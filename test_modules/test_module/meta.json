@@ -1,0 +1,8 @@
+{
+  "name": "test_module",
+  "version": "0.1.0",
+  "description": "A test module for integration testing",
+  "author": "Test Author",
+  "dependencies": [],
+  "supported_events": ["ping", "shutdown"]
+}

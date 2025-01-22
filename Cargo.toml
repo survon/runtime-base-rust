@@ -1,0 +1,32 @@
+[package]
+name = "survon_base_rust"
+version = "0.0.1"
+edition = "2021"
+description = "Survon core runtime for dynamic module management and event handling."
+authors = ["Sean Cannon <alienwebguy@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/survon/survon-base-rust"
+
+[lib]
+name = "survon_base_rust"
+path = "src/lib.rs"
+
+[[bin]]
+name = "survon_base_rust"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+zip = "0.6"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dashmap = "5.5"
+tempfile = "3.15.0"
+md-5 = "0.10.6"
+
+[dev-dependencies]
+tokio-test = "0.4"
