@@ -22,12 +22,14 @@ pub trait Module: Send + Sync {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ModuleInfo {
-    pub name: String,
-    pub version: String,
-    pub author: String,
-    pub description: String,
-    pub supported_events: Vec<String>,
-    pub dependencies: Vec<String>,
+    pub name: String,                   // Module's unique identifier
+    pub version: String,                // Module's version
+    pub survon_runtime: String,         // Target runtime (e.g., "runtime-base-rust")
+    pub survon_runtime_version: String, // Supported runtime version range
+    pub author: String,                 // Author's name or organization
+    pub description: String,            // Brief description of the module
+    pub supported_events: Vec<String>,  // List of events the module supports
+    pub dependencies: Vec<String>,      // List of dependent modules
 }
 
 #[derive(Debug)]

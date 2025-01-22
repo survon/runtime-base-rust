@@ -202,6 +202,8 @@ async fn create_test_module_zip() -> Result<Vec<u8>> {
         let meta = json!({
             "name": "test_module",
             "version": "0.1.0",
+            "survon_runtime": "runtime-base-rust",
+            "survon_runtime_version": ">=0.0.1",
             "description": "A test module for integration testing",
             "author": "Test Author",
             "dependencies": [],

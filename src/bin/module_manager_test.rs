@@ -62,6 +62,8 @@ fn create_mock_module_zip() -> Vec<u8> {
         let meta = json!({
             "name": "test_module",
             "version": "0.1.0",
+            "survon_runtime": "runtime-base-rust",
+            "survon_runtime_version": ">=0.0.1",
             "description": "A test module for manual testing",
             "author": "Test Author",
             "dependencies": [],

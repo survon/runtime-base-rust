@@ -26,6 +26,8 @@ async fn test_dynamic_module_lifecycle() {
         serde_json::to_string_pretty(&json!({
             "name": "test_module",
             "version": "0.1.0",
+            "survon_runtime": "runtime-base-rust",
+            "survon_runtime_version": ">=0.0.1",
             "author": "Test Author",
             "description": "A test module for integration testing",
             "supported_events": ["ping", "shutdown"],
