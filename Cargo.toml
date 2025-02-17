@@ -1,0 +1,16 @@
+[package]
+name = "runtime-base-rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Pulling tui-realm and tui-realm-stdlib directly from GitHub
+tuirealm = "0.4"
+tui-realm-stdlib = "2.0.1"
+ratatui = "0.20"
+crossterm = "0.26"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+zip = "0.6"
+libloading = "0.7"
+survon_module_api = { path = "../survon-module-api" }
