@@ -18,7 +18,7 @@ tui-scrollview = "0.5.1"
 throbber-widgets-tui = "0.5"
 
 # browser
-wry = "0.24"
+wry = "0.53"
 
 # Error handling
 color-eyre = "0.6"
