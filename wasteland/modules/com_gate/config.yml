@@ -1,0 +1,7 @@
+name: gate
+module_type: com
+ports:
+  - usb0
+messages:
+  - close_gate
+bus_topic: com_input

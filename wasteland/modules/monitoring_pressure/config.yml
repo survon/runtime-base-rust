@@ -1,0 +1,8 @@
+name: pressure
+module_type: monitoring
+view_type: line
+thresholds:
+  high: 50.0
+rules:
+  on_change: "value > threshold"
+bus_topic: monitoring
