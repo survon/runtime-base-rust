@@ -1,0 +1,12 @@
+/target
+.DS_Store
+.idea
+db
+.cache
+
+# We only keep the README in VCS. survon-os will install and pull
+# models into this space.
+bundled/*
+!bundled/models/
+bundled/models/*
+!bundled/models/README.md

@@ -1,0 +1,19 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  survon-gui-test:
+    build: .
+    ports:
+      - "5900:5900"  # VNC port
+    volumes:
+      - .:/app
+      - cargo-cache:/root/.cargo
+    environment:
+      - DISPLAY=:99
+      - RUST_BACKTRACE=1
+    stdin_open: true
+    tty: true
+
+volumes:
+  cargo-cache:

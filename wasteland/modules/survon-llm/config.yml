@@ -1,0 +1,4 @@
+name: "survon-llm"
+module_type: "llm"
+bus_topic: "llm_response"
+model: "knowledge"

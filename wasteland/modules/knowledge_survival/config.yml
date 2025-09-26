@@ -1,0 +1,3 @@
+name: survival
+module_type: knowledge
+bus_topic: knowledge_update  # Placeholder, as it’s a knowledge source (could trigger on LLM query)
