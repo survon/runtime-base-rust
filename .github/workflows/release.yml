@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, prereleased]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target: [armv7-unknown-linux-gnueabihf]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Create minimal Cross.toml
+        run: |
+          cat > Cross.toml << 'EOF'
+          [target.armv7-unknown-linux-gnueabihf]
+          image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest"
+          
+          # Only need basic OpenGL/X11 for egui, no GTK/WebKit!
+          pre-build = [
+              "dpkg --add-architecture armhf",
+              "apt-get update",
+              "apt-get install -y libssl-dev:armhf",
+              "apt-get install -y pkg-config",
+          ]
+          EOF
+
+      - name: Build for target
+        run: |
+          export CROSS_NO_WARNINGS=0
+          cross build --release --target ${{ matrix.target }}
+
+      - name: Test binary file info
+        run: |
+          file target/${{ matrix.target }}/release/runtime-base-rust
+          arm-linux-gnueabihf-readelf -d target/${{ matrix.target }}/release/runtime-base-rust | grep NEEDED || true
+
+      - name: Strip binary (optional, reduces size)
+        run: |
+          arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/runtime-base-rust || true
+          ls -lh target/${{ matrix.target }}/release/runtime-base-rust
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-base-rust-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/runtime-base-rust
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: target/${{ matrix.target }}/release/runtime-base-rust
+          asset_name: runtime-base-rust-armv7
+          overwrite_files: true
