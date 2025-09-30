@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, prereleased]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # Need write permission to upload release assets
+    strategy:
+      matrix:
+        target: [armv7-unknown-linux-gnueabihf]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Create Cross.toml
+        run: |
+          cat > Cross.toml << 'EOF'
+          [target.armv7-unknown-linux-gnueabihf]
+          pre-build = [
+              "dpkg --add-architecture armhf",
+              "apt-get update",
+              # Install newer LLVM from official repos
+              "apt-get install -y software-properties-common wget gnupg",
+              "wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -",
+              "add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal-16 main'",
+              "apt-get update",
+              # Install LLVM 16
+              "apt-get install -y llvm-16 llvm-16-dev libclang-16-dev clang-16",
+              # Install cross-compilation tools
+              "apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf",
+              "apt-get install -y libc6-dev-armhf-cross",
+              # Install build dependencies
+              "apt-get install -y cmake pkg-config",
+              "apt-get install -y libssl-dev:armhf",
+              # Create symlinks for clang
+              "ln -sf /usr/bin/llvm-config-16 /usr/bin/llvm-config",
+              "ln -sf /usr/lib/llvm-16/lib/libclang.so /usr/lib/libclang.so",
+          ]
+          
+          [build.env]
+          passthrough = [
+              "LIBCLANG_PATH",
+              "BINDGEN_EXTRA_CLANG_ARGS",
+              "CC_armv7_unknown_linux_gnueabihf",
+              "CXX_armv7_unknown_linux_gnueabihf",
+              "AR_armv7_unknown_linux_gnueabihf",
+              "PKG_CONFIG_ALLOW_CROSS",
+              "PKG_CONFIG_PATH",
+              "PKG_CONFIG_LIBDIR",
+          ]
+          EOF
+
+      - name: Build for target
+        run: |
+          # Set environment variables for the build
+          export LIBCLANG_PATH=/usr/lib/llvm-16/lib
+          export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=/usr/arm-linux-gnueabihf -I/usr/arm-linux-gnueabihf/include"
+          export CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
+          export CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++
+          export AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar
+          export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+          export PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig
+          export CROSS_NO_WARNINGS=0
+          export RUST_BACKTRACE=1
+          
+          # Build
+          cross build --release --target ${{ matrix.target }} --verbose
+
+      - name: Test binary file info
+        run: |
+          file target/${{ matrix.target }}/release/runtime-base-rust || true
+          ls -lh target/${{ matrix.target }}/release/runtime-base-rust || true
+
+      - name: Strip binary
+        run: |
+          docker run --rm -v $PWD:/workspace -w /workspace \
+            ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest \
+            arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/runtime-base-rust || true
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-base-rust-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/runtime-base-rust
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: target/${{ matrix.target }}/release/runtime-base-rust
+          name: runtime-base-rust-${{ matrix.target }}-${{ github.ref_name }}
+          overwrite: true
