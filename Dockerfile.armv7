@@ -1,0 +1,40 @@
+# Custom Docker image for cross-compiling with llama_cpp
+FROM ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest
+
+# Install newer LLVM/Clang (required for llama_cpp bindgen)
+RUN apt-get update && \
+    apt-get install -y software-properties-common wget && \
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
+    add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-15 main" && \
+    apt-get update
+
+# Install build dependencies
+RUN dpkg --add-architecture armhf && \
+    apt-get update && \
+    apt-get install -y \
+        # Newer LLVM/Clang for bindgen
+        llvm-15 \
+        llvm-15-dev \
+        libclang-15-dev \
+        clang-15 \
+        # Cross compilation tools
+        gcc-arm-linux-gnueabihf \
+        g++-arm-linux-gnueabihf \
+        libc6-dev-armhf-cross \
+        # Required for building
+        cmake \
+        pkg-config \
+        # SSL for downloading
+        libssl-dev:armhf \
+        # Standard C headers for target arch
+        linux-libc-dev:armhf
+
+# Set environment variables
+ENV LIBCLANG_PATH=/usr/lib/llvm-15/lib
+ENV LLVM_CONFIG_PATH=/usr/bin/llvm-config-15
+ENV CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc
+ENV CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++
+ENV AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar
+ENV BINDGEN_EXTRA_CLANG_ARGS="--sysroot=/usr/arm-linux-gnueabihf -I/usr/arm-linux-gnueabihf/include"
+ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
+ENV PKG_CONFIG_ALLOW_CROSS=1

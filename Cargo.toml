@@ -17,8 +17,9 @@ futures = "0.3"
 tui-scrollview = "0.5.1"
 throbber-widgets-tui = "0.5"
 
-# browser
-wry = "0.24"
+# Pure Rust GUI - no native dependencies!
+eframe = "0.24"  # egui framework
+egui = "0.24"
 
 # Error handling
 color-eyre = "0.6"

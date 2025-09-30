@@ -1,17 +1,11 @@
-// ui/external_viewer.rs - Launch external viewers on demand
+// ui/external_viewer.rs - Launch external viewers with egui (pure Rust)
 
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::path::Path;
 use color_eyre::Result;
 use tokio::process::Command as AsyncCommand;
-use wry::{
-    application::{
-        event::{Event, WindowEvent},
-        event_loop::{ControlFlow, EventLoop},
-        window::WindowBuilder,
-    },
-    webview::WebViewBuilder,
-};
+use eframe::egui;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct ExternalViewer {
@@ -31,7 +25,7 @@ impl ExternalViewer {
         let browsers = ["chromium-browser", "firefox", "epiphany"];
 
         for browser in &browsers {
-            if Command::new("which")
+            if std::process::Command::new("which")
                 .arg(browser)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -45,61 +39,61 @@ impl ExternalViewer {
         false
     }
 
-    /// Check if wry webview is available (always true on desktop Linux)
+    /// Check if egui viewer is available (always true since it's pure Rust)
     pub fn can_launch_wry(&self) -> bool {
+        // Renamed for compatibility, but this now checks for egui availability
+        // which is always true on systems with graphics
         let display = std::env::var("DISPLAY").is_ok();
         let wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
-        eprintln!("DEBUG: DISPLAY={}, WAYLAND_DISPLAY={}", display, wayland);
-        display || wayland
+        let framebuffer = Path::new("/dev/fb0").exists(); // For Pi without X
+
+        eprintln!("DEBUG: DISPLAY={}, WAYLAND={}, FB={}", display, wayland, framebuffer);
+        display || wayland || framebuffer
     }
 
-    /// Launch wry-based document viewer
+    /// Launch egui-based document viewer
     pub fn show_document_wry(&self, document_path: &str, content: &crate::ui::document_viewer::DocumentContent) -> Result<()> {
-        let html_content = self.create_document_html(content)?;
+        let content_clone = content.clone();
+        let doc_path = document_path.to_string();
 
-        // Run wry in a separate thread to avoid blocking
+        // Run egui in a separate thread to avoid blocking
         std::thread::spawn(move || {
-            if let Err(e) = Self::run_wry_viewer(html_content) {
-                eprintln!("Wry viewer error: {}", e);
+            if let Err(e) = Self::run_egui_viewer(doc_path, content_clone) {
+                eprintln!("Egui viewer error: {}", e);
             }
         });
 
         Ok(())
     }
 
-    fn run_wry_viewer(html_content: String) -> Result<()> {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_title("Survon Document Viewer")
-            .with_inner_size(wry::application::dpi::LogicalSize::new(900, 700))
-            .build(&event_loop)?;
+    fn run_egui_viewer(document_path: String, content: crate::ui::document_viewer::DocumentContent) -> Result<()> {
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size([900.0, 700.0]),
+            ..Default::default()
+        };
 
-        let _webview = WebViewBuilder::new(window)?
-            .with_html(&html_content)?
-            .build()?;
+        let app = DocumentViewerApp::new(document_path, content);
 
-        event_loop.run(move |event, _, control_flow| {
-            *control_flow = ControlFlow::Wait;
-
-            match event {
-                Event::WindowEvent {
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => *control_flow = ControlFlow::Exit,
-                _ => {}
-            }
-        });
+        eframe::run_native(
+            "Survon Document Viewer",
+            options,
+            Box::new(|_cc| Box::new(app)),
+        ).map_err(|e| color_eyre::eyre::eyre!("Failed to run egui app: {}", e))
     }
 
     /// Launch external viewer for documents with images
     pub async fn show_document_external(&self, document_path: &str, content: &crate::ui::document_viewer::DocumentContent) -> Result<()> {
-        // Create temporary HTML file with embedded images
+        // First try to use egui viewer (pure Rust, works everywhere)
+        if self.can_launch_wry() {
+            return Ok(self.show_document_wry(document_path, content)?);
+        }
+
+        // Fallback: Create temporary HTML file for browser
         let html_path = self.temp_dir.join("document.html");
         let html_content = self.create_document_html(content)?;
 
         tokio::fs::write(&html_path, html_content).await?;
-
-        // Launch with system default browser (lightweight on Pi)
         self.launch_browser(&html_path).await?;
 
         Ok(())
@@ -233,4 +227,98 @@ impl ExternalViewer {
             .map(|status| status.success())
             .unwrap_or(false)
     }
+}
+
+// Egui application for document viewing
+struct DocumentViewerApp {
+    document_path: String,
+    content: crate::ui::document_viewer::DocumentContent,
+    scroll_offset: f32,
+    images: Arc<Mutex<Vec<Option<egui::TextureHandle>>>>,
+}
+
+impl DocumentViewerApp {
+    fn new(document_path: String, content: crate::ui::document_viewer::DocumentContent) -> Self {
+        Self {
+            document_path,
+            content,
+            scroll_offset: 0.0,
+            images: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
+impl eframe::App for DocumentViewerApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            // Title bar
+            ui.horizontal(|ui| {
+                ui.heading(&self.document_path);
+                if ui.button("Close").clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+
+            ui.separator();
+
+            // Scrollable content area
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    // Display text content
+                    let mut text = self.content.text.clone();
+
+                    // Process image placeholders
+                    for (image_id, image_path) in &self.content.image_mappings {
+                        let placeholder = format!("{{{{IMAGE_{}}}}}", image_id);
+
+                        // For egui, we'll show a button that can open the image
+                        if text.contains(&placeholder) {
+                            text = text.replace(&placeholder, &format!("[Image: {}]", image_id));
+                        }
+                    }
+
+                    // Display the text with monospace font
+                    ui.add(
+                        egui::TextEdit::multiline(&mut text.as_str())
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(f32::INFINITY)
+                            .interactive(false)
+                    );
+
+                    // Add image viewer buttons
+                    if !self.content.image_mappings.is_empty() {
+                        ui.separator();
+                        ui.heading("Images:");
+
+                        for (image_id, image_path) in &self.content.image_mappings {
+                            ui.horizontal(|ui| {
+                                if ui.button(format!("View Image {}", image_id)).clicked() {
+                                    // Try to open with system image viewer
+                                    if let Err(e) = open_with_system_viewer(image_path) {
+                                        eprintln!("Failed to open image: {}", e);
+                                    }
+                                }
+                                ui.label(format!("({})", image_path));
+                            });
+                        }
+                    }
+                });
+        });
+    }
+}
+
+fn open_with_system_viewer(path: &str) -> Result<()> {
+    // Try common image viewers
+    for viewer in &["xdg-open", "feh", "eog", "gpicview"] {
+        if let Ok(_) = std::process::Command::new(viewer)
+            .arg(path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            return Ok(());
+        }
+    }
+    Err(color_eyre::eyre::eyre!("No image viewer found"))
 }
