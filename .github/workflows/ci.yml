@@ -7,6 +7,9 @@ on:
       - main
       - master
       - develop
+  workflow_dispatch:  # Enables manual trigger
+  release:  # For automatic on release or pre-release
+    types: [published, prereleased]
 
 env:
   CARGO_TERM_COLOR: always
@@ -45,7 +48,7 @@ jobs:
         with:
           components: clippy
       - name: Run clippy action
-        uses: clechasseur/rs-clippy-check@v3
+        uses: clechasseur/rs-clippy-check@v5
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
@@ -79,3 +82,32 @@ jobs:
         run: cargo test --locked --all-features --all-targets
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
+
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')  # Trigger on any tag
+    strategy:
+      matrix:
+        target: [armv7-unknown-linux-gnueabihf]  # RPi 3B target
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Build for target
+        run: cross build --release --target ${{ matrix.target }}
+        env:
+          PKG_CONFIG_ALLOW_CROSS: 1
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-base-rust-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/runtime-base-rust
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/${{ matrix.target }}/release/runtime-base-rust
