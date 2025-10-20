@@ -252,40 +252,44 @@ impl KnowledgeSearchStrategy {
 
     pub async fn process_query(&self, query: &str, context: &LlmContext) -> Result<String> {
         let knowledge_results = self.database.search_knowledge(query, &[], 5)
-            .map_err(|e| {
-                color_eyre::eyre::eyre!("Knowledge search failed: {}", e)
-            })?;
-
-        // Search knowledge base without domain filtering first
-        let knowledge_results = self.database.search_knowledge(query, &[], 5)
             .map_err(|e| color_eyre::eyre::eyre!("Knowledge search failed: {}", e))?;
 
         if knowledge_results.is_empty() {
             return Ok(format!(
-                "No specific knowledge found for '{}'. Try different keywords or ask about general topics like 'survival', 'fire', 'water', 'shelter', 'homestead', or 'gate control'.",
+                "No specific knowledge found for '{}'. Try different keywords.",
                 query
             ));
         }
 
-        // Format results
         let mut response = format!("Found {} result{}:\n\n",
                                    knowledge_results.len(),
                                    if knowledge_results.len() == 1 { "" } else { "s" }
         );
 
         for (i, chunk) in knowledge_results.iter().enumerate() {
-            // Truncate body to reasonable length
             let body_preview = if chunk.body.len() > 300 {
                 format!("{}...", chunk.body.chars().take(300).collect::<String>())
             } else {
                 chunk.body.clone()
             };
 
+            // Extract page number from metadata
+            let page_info = if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&chunk.metadata) {
+                if let Some(page_num) = metadata.get("page_number").and_then(|v| v.as_u64()) {
+                    format!("#page={}", page_num)
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
             response.push_str(&format!(
-                "{}. **{}** (from {})\n{}\n\n",
+                "{}. **{}** (from {}{})\n{}\n\n",
                 i + 1,
                 chunk.title,
                 chunk.source_file,
+                page_info,  // Add page fragment to the link
                 body_preview
             ));
         }
