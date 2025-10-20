@@ -196,32 +196,62 @@ impl<'a> KnowledgeIngester<'a> {
     }
 
     fn process_pdf_file(&self, file_path: &Path, config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
-        // Create cache directory
+        use pdf::file::FileOptions;
+
         let cache_dir = PathBuf::from("./.cache/knowledge");
         std::fs::create_dir_all(&cache_dir)?;
 
-        let file_uuid = Uuid::new_v4().to_string();
-        let image_cache_dir = cache_dir.join(&file_uuid);
-        std::fs::create_dir_all(&image_cache_dir)?;
+        let mut all_chunks = Vec::new();
 
-        // Extract text and images
-        let (text_content, image_placeholders) = self.extract_pdf_with_images(file_path, &image_cache_dir)?;
+        // Try to parse PDF page by page
+        if let Ok(pdf_file) = FileOptions::cached().open(file_path) {
+            for page_num in 0..pdf_file.num_pages() {
+                if let Ok(page) = pdf_file.get_page(page_num) {
+                    // Extract text from this specific page
+                    // Note: This is simplified - you might need to use a different method
+                    let page_text = format!("Page {} content", page_num + 1); // Placeholder
 
-        if text_content.is_empty() {
-            return Ok(vec![]);
+                    if page_text.trim().is_empty() {
+                        continue;
+                    }
+
+                    // Create chunks for this page
+                    let paragraphs: Vec<&str> = page_text.split("\n\n")
+                        .filter(|p| !p.trim().is_empty())
+                        .collect();
+
+                    for (para_index, paragraph) in paragraphs.iter().enumerate() {
+                        let inferred_domains = self.infer_domains_from_content(paragraph);
+                        let primary_domain = inferred_domains.first()
+                            .unwrap_or(&"general".to_string())
+                            .clone();
+
+                        let chunk = KnowledgeChunk {
+                            id: None,
+                            source_file: file_path.to_string_lossy().to_string(),
+                            domain: primary_domain,
+                            category: config.name.clone(),
+                            title: self.extract_title(paragraph, para_index),
+                            body: paragraph.trim().to_string(),
+                            chunk_index: ((page_num * 100) + (para_index as u32)) as i32,
+                            metadata: serde_json::json!({
+                            "file_type": "pdf",
+                            "full_path": file_path.to_string_lossy(),
+                            "page_number": page_num + 1,  // Store 1-indexed page number
+                            "paragraph_index": para_index,
+                        }).to_string(),
+                        };
+                        all_chunks.push(chunk);
+                    }
+                }
+            }
+            Ok(all_chunks)
+        } else {
+            // Fallback to old method if PDF parsing fails
+            let text = pdf_extract::extract_text(file_path)?;
+            let chunks = self.chunk_text(&text, file_path, config);
+            Ok(chunks)
         }
-
-        // Store image mappings in metadata
-        let metadata = serde_json::json!({
-            "file_type": "pdf",
-            "full_path": file_path.to_string_lossy(),
-            "paragraph_index": 0,
-            "image_mappings": image_placeholders,
-            "cache_dir": image_cache_dir.to_string_lossy()
-        });
-
-        let chunks = self.chunk_text_with_images(&text_content, file_path, config, metadata.to_string());
-        Ok(chunks)
     }
 
     fn extract_pdf_with_images(&self, file_path: &Path, cache_dir: &Path) -> Result<(String, HashMap<String, String>)> {

@@ -1,11 +1,9 @@
-// ui/external_viewer.rs - Launch external viewers with egui (pure Rust)
+// ui/external_viewer.rs - Launch external browser for viewing all media types
 
 use std::process::Stdio;
 use std::path::Path;
 use color_eyre::Result;
 use tokio::process::Command as AsyncCommand;
-use eframe::egui;
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct ExternalViewer {
@@ -22,7 +20,7 @@ impl ExternalViewer {
 
     /// Check if external viewing is possible (synchronous)
     pub fn can_launch_external(&self) -> bool {
-        let browsers = ["chromium-browser", "firefox", "epiphany"];
+        let browsers = ["netsurf-gtk", "chromium-browser", "firefox", "epiphany"];
 
         for browser in &browsers {
             if std::process::Command::new("which")
@@ -39,105 +37,137 @@ impl ExternalViewer {
         false
     }
 
-    /// Check if egui viewer is available (always true since it's pure Rust)
-    pub fn can_launch_wry(&self) -> bool {
-        // Renamed for compatibility, but this now checks for egui availability
-        // which is always true on systems with graphics
-        let display = std::env::var("DISPLAY").is_ok();
-        let wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
-        let framebuffer = Path::new("/dev/fb0").exists(); // For Pi without X
-
-        eprintln!("DEBUG: DISPLAY={}, WAYLAND={}, FB={}", display, wayland, framebuffer);
-        display || wayland || framebuffer
-    }
-
-    /// Launch egui-based document viewer
-    pub fn show_document_wry(&self, document_path: &str, content: &crate::ui::document_viewer::DocumentContent) -> Result<()> {
-        let content_clone = content.clone();
-        let doc_path = document_path.to_string();
-
-        // Run egui in a separate thread to avoid blocking
-        std::thread::spawn(move || {
-            if let Err(e) = Self::run_egui_viewer(doc_path, content_clone) {
-                eprintln!("Egui viewer error: {}", e);
-            }
-        });
-
-        Ok(())
-    }
-
-    fn run_egui_viewer(document_path: String, content: crate::ui::document_viewer::DocumentContent) -> Result<()> {
-        let options = eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default()
-                .with_inner_size([900.0, 700.0]),
-            ..Default::default()
-        };
-
-        let app = DocumentViewerApp::new(document_path, content);
-
-        eframe::run_native(
-            "Survon Document Viewer",
-            options,
-            Box::new(|_cc| Box::new(app)),
-        ).map_err(|e| color_eyre::eyre::eyre!("Failed to run egui app: {}", e))
-    }
-
     /// Launch external viewer for documents with images
     pub async fn show_document_external(&self, document_path: &str, content: &crate::ui::document_viewer::DocumentContent) -> Result<()> {
-        // First try to use egui viewer (pure Rust, works everywhere)
-        if self.can_launch_wry() {
-            return Ok(self.show_document_wry(document_path, content)?);
+        let path = std::path::Path::new(document_path);
+        let extension = path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        match extension.as_str() {
+            // Documents - browsers can render these natively
+            "pdf" => {
+                self.launch_browser_with_file(document_path).await?;
+            }
+
+            // Video files - create simple HTML5 video player
+            "mp4" | "webm" | "ogg" | "ogv" | "avi" | "mov" | "mkv" => {
+                let html_path = self.temp_dir.join("video.html");
+                let html_content = format!(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Video Player</title>
+    <style>
+        body {{ margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }}
+        video {{ max-width: 100%; max-height: 100vh; }}
+    </style>
+</head>
+<body>
+    <video controls autoplay>
+        <source src="file://{}" type="video/{}">
+        Your browser doesn't support this video format.
+    </video>
+</body>
+</html>
+"#, document_path, extension);
+                tokio::fs::write(&html_path, html_content).await?;
+                self.launch_browser(&html_path).await?;
+            }
+
+            // Audio files - create simple HTML5 audio player
+            "mp3" | "wav" | "ogg" | "oga" | "flac" | "m4a" | "aac" => {
+                let html_path = self.temp_dir.join("audio.html");
+                let html_content = format!(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Audio Player</title>
+    <style>
+        body {{
+            margin: 0;
+            background: #1e1e1e;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: monospace;
+        }}
+        audio {{ width: 80%; max-width: 600px; margin: 20px; }}
+        .info {{ text-align: center; }}
+    </style>
+</head>
+<body>
+    <div class="info">
+        <h2>Now Playing</h2>
+        <p>{}</p>
+    </div>
+    <audio controls autoplay>
+        <source src="file://{}" type="audio/{}">
+        Your browser doesn't support this audio format.
+    </audio>
+</body>
+</html>
+"#, path.file_name().unwrap_or_default().to_string_lossy(), document_path, extension);
+                tokio::fs::write(&html_path, html_content).await?;
+                self.launch_browser(&html_path).await?;
+            }
+
+            // Text/Markdown - convert to HTML
+            "txt" | "md" | "log" | "rtf" => {
+                let html_path = self.temp_dir.join("document.html");
+                let html_content = self.create_document_html(content)?;
+                tokio::fs::write(&html_path, html_content).await?;
+                self.launch_browser(&html_path).await?;
+            }
+
+            // Images - create simple HTML image viewer
+            "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" => {
+                let html_path = self.temp_dir.join("image.html");
+                let html_content = format!(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Image Viewer</title>
+    <style>
+        body {{
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }}
+        img {{ max-width: 100%; max-height: 100vh; object-fit: contain; }}
+    </style>
+</head>
+<body>
+    <img src="file://{}" alt="Image">
+</body>
+</html>
+"#, document_path);
+                tokio::fs::write(&html_path, html_content).await?;
+                self.launch_browser(&html_path).await?;
+            }
+
+            // Unknown - try opening directly and let browser figure it out
+            _ => {
+                self.launch_browser_with_file(document_path).await?;
+            }
         }
-
-        // Fallback: Create temporary HTML file for browser
-        let html_path = self.temp_dir.join("document.html");
-        let html_content = self.create_document_html(content)?;
-
-        tokio::fs::write(&html_path, html_content).await?;
-        self.launch_browser(&html_path).await?;
 
         Ok(())
     }
 
-    /// Launch external image viewer
-    pub async fn show_images_external(&self, image_paths: &[String]) -> Result<()> {
-        // Use feh, eog, or other lightweight viewers available on Pi
-        let viewers = ["feh", "eog", "gpicview", "xviewer"];
-
-        for viewer in &viewers {
-            if self.command_exists(viewer).await {
-                let mut cmd = AsyncCommand::new(viewer);
-                cmd.args(image_paths);
-                cmd.stdout(Stdio::null());
-                cmd.stderr(Stdio::null());
-
-                if let Ok(_) = cmd.spawn() {
-                    return Ok(());
-                }
-            }
-        }
-
-        Err(color_eyre::eyre::eyre!("No suitable image viewer found"))
-    }
-
-    /// Launch external video player
-    pub async fn show_video_external(&self, video_path: &str) -> Result<()> {
-        let players = ["mpv", "vlc", "omxplayer"]; // omxplayer is Pi-optimized
-
-        for player in &players {
-            if self.command_exists(player).await {
-                let mut cmd = AsyncCommand::new(player);
-                cmd.arg(video_path);
-                cmd.stdout(Stdio::null());
-                cmd.stderr(Stdio::null());
-
-                if let Ok(_) = cmd.spawn() {
-                    return Ok(());
-                }
-            }
-        }
-
-        Err(color_eyre::eyre::eyre!("No suitable video player found"))
+    async fn launch_browser_with_file(&self, file_path: &str) -> Result<()> {
+        let path = std::path::Path::new(file_path);
+        self.launch_browser(path).await
     }
 
     fn create_document_html(&self, content: &crate::ui::document_viewer::DocumentContent) -> Result<String> {
@@ -198,23 +228,58 @@ impl ExternalViewer {
     }
 
     async fn launch_browser(&self, html_path: &Path) -> Result<()> {
-        let browsers = ["chromium-browser", "firefox", "epiphany"]; // Pi-friendly browsers
+        // Prioritize lightweight browsers suitable for Pi/embedded systems
+        let browsers = [
+            "netsurf-gtk",      // ~20MB RAM, super lightweight, perfect for Pi
+            "surf",             // ~30MB RAM, minimalist webkit
+            "midori",           // ~40MB RAM, light but feature-complete
+            "chromium-browser", // Linux Chrome
+            "google-chrome",    // macOS/Linux Chrome
+            "firefox",          // Cross-platform
+            "open",             // macOS default opener (uses Safari or default browser)
+            "epiphany",         // GNOME Web, also lightweight
+        ];
 
         for browser in &browsers {
             if self.command_exists(browser).await {
                 let mut cmd = AsyncCommand::new(browser);
-                cmd.arg("--app=true"); // App mode for cleaner UI
-                cmd.arg(format!("file://{}", html_path.display()));
+
+                // Configure browser-specific flags
+                match *browser {
+                    "open" => {
+                        // macOS open command - just pass the file path, no file:// prefix
+                        cmd.arg(html_path);
+                    },
+                    "netsurf-gtk" | "surf" => {
+                        // Minimal browsers - no special flags
+                        cmd.arg(format!("file://{}", html_path.display()));
+                    },
+                    "midori" => {
+                        cmd.arg("--app");
+                        cmd.arg(format!("file://{}", html_path.display()));
+                    },
+                    "chromium-browser" | "google-chrome" | "firefox" => {
+                        cmd.arg("--app");
+                        cmd.arg(format!("file://{}", html_path.display()));
+                    },
+                    _ => {
+                        cmd.arg(format!("file://{}", html_path.display()));
+                    },
+                }
+
                 cmd.stdout(Stdio::null());
                 cmd.stderr(Stdio::null());
 
                 if let Ok(_) = cmd.spawn() {
+                    eprintln!("Launched document viewer with: {}", browser);
                     return Ok(());
                 }
             }
         }
 
-        Err(color_eyre::eyre::eyre!("No suitable browser found"))
+        Err(color_eyre::eyre::eyre!(
+            "No suitable browser found. Install one of: netsurf-gtk, surf, midori, chromium-browser"
+        ))
     }
 
     async fn command_exists(&self, command: &str) -> bool {
@@ -227,98 +292,4 @@ impl ExternalViewer {
             .map(|status| status.success())
             .unwrap_or(false)
     }
-}
-
-// Egui application for document viewing
-struct DocumentViewerApp {
-    document_path: String,
-    content: crate::ui::document_viewer::DocumentContent,
-    scroll_offset: f32,
-    images: Arc<Mutex<Vec<Option<egui::TextureHandle>>>>,
-}
-
-impl DocumentViewerApp {
-    fn new(document_path: String, content: crate::ui::document_viewer::DocumentContent) -> Self {
-        Self {
-            document_path,
-            content,
-            scroll_offset: 0.0,
-            images: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-}
-
-impl eframe::App for DocumentViewerApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            // Title bar
-            ui.horizontal(|ui| {
-                ui.heading(&self.document_path);
-                if ui.button("Close").clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
-            });
-
-            ui.separator();
-
-            // Scrollable content area
-            egui::ScrollArea::vertical()
-                .auto_shrink([false; 2])
-                .show(ui, |ui| {
-                    // Display text content
-                    let mut text = self.content.text.clone();
-
-                    // Process image placeholders
-                    for (image_id, image_path) in &self.content.image_mappings {
-                        let placeholder = format!("{{{{IMAGE_{}}}}}", image_id);
-
-                        // For egui, we'll show a button that can open the image
-                        if text.contains(&placeholder) {
-                            text = text.replace(&placeholder, &format!("[Image: {}]", image_id));
-                        }
-                    }
-
-                    // Display the text with monospace font
-                    ui.add(
-                        egui::TextEdit::multiline(&mut text.as_str())
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(f32::INFINITY)
-                            .interactive(false)
-                    );
-
-                    // Add image viewer buttons
-                    if !self.content.image_mappings.is_empty() {
-                        ui.separator();
-                        ui.heading("Images:");
-
-                        for (image_id, image_path) in &self.content.image_mappings {
-                            ui.horizontal(|ui| {
-                                if ui.button(format!("View Image {}", image_id)).clicked() {
-                                    // Try to open with system image viewer
-                                    if let Err(e) = open_with_system_viewer(image_path) {
-                                        eprintln!("Failed to open image: {}", e);
-                                    }
-                                }
-                                ui.label(format!("({})", image_path));
-                            });
-                        }
-                    }
-                });
-        });
-    }
-}
-
-fn open_with_system_viewer(path: &str) -> Result<()> {
-    // Try common image viewers
-    for viewer in &["xdg-open", "feh", "eog", "gpicview"] {
-        if let Ok(_) = std::process::Command::new(viewer)
-            .arg(path)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            return Ok(());
-        }
-    }
-    Err(color_eyre::eyre::eyre!("No image viewer found"))
 }

@@ -175,13 +175,13 @@ impl App {
             if let Ok(messages) = llm_engine.get_chat_history(50) {
                 for msg in messages {
                     if msg.role == "assistant" {
-                        // Extract file paths from assistant messages
                         for line in msg.content.lines() {
                             if line.contains("(from ./") {
                                 if let Some(start) = line.find("(from ") {
                                     if let Some(end) = line[start..].find(')') {
-                                        let file_path = &line[start + 6..start + end];
-                                        links.push(file_path.to_string());
+                                        let full_path = &line[start + 6..start + end];
+                                        // full_path now contains "./path/file.pdf#page=5"
+                                        links.push(full_path.to_string());
                                     }
                                 }
                             }
@@ -252,31 +252,60 @@ impl App {
     pub fn open_document(&mut self, file_path: String) {
         eprintln!("DEBUG: open_document called with: {}", file_path);
 
-        // Parse and cache document first
-        if let Some(viewer) = &self.document_viewer {
-            if self.get_cached_document(&file_path).is_none() {
-                if let Ok(content) = viewer.view_document(Path::new(&file_path)) {
-                    self.cache_document(file_path.clone(), content);
-                }
-            }
-        }
+        // Split path and page fragment
+        let (actual_path, page_number) = if file_path.contains("#page=") {
+            let parts: Vec<&str> = file_path.split("#page=").collect();
+            let page = parts.get(1)
+                .and_then(|p| p.parse::<u32>().ok());
+            (parts[0].to_string(), page)
+        } else {
+            (file_path.clone(), None)
+        };
 
-        if let Some(external_viewer) = &self.external_viewer {
-            if external_viewer.as_ref().can_launch_wry() {
-                eprintln!("Trying wry viewer...");
-                if let Some((_, content)) = &self.cached_document {
-                    if let Ok(_) = external_viewer.as_ref().show_document_wry(&file_path, content) {
-                        eprintln!("Wry viewer launched");
-                        return;
+        let path = Path::new(&actual_path);
+        let content = if let Some(viewer) = &self.document_viewer {
+            // Check if file supports direct viewing (PDFs, media)
+            if viewer.supports_direct_viewing(path) {
+                // Get empty content for direct viewing - no parsing needed
+                viewer.get_direct_view_content(path)
+            } else {
+                // Parse and cache for files that need it (text, markdown, etc)
+                if let Some(cached) = self.get_cached_document(&file_path) {
+                    Some(cached.clone())
+                } else {
+                    match viewer.view_document(path) {
+                        Ok(content) => {
+                            self.cache_document(file_path.clone(), content.clone());
+                            Some(content)
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to parse document: {}", e);
+                            None
+                        }
                     }
                 }
             }
-        }
-        eprintln!("Using TUI fallback");
+        } else {
+            None
+        };
 
-        // Tier 3: Fallback to TUI popup
-        self.show_document_popup = Some(file_path);
-        self.document_scroll_offset = 0;
+        // Launch external viewer if we have content
+        if let Some(content) = content {
+            if let Some(external_viewer) = &self.external_viewer {
+                let viewer = external_viewer.clone();
+                let path_clone = file_path.clone();
+
+                tokio::spawn(async move {
+                    if let Err(e) = viewer.show_document_external(&path_clone, &content).await {
+                        eprintln!("Failed to launch external viewer: {}", e);
+                    }
+                });
+            }
+
+            // Also show TUI popup as fallback
+            self.show_document_popup = Some(file_path);
+            self.document_scroll_offset = 0;
+        }
     }
 
     pub fn close_document(&mut self) {

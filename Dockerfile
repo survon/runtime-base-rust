@@ -27,12 +27,12 @@ RUN cargo build --release && \
 # Runtime stage - minimal dependencies only
 FROM ubuntu:22.04
 
-# Install only runtime GUI dependencies
+# Install runtime GUI dependencies + ONE lightweight browser
 RUN apt-get update && apt-get install -y \
     libgtk-3-0 \
     libwebkit2gtk-4.0-37 \
     libayatana-appindicator3-1 \
-    chromium-browser \
+    netsurf-gtk \
     xvfb \
     x11vnc \
     fluxbox \
