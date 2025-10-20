@@ -25,7 +25,7 @@ egui = "0.24"
 color-eyre = "0.6"
 
 # Database
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
