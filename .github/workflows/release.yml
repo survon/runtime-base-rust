@@ -95,7 +95,7 @@ jobs:
             arm-linux-gnueabihf-strip target/${{ matrix.target }}/release/runtime-base-rust || true
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: runtime-base-rust-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/runtime-base-rust
