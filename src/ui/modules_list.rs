@@ -9,7 +9,7 @@ use crate::app::App;
 use crate::module::Module;
 
 pub fn render_modules_list(app: &App, area: Rect, buf: &mut Buffer) {
-    let modules = app.get_modules();
+    let modules = app.module_manager.get_modules();
 
     if modules.is_empty() {
         let empty_msg = Paragraph::new("No modules found.\n\nPlace module directories in:\n./wasteland/modules/\n\nEach directory should contain a config.yml file.")
@@ -29,7 +29,7 @@ pub fn render_modules_list(app: &App, area: Rect, buf: &mut Buffer) {
         .iter()
         .enumerate()
         .map(|(i, module)| {
-            let style = if i == app.selected_module {
+            let style = if i == app.module_manager.selected_module {
                 Style::default().bg(Color::Blue).fg(Color::White)
             } else {
                 Style::default()

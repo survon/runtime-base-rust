@@ -46,7 +46,7 @@ pub fn render_overview(app: &App, area: Rect, buf: &mut Buffer) {
     messages::render_recent_messages_panel(content_layout[1], buf);
 
     // Help text
-    let help_text = if app.get_modules().is_empty() {
+    let help_text = if app.module_manager.get_modules().is_empty() {
         "No modules found. Press 'r' to refresh • 'o' for LLM setup • 'q' to quit"
     } else if app.get_llm_engine().is_some() {
         "↑/↓: Navigate • Enter: Select • 'c': Chat • 'o': LLM Setup • '1': Close Gate • 'r': Refresh • 'q': Quit"

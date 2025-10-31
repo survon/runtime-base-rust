@@ -53,7 +53,7 @@ pub fn render_chat_history(app: &App, area: Rect, buf: &mut Buffer) {
                                         .and_then(|n| n.to_str())
                                         .unwrap_or(file_part);
 
-                                    let is_selected = app.current_link_index == Some(link_index);
+                                    let is_selected = app.chat_manager.current_link_index == Some(link_index);
                                     let link_style = if is_selected {
                                         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                                     } else {
@@ -91,7 +91,7 @@ pub fn render_chat_history(app: &App, area: Rect, buf: &mut Buffer) {
         Text::from("LLM engine not available...")
     };
 
-    let user_scroll_offset = app.get_chat_scroll_offset() as u16;
+    let user_scroll_offset = app.chat_manager.get_chat_scroll_offset() as u16;
 
     let chat_widget = Paragraph::new(content)
         .block(

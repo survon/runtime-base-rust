@@ -9,6 +9,123 @@ use pdf::enc::StreamFilter;
 use pdf::object::*;
 use uuid::Uuid;
 use std::fs;
+use std::sync::Arc;
+
+use crate::ui::external_viewer::ExternalViewer;
+#[derive(Debug)]
+pub struct DocumentManager {
+    viewer: DocumentViewer,
+    external_viewer: Option<Arc<ExternalViewer>>,
+    cached_document: Option<(String, DocumentContent)>,
+    show_document_popup: Option<String>,
+    document_scroll_offset: usize,
+}
+
+impl DocumentManager {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            viewer: DocumentViewer::new(),
+            external_viewer: Some(Arc::new(ExternalViewer::new()?)),
+            cached_document: None,
+            show_document_popup: None,
+            document_scroll_offset: 0,
+        })
+    }
+    pub fn scroll_document_up(&mut self) {
+        if self.document_scroll_offset > 0 {
+            self.document_scroll_offset -= 1;
+        }
+    }
+
+    pub fn scroll_document_down(&mut self) {
+        self.document_scroll_offset += 1;
+    }
+
+    pub fn scroll_document_page_up(&mut self) {
+        for _ in 0..10 {
+            self.scroll_document_up();
+        }
+    }
+
+    pub fn scroll_document_page_down(&mut self) {
+        for _ in 0..10 {
+            self.scroll_document_down();
+        }
+    }
+
+    pub fn cache_document(&mut self, file_path: String, content: DocumentContent) {
+        self.cached_document = Some((file_path, content));
+    }
+
+    pub fn get_cached_document(&self, file_path: &str) -> Option<&DocumentContent> {
+        if let Some((cached_path, content)) = &self.cached_document {
+            if cached_path == file_path {
+                Some(content)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn open_document(&mut self, file_path: String) {
+        eprintln!("DEBUG: open_document called with: {}", file_path);
+
+        // Split path and page fragment
+        let (actual_path, page_number) = if file_path.contains("#page=") {
+            let parts: Vec<&str> = file_path.split("#page=").collect();
+            let page = parts.get(1)
+                .and_then(|p| p.parse::<u32>().ok());
+            (parts[0].to_string(), page)
+        } else {
+            (file_path.clone(), None)
+        };
+
+        let path = Path::new(&actual_path);
+        let content = if self.viewer.supports_direct_viewing(path) {
+            self.viewer.get_direct_view_content(path)
+        } else {
+            // Parse and cache for files that need it (text, markdown, etc)
+            if let Some(cached) = self.get_cached_document(&file_path) {
+                Some(cached.clone())
+            } else {
+                match self.viewer.view_document(path) {
+                    Ok(content) => {
+                        self.cache_document(file_path.clone(), content.clone());
+                        Some(content)
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse document: {}", e);
+                        None
+                    }
+                }
+            }
+        };
+
+        // Launch external viewer if we have content
+        if let Some(content) = content {
+            if let Some(external_viewer) = &self.external_viewer {
+                let viewer = external_viewer.clone();
+                let path_clone = file_path.clone();
+
+                tokio::spawn(async move {
+                    if let Err(e) = viewer.show_document_external(&path_clone, &content).await {
+                        eprintln!("Failed to launch external viewer: {}", e);
+                    }
+                });
+            }
+
+            // Also show TUI popup as fallback
+            self.show_document_popup = Some(file_path);
+            self.document_scroll_offset = 0;
+        }
+    }
+
+    pub fn close_document(&mut self) {
+        self.show_document_popup = None;
+    }
+}
 
 pub trait DocumentViewStrategy: Debug {
     fn parse_content(&self, file_path: &Path, cache_dir: &Path) -> Result<DocumentContent>;
