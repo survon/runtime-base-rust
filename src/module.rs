@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use color_eyre::Result;
+use crate::app::AppMode;
+use crate::llm::create_llm_engine_if_available;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleConfig {
@@ -31,7 +33,7 @@ impl Module {
         let config_path = path.join("config.yml");
         let config_content = fs::read_to_string(&config_path)?;
         let config: ModuleConfig = serde_yaml::from_str(&config_content)?;
-
+        println!("LOADED CONFIG: {:?}", config);  // ← ADD THIS
         Ok(Module {
             config,
             path: path.to_path_buf(),
@@ -51,6 +53,7 @@ impl Module {
 pub struct ModuleManager {
     modules: Vec<Module>,
     modules_path: std::path::PathBuf,
+    pub selected_module: usize,
 }
 
 impl ModuleManager {
@@ -58,6 +61,7 @@ impl ModuleManager {
         Self {
             modules: Vec::new(),
             modules_path: std::path::PathBuf::from("./wasteland/modules"),
+            selected_module: 0,
         }
     }
 
@@ -105,5 +109,40 @@ impl ModuleManager {
 
     pub fn get_knowledge_modules(&self) -> Vec<&Module> {
         self.get_modules_by_type("knowledge")
+    }
+
+
+    pub fn next_module(&mut self) {
+        let module_count = self.get_modules().len();
+        if module_count > 0 {
+            self.selected_module = (self.selected_module + 1) % module_count;
+        }
+    }
+
+    pub fn prev_module(&mut self) {
+        let module_count = self.get_modules().len();
+        if module_count > 0 {
+            self.selected_module = if self.selected_module == 0 {
+                module_count - 1
+            } else {
+                self.selected_module - 1
+            };
+        }
+    }
+
+    pub fn select_current_module(&mut self) -> Option<&Module> {
+        self.get_modules().get(self.selected_module)
+    }
+
+    pub async fn refresh_modules(&mut self) {
+        if let Err(e) = self.discover_modules() {
+            eprintln!("Failed to refresh modules: {}", e);
+        }
+
+        // Reset selection if it's out of bounds
+        let module_count = self.get_modules().len();
+        if self.selected_module >= module_count && module_count > 0 {
+            self.selected_module = 0;
+        }
     }
 }

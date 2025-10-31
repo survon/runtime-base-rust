@@ -456,7 +456,171 @@ impl LlmEngine {
     }
 }
 
-/// Factory for creating LLM strategies
+/// Manages chat UI state and interactions
+#[derive(Debug)]
+pub struct ChatManager {
+    pub chat_input: String,
+    pub chat_scroll_offset: usize,
+    pub current_link_index: Option<usize>,
+    pub available_links: Vec<String>,
+}
+
+impl ChatManager {
+    pub fn new() -> Self {
+        Self {
+            chat_input: String::new(),
+            chat_scroll_offset: 0,
+            current_link_index: None,
+            available_links: Vec::new(),
+        }
+    }
+
+    pub fn handle_chat_input(&mut self, ch: char) {
+        self.chat_input.push(ch);
+    }
+
+    pub fn chat_backspace(&mut self) {
+        self.chat_input.pop();
+    }
+
+    pub fn clear_input(&mut self) {
+        self.chat_input.clear();
+    }
+
+    pub fn get_input(&self) -> &str {
+        &self.chat_input
+    }
+
+    pub fn cycle_document_links(&mut self) {
+        self.cycle_document_links_direction(1);
+    }
+
+    pub fn cycle_document_links_backward(&mut self) {
+        self.cycle_document_links_direction(-1);
+    }
+
+    fn cycle_document_links_direction(&mut self, direction: i32) {
+        if !self.available_links.is_empty() {
+            match self.current_link_index {
+                None => self.current_link_index = Some(0),
+                Some(index) => {
+                    let len = self.available_links.len() as i32;
+                    let new_index = if direction > 0 {
+                        (index as i32 + 1) % len
+                    } else {
+                        (index as i32 - 1 + len) % len
+                    };
+                    self.current_link_index = Some(new_index as usize);
+                }
+            }
+        }
+    }
+
+    pub fn clear_document_links(&mut self) {
+        self.current_link_index = None;
+        self.available_links.clear();
+    }
+
+    pub fn set_available_links(&mut self, links: Vec<String>) {
+        self.available_links = links;
+        self.current_link_index = None;
+    }
+
+    pub fn update_available_links(&mut self, llm_engine: &LlmEngine) {
+        let mut links = Vec::new();
+
+        if let Ok(messages) = llm_engine.get_chat_history(50) {
+            for msg in messages {
+                if msg.role == "assistant" {
+                    for line in msg.content.lines() {
+                        if line.contains("(from ./") {
+                            if let Some(start) = line.find("(from ") {
+                                if let Some(end) = line[start..].find(')') {
+                                    let full_path = &line[start + 6..start + end];
+                                    links.push(full_path.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        self.set_available_links(links);
+    }
+
+    pub fn scroll_chat_up(&mut self) {
+        if self.chat_scroll_offset > 0 {
+            self.chat_scroll_offset -= 1;
+        }
+    }
+
+    pub fn scroll_chat_down(&mut self, llm_engine: &LlmEngine) {
+        if let Ok(messages) = llm_engine.get_chat_history(50) {
+            let total_lines = self.calculate_chat_content_lines(&messages);
+            let visible_lines = self.get_chat_visible_lines();
+            let max_scroll = total_lines.saturating_sub(visible_lines);
+
+            if self.chat_scroll_offset < max_scroll {
+                self.chat_scroll_offset += 1;
+            }
+        }
+    }
+
+    pub fn get_chat_scroll_offset(&self) -> usize {
+        self.chat_scroll_offset
+    }
+
+    fn calculate_chat_content_lines(&self, messages: &[ChatMessage]) -> usize {
+        let mut line_count = 0;
+        for msg in messages {
+            let content_lines: Vec<&str> = msg.content.lines().collect();
+            line_count += content_lines.len() + 1; // +1 for spacing
+        }
+        line_count
+    }
+
+    fn get_chat_visible_lines(&self) -> usize {
+        // This should match the chat history area height from your layout
+        // You'll need to calculate this based on your UI layout
+        20 // Placeholder - adjust based on actual chat area height
+    }
+
+    pub fn get_current_link(&self) -> Option<&String> {
+        self.current_link_index
+            .and_then(|idx| self.available_links.get(idx))
+    }
+}
+
+/// Helper function to create LLM engine from module configuration
+pub async fn create_llm_engine_if_available(
+    module_manager: &ModuleManager,
+    _database: &Database,
+    bus_sender: crate::bus::BusSender,
+) -> Result<Option<LlmEngine>> {
+    let llm_modules = module_manager.get_modules_by_type("llm");
+    if let Some(llm_module) = llm_modules.first() {
+        let model_name = llm_module.config.model.as_deref().unwrap_or("knowledge");
+
+        println!("Found LLM module: {} with model: {}", llm_module.config.name, model_name);
+
+        let (strategy, _) = create_llm_strategy(model_name).await;
+        let session_id = format!("session_{}",
+                                 std::time::SystemTime::now()
+                                     .duration_since(std::time::UNIX_EPOCH)
+                                     .unwrap()
+                                     .as_secs()
+        );
+
+        let database = Database::new_implied_all_schemas()?;
+        let engine = LlmEngine::new(strategy, database, bus_sender, session_id);
+        Ok(Some(engine))
+    } else {
+        println!("No LLM modules found. Create an LLM module to enable AI chat.");
+        Ok(None)
+    }
+}
+
 /// Factory for creating LLM strategies
 pub async fn create_llm_strategy(model_name: &str) -> (LlmStrategy, Option<Database>) {
     match model_name {

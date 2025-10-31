@@ -33,14 +33,14 @@ impl Widget for &App {
         match &self.mode {
             AppMode::Overview => overview::render_overview(self, area, buf),
             AppMode::ModuleDetail(module_idx) => {
-                if let Some(module) = self.get_modules().get(*module_idx) {
+                if let Some(module) = self.module_manager.get_modules().get(*module_idx) {
                     module_detail::render_module_detail(self, module, area, buf);
                 } else {
                     overview::render_overview(self, area, buf);
                 }
             }
             AppMode::LlmChat(module_idx) => {
-                if let Some(module) = self.get_modules().get(*module_idx) {
+                if let Some(module) = self.module_manager.get_modules().get(*module_idx) {
                     llm_chat::render_llm_chat(self, module, area, buf);
                 } else {
                     overview::render_overview(self, area, buf);
