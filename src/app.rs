@@ -240,8 +240,8 @@ impl App {
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
-            KeyCode::Up | KeyCode::Char('k') => self.events.send(AppEvent::Decrement),
-            KeyCode::Down | KeyCode::Char('j') => self.events.send(AppEvent::Increment),
+            KeyCode::Left | KeyCode::Char('k') => self.events.send(AppEvent::Decrement),
+            KeyCode::Right | KeyCode::Char('j') => self.events.send(AppEvent::Increment),
             KeyCode::Enter | KeyCode::Char(' ') => self.events.send(AppEvent::Select),
             KeyCode::Backspace | KeyCode::Char('h') => self.events.send(AppEvent::Back),
             KeyCode::Char('r') => self.events.send(AppEvent::RefreshModules),
