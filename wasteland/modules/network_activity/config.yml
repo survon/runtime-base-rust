@@ -1,0 +1,13 @@
+name: "Network Activity"
+module_type: "com"
+bus_topic: "network"
+template: "activity_card"
+bindings:
+  activity_log:
+    - "INFO: Connection established from 192.168.1.100"
+    - "INFO: Data packet received (2.4KB)"
+    - "WARN: High latency detected (250ms)"
+    - "INFO: Packet forwarded to main hub"
+    - "ERROR: Connection timeout on retry"
+    - "INFO: Reconnection successful"
+  status: "active"

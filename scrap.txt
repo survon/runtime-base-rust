@@ -22,3 +22,11 @@ https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/src
 https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/src/ui/modules_list.rs
 https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/src/ui/monitoring.rs
 https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/src/ui/overview.rs
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/wasteland/modules/com_gate/config.yml
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/wasteland/modules/entertainment_puzzle/config.yml
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/wasteland/modules/knowledge_survival/config.yml
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/wasteland/modules/monitoring_pressure/config.yml
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/wasteland/modules/survon-llm/config.yml
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/cargo.toml
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/Dockerfile
+https://raw.githubusercontent.com/survon/runtime-base-rust/refs/heads/master/docker-compose.yml
