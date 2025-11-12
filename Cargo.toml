@@ -40,7 +40,7 @@ pdf-extract = "0.7"
 llama_cpp = { version = "0.3", default-features = false }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-libc = "0.2.175"
+libc = "0.2.177"
 
 [[bin]]
 name = "runtime-base-rust"
