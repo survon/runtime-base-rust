@@ -1,7 +1,17 @@
-name: gate
+name: "Gate Control"
 module_type: com
-ports:
-  - usb0
-messages:
-  - close_gate
 bus_topic: com_input
+template: toggle_switch
+
+# Template bindings
+bindings:
+  state: false  # false = closed, true = open
+  label: "Main Gate"
+  toggle_on_label: "Closed/Locked"
+  toggle_off_label: "Open/Unlocked"
+  description: "Primary entrance gate control"
+  ports:
+    - usb0
+  messages:
+    - close_gate
+    - open_gate

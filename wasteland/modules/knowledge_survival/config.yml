@@ -1,3 +1,10 @@
-name: survival
+name: "Survival Guide"
 module_type: knowledge
-bus_topic: knowledge_update  # Placeholder, as it’s a knowledge source (could trigger on LLM query)
+bus_topic: knowledge_survival
+template: ""  # Empty template = won't show in dashboard
+
+# Optional metadata
+bindings:
+  description: "Emergency survival procedures and protocols"
+  version: "2.1"
+  last_updated: "2024-01-15"

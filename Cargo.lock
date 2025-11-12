@@ -3598,6 +3598,7 @@ dependencies = [
  "futures",
  "gag",
  "image 0.25.8",
+ "lazy_static",
  "libc",
  "llama_cpp",
  "pdf",

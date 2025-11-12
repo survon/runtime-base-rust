@@ -1,23 +1,17 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    text::Text,
-    widgets::{Block, BorderType, Clear, Paragraph, Widget, Wrap},
+    layout::{Constraint, Direction, Layout, Rect},
+    widgets::Widget,
 };
 use crate::app::{App, AppMode};
-use crate::module::Module;
-use std::path::Path;
-use tui_scrollview::{ScrollView, ScrollViewState};
-use ratatui::widgets::StatefulWidget;
-use ratatui::prelude::Size;
 
 // Re-export submodules
+pub mod modules;
+
 pub mod overview;
 pub mod modules_list;
 pub mod messages;
 pub mod module_detail;
-pub mod monitoring;
 pub mod com;
 pub mod entertainment;
 pub mod knowledge;
@@ -27,20 +21,17 @@ pub mod chat_history;
 pub mod document_viewer;
 pub mod document_popup_widget;
 pub mod external_viewer;
+pub mod template;
+pub mod splash;
 
-impl Widget for &App {
+impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        match &self.mode {
+        match self.mode {
+            AppMode::Splash => {},
             AppMode::Overview => overview::render_overview(self, area, buf),
-            AppMode::ModuleDetail(module_idx) => {
-                if let Some(module) = self.module_manager.get_modules().get(*module_idx) {
-                    module_detail::render_module_detail(self, module, area, buf);
-                } else {
-                    overview::render_overview(self, area, buf);
-                }
-            }
+            AppMode::ModuleDetail(_module_idx) => {}
             AppMode::LlmChat(module_idx) => {
-                if let Some(module) = self.module_manager.get_modules().get(*module_idx) {
+                if let Some(module) = self.module_manager.get_modules().get(module_idx) {
                     llm_chat::render_llm_chat(self, module, area, buf);
                 } else {
                     overview::render_overview(self, area, buf);

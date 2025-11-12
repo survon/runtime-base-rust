@@ -1,8 +1,8 @@
-name: pressure
-module_type: monitoring
-view_type: line
-thresholds:
-  high: 50.0
-rules:
-  on_change: "value > threshold"
-bus_topic: monitoring
+name: "Pressure Monitor"
+module_type: "monitoring"
+bus_topic: "pressure_sensor"
+template: "gauge_card"
+bindings:
+  pressure_psi: 85.5
+  bus_topic: "monitoring"
+  is_blinkable: true

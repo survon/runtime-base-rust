@@ -1,10 +1,3 @@
-use crate::event::{AppEvent, Event, EventHandler};
-use crate::module::{Module, ModuleManager};
-use crate::bus::{MessageBus, BusMessage, BusReceiver};
-use crate::database::{Database, ChatMessage};
-use crate::llm::{LlmEngine, ChatManager, create_llm_strategy, create_llm_engine_if_available};
-use crate::ui::document_viewer::{DocumentViewer, DocumentContent, DocumentManager};
-use crate::ui::external_viewer::ExternalViewer;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -14,13 +7,23 @@ use std::path::{Path,PathBuf};
 use std::time::Duration;
 use std::sync::Arc;
 use gag::Gag;
-
 use std::collections::HashMap;
 
-use crate::ui;
+use crate::event::{AppEvent, Event, EventHandler};
+use crate::module::{Module, ModuleManager};
+use crate::bus::{MessageBus, BusMessage, BusReceiver};
+use crate::database::{Database, ChatMessage};
+use crate::llm::{LlmEngine, ChatManager, create_llm_strategy, create_llm_engine_if_available};
+use crate::ui::{
+    document_viewer::{DocumentViewer, DocumentContent, DocumentManager},
+    external_viewer::ExternalViewer,
+    module_detail,
+    splash::SplashScreen
+};
 
 #[derive(Debug, PartialEq)]
 pub enum AppMode {
+    Splash,
     Overview,
     ModuleDetail(usize),
     LlmChat(usize), // Index of the LLM module
@@ -36,6 +39,9 @@ pub struct App {
     pub running: bool,
     /// Current app mode/screen
     pub mode: AppMode,
+
+    pub needs_redraw: bool,
+    pub splash_screen: Option<SplashScreen>,
 
     /// Module manager
     pub module_manager: ModuleManager,
@@ -84,7 +90,9 @@ impl App {
 
         Ok(Self {
             running: true,
-            mode: AppMode::Overview,
+            mode: AppMode::Splash,
+            needs_redraw: false,
+            splash_screen: Some(SplashScreen::new()),
             module_manager,
             message_bus,
             bus_receiver,
@@ -97,33 +105,111 @@ impl App {
         })
     }
 
+    pub fn has_active_blinks(&self) -> bool {
+        self.module_manager.has_active_blinks()
+    }
 
-
-
+    pub fn request_redraw(&mut self) {
+        self.needs_redraw = true;
+    }
 
     /// Run the application's main loop.
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         let mut needs_redraw = true;
 
         while self.running {
-            if needs_redraw {
 
+            // Check if splash is complete
+            if matches!(self.mode, AppMode::Splash) {
+                if let Some(splash) = &self.splash_screen {
+                    if splash.is_complete() {
+                        self.mode = AppMode::Overview;
+                        self.splash_screen = None;
+                        needs_redraw = true;
+                    }
+                }
+            }
+
+            if needs_redraw || self.needs_redraw {
                 terminal.draw(|frame| {
                     static mut RENDER_COUNT: u32 = 0;
                     unsafe {
                         RENDER_COUNT += 1;
-                        if RENDER_COUNT % 100 == 0 { // Only print every 100th render
-                            eprintln!("Render count: {}", RENDER_COUNT);
+                        if RENDER_COUNT % 100 == 0 {
+                            // Log for performance checks
+                            // eprintln!("Render count: {}", RENDER_COUNT);
                         }
                     }
 
-                    // Render main app
-                    frame.render_widget(&self, frame.area());
+                    match self.mode {
+                        AppMode::Splash => {
+                            // Render splash screen
+                            if let Some(splash) = &mut self.splash_screen {
+                                let area = frame.area();
+                                let buf = frame.buffer_mut();
+                                splash.render(area, buf);
+                            }
+                        }
+                        AppMode::Overview | AppMode::LlmChat(_) => {
+                            // Use normal widget rendering for these modes
+                            frame.render_widget(&mut self, frame.area());
+                        }
+                        AppMode::ModuleDetail(module_idx) => {
+                            // Special handling for module detail to render templates with Frame
+                            let area = frame.area();
+                            let buf = frame.buffer_mut();
+
+                            // Render chrome (title, help, etc.)
+                            module_detail::render_module_detail_chrome(&self, module_idx, area, buf);
+
+                            // Render template content
+                            let content_area = module_detail::get_content_area(area);
+
+                            if let Some(module) = self.module_manager.get_modules_mut().get_mut(module_idx) {
+                                let is_selected = false;
+                                if let Err(e) = module.render(is_selected, content_area, buf) {
+                                    // Render error widget
+                                    use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
+                                    use ratatui::style::{Color, Style};
+                                    use ratatui::layout::Alignment;
+                                    use ratatui::text::Line;
+
+                                    let error_lines = vec![
+                                        Line::from(""),
+                                        Line::from("⚠️  Template Rendering Error").style(Style::default().fg(Color::Red)),
+                                        Line::from(""),
+                                        Line::from(e.clone()).style(Style::default().fg(Color::Yellow)),
+                                        Line::from(""),
+                                        Line::from("Check your module's config.yml:").style(Style::default().fg(Color::Gray)),
+                                        Line::from("  - Is the 'template' field correct?").style(Style::default().fg(Color::Gray)),
+                                        Line::from("  - Are all required bindings present?").style(Style::default().fg(Color::Gray)),
+                                    ];
+
+                                    let error_widget = Paragraph::new(error_lines)
+                                        .block(
+                                            Block::bordered()
+                                                .title("Error")
+                                                .border_type(BorderType::Rounded)
+                                                .style(Style::default().fg(Color::Red))
+                                        )
+                                        .alignment(Alignment::Center)
+                                        .wrap(Wrap { trim: true });
+
+                                    frame.render_widget(error_widget, content_area);
+                                }
+                            }
+                        }
+                    }
                 })?;
 
                 // save power
                 needs_redraw = false;
+                self.needs_redraw = false;
             }
+
+            // During splash, we need continuous redraws for animation
+            let should_animate = matches!(self.mode, AppMode::Splash) ||
+                (matches!(self.mode, AppMode::Overview) && self.has_active_blinks());
 
             // Handle events with timeout so we can process bus messages
             tokio::select! {
@@ -131,11 +217,22 @@ impl App {
                     match event {
                         Ok(event) => {
                             match event {
-                                Event::Tick => {}, // Don't redraw on tick
+                                Event::Tick => {
+                                    if should_animate {
+                                        needs_redraw = true;
+                                    }
+                                },
                                 Event::Crossterm(event) => match event {
                                     crossterm::event::Event::Key(key_event) => {
-                                        self.handle_key_events(key_event)?;
-                                        needs_redraw = true;
+                                        // Allow skipping splash with any key
+                                        if matches!(self.mode, AppMode::Splash) {
+                                            self.mode = AppMode::Overview;
+                                            self.splash_screen = None;
+                                            needs_redraw = true;
+                                        } else {
+                                            self.handle_key_events(key_event)?;
+                                            needs_redraw = true;
+                                        }
                                         use std::io::Write;
                                         std::io::stdout().flush()?;
                                     }

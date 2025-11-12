@@ -1,27 +1,31 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Stylize},
-    text::{Line, Text},
-    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
+    style::{Color, Stylize},
+    widgets::{Block, BorderType, Paragraph, Widget},
 };
 use crate::app::App;
-use crate::module::Module;
-use crate::ui::{com, entertainment, knowledge, llm, monitoring};
 
-pub fn render_module_detail(app: &App, module: &Module, area: Rect, buf: &mut Buffer) {
+/// Renders the title and help sections (the "chrome" around the template content)
+/// The actual template content is rendered separately via Frame in the main loop
+pub fn render_module_detail_chrome(app: &App, module_idx: usize, area: Rect, buf: &mut Buffer) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),  // Title
-            Constraint::Min(1),     // Content
+            Constraint::Min(1),     // Content (template renders here via Frame)
             Constraint::Length(3),  // Help
         ])
         .split(area);
 
+    let module = match app.module_manager.get_modules().get(module_idx) {
+        Some(m) => m,
+        None => return,
+    };
+
     // Title with module info
     let icon = match module.config.module_type.as_str() {
-        "com" => "🔌",
+        "com" => "📌",
         "entertainment" => "🎮",
         "knowledge" => "📚",
         "llm" => "🤖",
@@ -29,7 +33,13 @@ pub fn render_module_detail(app: &App, module: &Module, area: Rect, buf: &mut Bu
         _ => "⚙️",
     };
 
-    let title = Paragraph::new(format!("{} {} - {}", icon, module.config.name, module.config.module_type))
+    let title = Paragraph::new(format!(
+        "{} {} - {} [{}]",
+        icon,
+        module.config.name,
+        module.config.module_type,
+        module.config.template
+    ))
         .block(
             Block::bordered()
                 .title("Module Details")
@@ -39,16 +49,6 @@ pub fn render_module_detail(app: &App, module: &Module, area: Rect, buf: &mut Bu
         .fg(Color::Green)
         .alignment(Alignment::Center);
     title.render(main_layout[0], buf);
-
-    // Module-specific content
-    match module.config.module_type.as_str() {
-        "monitoring" => monitoring::render_monitoring_module(module, main_layout[1], buf),
-        "com" => com::render_com_module(module, main_layout[1], buf),
-        "entertainment" => entertainment::render_entertainment_module(module, main_layout[1], buf),
-        "knowledge" => knowledge::render_knowledge_module(module, main_layout[1], buf),
-        "llm" => llm::render_llm_module(module, main_layout[1], buf),
-        _ => render_default_module(module, main_layout[1], buf),
-    }
 
     // Help
     let help = Paragraph::new("Backspace/h: Back to overview • '1': Close Gate • 'q': Quit")
@@ -62,25 +62,16 @@ pub fn render_module_detail(app: &App, module: &Module, area: Rect, buf: &mut Bu
     help.render(main_layout[2], buf);
 }
 
-fn render_default_module(module: &Module, area: Rect, buf: &mut Buffer) {
-    let content_lines = vec![
-        Line::from(format!("Name: {}", module.config.name)),
-        Line::from(format!("Type: {}", module.config.module_type)),
-        Line::from(format!("Bus Topic: {}", module.config.bus_topic)),
-        Line::from(format!("Path: {}", module.path.display())),
-        Line::from(""),
-        Line::from("This module type doesn't have a custom view yet."),
-        Line::from("The module is loaded and available for messaging."),
-    ];
+/// Returns the content area rect for template rendering
+pub fn get_content_area(area: Rect) -> Rect {
+    let main_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),  // Title
+            Constraint::Min(1),     // Content
+            Constraint::Length(3),  // Help
+        ])
+        .split(area);
 
-    let content = Text::from(content_lines);
-    let widget = Paragraph::new(content)
-        .block(
-            Block::bordered()
-                .title("Module Information")
-                .border_type(BorderType::Rounded)
-        )
-        .wrap(Wrap { trim: true });
-
-    widget.render(area, buf);
+    main_layout[1]
 }

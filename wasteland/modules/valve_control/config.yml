@@ -1,0 +1,10 @@
+name: "Valve Control"
+module_type: "com"
+bus_topic: "control"
+template: "toggle_switch"
+bindings:
+  state: true
+  label: "Primary Flow Control"
+  toggle_on_label: "Open"
+  toggle_off_label: "Closed"
+  description: "Controls pipeline flow"

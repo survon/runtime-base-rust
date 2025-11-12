@@ -1,0 +1,9 @@
+name: "API Gateway"
+module_type: "monitoring"
+bus_topic: "api_status"
+template: "status_badge"
+bindings:
+  status: "online"
+  message: "All systems nominal"
+  count: 1247
+  timestamp: "2024-01-15 14:32:10"
