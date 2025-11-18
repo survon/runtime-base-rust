@@ -221,11 +221,19 @@ impl App {
         match app_event {
             // Navigation events - App owns UI state
             AppEvent::Increment => {
-                self.wasteland_module_manager.next_module();
+                match self.overview_focus {
+                    OverviewFocus::WastelandModules => self.wasteland_module_manager.next_module(),
+                    OverviewFocus::CoreModules => self.core_module_manager.next_module(),
+                    _ => {}
+                }
                 Ok(true)
             }
             AppEvent::Decrement => {
-                self.wasteland_module_manager.prev_module();
+                match self.overview_focus {
+                    OverviewFocus::WastelandModules => self.wasteland_module_manager.prev_module(),
+                    OverviewFocus::CoreModules => self.core_module_manager.prev_module(),
+                    _ => {}
+                }
                 Ok(true)
             }
             AppEvent::Select => Ok(self.handle_select()),
@@ -471,6 +479,7 @@ impl App {
 
         match key_code {
             KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
+            KeyCode::Enter => self.events.send(AppEvent::Select),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
@@ -514,12 +523,16 @@ impl App {
                 } else {
                     // Default module navigation keys
                     match key_code {
-                        KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
-                        KeyCode::Backspace | KeyCode::Char('h') => self.events.send(AppEvent::Back),
+                        KeyCode::Delete if key_event.modifiers == KeyModifiers::SHIFT => {
+                            self.events.send(AppEvent::Back)
+                        },
+                        KeyCode::Esc if key_event.modifiers == KeyModifiers::SHIFT => {
+                            self.events.send(AppEvent::Quit)
+                        },
                         KeyCode::Char('r') => self.events.send(AppEvent::RefreshModules),
-                        KeyCode::Char('1') => {
-                            self.events.send(AppEvent::SendCommand("com_input".to_string(), "close_gate".to_string()));
-                        }
+                        // KeyCode::Char('1') => {
+                        //     self.events.send(AppEvent::SendCommand("com_input".to_string(), "close_gate".to_string()));
+                        // }
                         _ => {}
                     }
                 }
