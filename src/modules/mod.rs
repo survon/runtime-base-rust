@@ -145,7 +145,7 @@ impl Module {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(500);
 
-            let blink_interval = std::time::Duration::from_millis(blink_interval_ms);
+            let blink_interval = Duration::from_millis(blink_interval_ms);
 
             if self.render_state.last_blink.elapsed() >= blink_interval {
                 self.render_state.blink_state = !self.render_state.blink_state;
