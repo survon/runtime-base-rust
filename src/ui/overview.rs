@@ -5,7 +5,7 @@ use ratatui::{
     text::Text,
     widgets::{Block, BorderType, Paragraph, Widget},
 };
-use crate::app::App;
+use crate::app::{App, OverviewFocus};
 use crate::ui::{messages, modules_list};
 
 pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
@@ -30,29 +30,71 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         .alignment(Alignment::Center);
     title.render(main_layout[0], buf);
 
+    let wasteland_modules_cell_constraints = Constraint::Percentage(40);
+    let messages_cell_constraints = Constraint::Percentage(20);
+    let core_modules_cell_constraints = Constraint::Percentage(40);
+
     // Content area split between modules and messages
     let content_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(60),  // Modules
-            Constraint::Percentage(40),  // Messages
+            wasteland_modules_cell_constraints,
+            messages_cell_constraints,
+            core_modules_cell_constraints,
         ])
         .split(main_layout[1]);
 
-    // Render modules list with templates
-    // Pass true to render actual templates, false for metadata cards
-    modules_list::render_modules_list(app, content_layout[0], buf, true);
+    let should_use_template = true;
+    let is_wasteland_modules_list_focused = matches!(app.overview_focus, OverviewFocus::WastelandModules);
+    let is_core_modules_list_focused = matches!(app.overview_focus, OverviewFocus::CoreModules);
 
-    // Render recent messages
-    messages::render_recent_messages_panel(content_layout[1], buf);
+    // Render wasteland modules
+    let mut needs_redraw = false;
+    modules_list::render_modules_list(
+        &mut app.wasteland_module_manager,
+        content_layout[0],
+        buf,
+        should_use_template,
+        is_wasteland_modules_list_focused,
+        &mut needs_redraw
+    );
 
-    // Help text
-    let help_text = if app.module_manager.get_modules().is_empty() {
-        "No modules found. Press 'r' to refresh • 'o' for LLM setup • 'q' to quit"
-    } else if app.get_llm_engine().is_some() {
-        "←/→: Navigate • Enter: Select • 'c': Chat • 'o': LLM Setup • '1': Close Gate • 'r': Refresh • 'q': Quit"
+    if needs_redraw {
+        app.request_redraw();
+    }
+
+    // Render messages panel
+    let is_messages_focused = matches!(app.overview_focus, OverviewFocus::Messages);
+    app.messages_panel.render(content_layout[1], buf, is_messages_focused);
+
+    // Render core modules
+    modules_list::render_modules_list(
+        &mut app.core_module_manager,
+        content_layout[2],
+        buf,
+        should_use_template,
+        is_core_modules_list_focused,
+        &mut needs_redraw
+    );
+
+    let wasteland_help_text: &str = {
+        if app.wasteland_module_manager.get_modules().is_empty() {
+            "No wasteland modules found."
+        } else {
+            "SHIFT + ←/→: Navigate Wasteland Modules"
+        }
+    };
+
+    let focus_hint = match app.overview_focus {
+        OverviewFocus::WastelandModules => format!("{} • Tab: Focus Messages", wasteland_help_text),
+        OverviewFocus::Messages => "SHIFT + ↑/↓: Scroll Messages • Tab: Focus Core Modules".to_string(),
+        OverviewFocus::CoreModules => "SHIFT + ↑/↓: Navigate Core Modules • Tab: Focus Wasteland Modules".to_string(),
+    };
+
+    let help_text = if app.get_llm_engine().is_some() {
+        format!("{} • Enter: Select • 'c': Chat • 'r': Refresh • 'q': Quit", focus_hint)
     } else {
-        "←/→: Navigate • Enter: Select • 'o': LLM Setup • '1': Close Gate • 'r': Refresh • 'q': Quit"
+        format!("{} • Enter: Select • 'r': Refresh • 'q': Quit", focus_hint)
     };
 
     let help = Paragraph::new(help_text)
@@ -64,6 +106,4 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         .fg(Color::Yellow)
         .alignment(Alignment::Center);
     help.render(main_layout[2], buf);
-
-
 }

@@ -19,39 +19,30 @@ pub enum Event {
 }
 
 /// Application events.
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub enum AppEvent {
-    /// Move selection up/previous
-    Decrement,
-    /// Move selection down/next
+    // Navigation
     Increment,
-    /// Select current item
+    Decrement,
     Select,
-    /// Go back/escape
     Back,
-    /// Refresh modules
+
+    // System
+    Quit,
     RefreshModules,
-    /// Send command through message bus
-    SendCommand(String, String), // topic, command
-    /// Enter LLM chat mode
-    EnterChat,
-    /// Handle chat input character
-    ChatInput(char),
-    /// Submit chat message
-    ChatSubmit,
-    /// Handle backspace in chat
-    ChatBackspace,
-    /// Scroll Chat
-    ScrollChatUp,
-    ScrollChatDown,
-    /// Documents
-    OpenDocument(String), // file path
+
+    // Documents
+    OpenDocument(String),
     CloseDocument,
     ScrollDocumentUp,
     ScrollDocumentDown,
 
-    /// Quit the application.
-    Quit,
+    // Commands
+    SendCommand(String, String),
+
+    // Module-specific events that need to be handled by App
+    // (Most module interaction is now handled by the module handlers directly)
+    ChatSubmit,  // Keep this one because it needs async processing
 }
 
 /// Terminal event handler.

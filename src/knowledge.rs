@@ -24,7 +24,7 @@ impl<'a> KnowledgeIngester<'a> {
     pub fn new(database: &'a Database) -> Self {
         Self {
             database,
-            modules_dir: PathBuf::from("./wasteland/modules"),
+            modules_dir: PathBuf::from("./modules/wasteland"),
         }
     }
 

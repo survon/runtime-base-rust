@@ -1,5 +1,5 @@
-// src/ui/modules/monitoring/history_chart.rs
-use crate::module::Module;
+// src/ui/module_templates/monitoring/history_chart.rs
+use crate::modules::Module;
 use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;

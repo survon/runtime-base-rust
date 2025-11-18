@@ -1,3 +1,5 @@
+// src/ui/chat_history.rs
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -6,6 +8,7 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
 use crate::app::App;
+use crate::modules::llm::handler::LlmHandler;
 
 pub fn render_chat_history(app: &App, area: Rect, buf: &mut Buffer) {
     let content = if let Some(llm_engine) = app.get_llm_engine() {
@@ -24,6 +27,13 @@ pub fn render_chat_history(app: &App, area: Rect, buf: &mut Buffer) {
                         Line::from("Or try: 'survival tips' or 'wilderness safety'"),
                     ])
                 } else {
+                    // Get the chat manager through the LLM handler
+                    let current_link_index = app.core_module_manager
+                        .get_handler("llm")
+                        .and_then(|h| h.as_any().downcast_ref::<LlmHandler>())
+                        .map(|llm_handler| llm_handler.get_manager().chat_manager.current_link_index)
+                        .flatten();
+
                     let mut lines = Vec::new();
                     let mut link_index = 0;
 
@@ -53,7 +63,7 @@ pub fn render_chat_history(app: &App, area: Rect, buf: &mut Buffer) {
                                         .and_then(|n| n.to_str())
                                         .unwrap_or(file_part);
 
-                                    let is_selected = app.chat_manager.current_link_index == Some(link_index);
+                                    let is_selected = current_link_index == Some(link_index);
                                     let link_style = if is_selected {
                                         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                                     } else {
@@ -91,7 +101,12 @@ pub fn render_chat_history(app: &App, area: Rect, buf: &mut Buffer) {
         Text::from("LLM engine not available...")
     };
 
-    let user_scroll_offset = app.chat_manager.get_chat_scroll_offset() as u16;
+    // Get scroll offset through the LLM handler
+    let user_scroll_offset = app.core_module_manager
+        .get_handler("llm")
+        .and_then(|h| h.as_any().downcast_ref::<LlmHandler>())
+        .map(|llm_handler| llm_handler.get_manager().chat_manager.get_chat_scroll_offset() as u16)
+        .unwrap_or(0);
 
     let chat_widget = Paragraph::new(content)
         .block(

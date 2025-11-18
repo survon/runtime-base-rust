@@ -4,11 +4,11 @@ use ratatui::{
     style::{Color, Stylize},
     widgets::{Block, BorderType, Paragraph, Widget},
 };
-use crate::app::App;
+use crate::modules::{ModuleManager};
 
 /// Renders the title and help sections (the "chrome" around the template content)
 /// The actual template content is rendered separately via Frame in the main loop
-pub fn render_module_detail_chrome(app: &App, module_idx: usize, area: Rect, buf: &mut Buffer) {
+pub fn render_module_detail_chrome(module_manager: &ModuleManager, module_idx: usize, area: Rect, buf: &mut Buffer) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -18,7 +18,7 @@ pub fn render_module_detail_chrome(app: &App, module_idx: usize, area: Rect, buf
         ])
         .split(area);
 
-    let module = match app.module_manager.get_modules().get(module_idx) {
+    let module = match module_manager.get_modules().get(module_idx) {
         Some(m) => m,
         None => return,
     };

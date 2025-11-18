@@ -1,5 +1,5 @@
-// src/ui/modules/monitoring/status_badge.rs
-use crate::module::Module;
+// src/ui/module_templates/monitoring/status_badge.rs
+use crate::modules::Module;
 use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;

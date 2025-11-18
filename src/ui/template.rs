@@ -1,5 +1,5 @@
 // src/ui/template.rs
-use crate::module::Module;
+use crate::modules::Module;
 use ratatui::prelude::*;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -30,6 +30,7 @@ lazy_static::lazy_static! {
 
         // Com templates
         map.insert("activity_card", activity_card_factory as TemplateFactory);
+        map.insert("llm_card", llm_card_factory as TemplateFactory);
 
         map
     };
@@ -37,23 +38,27 @@ lazy_static::lazy_static! {
 
 // Factory functions
 fn gauge_card_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::modules::monitoring::gauge_card::GaugeCard::default())
+    Box::new(crate::ui::module_templates::monitoring::gauge_card::GaugeCard::default())
 }
 
 fn history_chart_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::modules::monitoring::history_chart_card::HistoryChart)
+    Box::new(crate::ui::module_templates::monitoring::history_chart_card::HistoryChart)
 }
 
 fn activity_card_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::modules::com::activity_card::ActivityCard)
+    Box::new(crate::ui::module_templates::com::activity_card::ActivityCard)
 }
 
 fn toggle_switch_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::modules::control::toggle_switch_card::ToggleSwitch)
+    Box::new(crate::ui::module_templates::control::toggle_switch_card::ToggleSwitch)
 }
 
 fn status_badge_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::modules::monitoring::status_badge_card::StatusBadge)
+    Box::new(crate::ui::module_templates::monitoring::status_badge_card::StatusBadge)
+}
+
+fn llm_card_factory() -> Box<dyn UiTemplate> {
+    Box::new(crate::ui::module_templates::knowledge::llm_card::LlmCard)
 }
 
 /// Helper to get a template instance

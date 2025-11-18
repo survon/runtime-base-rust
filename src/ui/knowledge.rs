@@ -5,7 +5,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
-use crate::module::Module;
+use crate::modules::Module;
 
 pub fn render_knowledge_module(module: &Module, area: Rect, buf: &mut Buffer) {
     let mut content_lines = vec![

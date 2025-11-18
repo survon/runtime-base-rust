@@ -1,15 +1,16 @@
-/// ./src/llm.rs
+// src/modules/llm/engine.rs
+//! LLM Engine - Core implementation for language model processing
 
 use crate::database::{Database, ChatMessage};
 use crate::modules::ModuleManager;
 use crate::bus::{BusMessage, BusSender};
-use tokio::time::{timeout, Duration};
 use color_eyre::Result;
 use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
 use llama_cpp::standard_sampler::StandardSampler;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use gag::Gag;
+use tokio::time::Duration;
 
 /// Embedded LLM using llama_cpp with your existing Phi-3 model
 pub struct EmbeddedLlmStrategy {
@@ -83,7 +84,7 @@ impl EmbeddedLlmStrategy {
         let mut response = String::new();
 
         // Get the completion handle and check for errors
-        let completion_result = session.start_completing_with(sampler, max_tokens); // No timeout (source: https://docs.rs/llama_cpp/0.3.1/llama_cpp/context/struct.LlamaContext.html#method.start_completing_with)
+        let completion_result = session.start_completing_with(sampler, max_tokens);
         let mut completion_handle = match completion_result {
             Ok(handle) => handle.into_strings(),
             Err(e) => return Err(color_eyre::eyre::eyre!("Failed to start completion: {}", e)),
@@ -92,7 +93,7 @@ impl EmbeddedLlmStrategy {
         // Collect tokens
         let mut token_count = 0;
         let start_time = std::time::Instant::now();
-        while let Some(token) = completion_handle.next() { // token is String (source: https://docs.rs/llama_cpp/0.3.1/llama_cpp/completion/struct.CompletionHandle.html#method.into_strings)
+        while let Some(token) = completion_handle.next() {
             if start_time.elapsed() > Duration::from_secs(30) {
                 break; // Timeout after 30 seconds
             }
@@ -116,9 +117,6 @@ impl EmbeddedLlmStrategy {
         Ok(cleaned_response)
     }
 
-    // fn build_prompt(&self, query: &str, context: &LlmContext) -> String {
-    //     format!("Q: {}\nA:", query)  // Much simpler prompt
-    // }
     fn build_prompt(&self, query: &str, context: &LlmContext) -> String {
         let mut prompt = String::new();
 
@@ -139,7 +137,7 @@ impl EmbeddedLlmStrategy {
     fn clean_response(&self, response: &str) -> String {
         let cleaned = response
             .chars()
-            .filter(|c| c.is_ascii_alphabetic() || c.is_ascii_whitespace() || c.is_ascii_punctuation()) // Strip tokens/control chars (source: https://doc.rust-lang.org/std/primitive.char.html#method.is_ascii_alphabetic)
+            .filter(|c| c.is_ascii_alphabetic() || c.is_ascii_whitespace() || c.is_ascii_punctuation())
             .collect::<String>()
             .trim()
             .replace("<|end|>", "")
@@ -148,13 +146,13 @@ impl EmbeddedLlmStrategy {
             .replace("<|system|>", "")
             .lines()
             .take(10)  // Limit to reasonable length
-            .filter(|line| !line.trim().is_empty()) // Skip empty (source: https://doc.rust-lang.org/std/primitive.str.html#method.trim)
+            .filter(|line| !line.trim().is_empty())
             .collect::<Vec<_>>()
             .join("\n")
             .trim()
             .to_string()
             .chars()
-            .take(500) // Hard cap length for DB (adjust if your schema has limit)
+            .take(500) // Hard cap length for DB
             .collect::<String>();
 
         if cleaned.is_empty() || cleaned.len() < 10 {
@@ -250,7 +248,7 @@ impl KnowledgeSearchStrategy {
         Self { database }
     }
 
-    pub async fn process_query(&self, query: &str, context: &LlmContext) -> Result<String> {
+    pub async fn process_query(&self, query: &str, _context: &LlmContext) -> Result<String> {
         let knowledge_results = self.database.search_knowledge(query, &[], 5)
             .map_err(|e| color_eyre::eyre::eyre!("Knowledge search failed: {}", e))?;
 
@@ -289,7 +287,7 @@ impl KnowledgeSearchStrategy {
                 i + 1,
                 chunk.title,
                 chunk.source_file,
-                page_info,  // Add page fragment to the link
+                page_info,
                 body_preview
             ));
         }
@@ -333,7 +331,7 @@ impl LlmStrategy {
 pub struct LlmContext {
     pub knowledge_modules: Vec<String>,
     pub recent_messages: Vec<BusMessage>,
-    pub module_states: std::collections::HashMap<String, String>,
+    pub module_states: HashMap<String, String>,
 }
 
 impl LlmContext {
@@ -341,7 +339,7 @@ impl LlmContext {
         Self {
             knowledge_modules: Vec::new(),
             recent_messages: Vec::new(),
-            module_states: std::collections::HashMap::new(),
+            module_states: HashMap::new(),
         }
     }
 
@@ -396,17 +394,9 @@ impl LlmEngine {
         &self,
         query: String,
         module_name: String,
-        module_manager: &ModuleManager,
         recent_messages: Vec<BusMessage>,
+        mut context: LlmContext,
     ) -> Result<String> {
-        // Build context from available modules and recent activity
-        let mut context = LlmContext::new();
-
-        // Add knowledge modules to context
-        for knowledge_module in module_manager.get_knowledge_modules() {
-            context.add_knowledge_module(knowledge_module.config.name.clone());
-        }
-
         // Add recent bus messages for context
         context.update_recent_messages(recent_messages);
 
@@ -422,9 +412,6 @@ impl LlmEngine {
         let result = self.strategy.process_query(&query, &context).await;
         let response = result?;
 
-        // Process query through LLM strategy
-        // let response = self.strategy.process_query(&query, &context).await?;
-
         // Store assistant response in database
         let assistant_message = ChatMessage::new_assistant(
             self.session_id.clone(),
@@ -432,8 +419,8 @@ impl LlmEngine {
             module_name.clone(),
         );
         match self.database.insert_chat_message(assistant_message) {
-            Ok(_) => {}, // Success, continue
-            Err(e) => println!("Insert failed (continuing): {:?}", e), // Log but don't bail (source: https://doc.rust-lang.org/std/io/struct.Error.html)
+            Ok(_) => {},
+            Err(e) => println!("Insert failed (continuing): {:?}", e),
         }
 
         // Send response through message bus
@@ -456,147 +443,11 @@ impl LlmEngine {
     }
 }
 
-/// Manages chat UI state and interactions
-#[derive(Debug)]
-pub struct ChatManager {
-    pub chat_input: String,
-    pub chat_scroll_offset: usize,
-    pub current_link_index: Option<usize>,
-    pub available_links: Vec<String>,
-}
-
-impl ChatManager {
-    pub fn new() -> Self {
-        Self {
-            chat_input: String::new(),
-            chat_scroll_offset: 0,
-            current_link_index: None,
-            available_links: Vec::new(),
-        }
-    }
-
-    pub fn handle_chat_input(&mut self, ch: char) {
-        self.chat_input.push(ch);
-    }
-
-    pub fn chat_backspace(&mut self) {
-        self.chat_input.pop();
-    }
-
-    pub fn clear_input(&mut self) {
-        self.chat_input.clear();
-    }
-
-    pub fn get_input(&self) -> &str {
-        &self.chat_input
-    }
-
-    pub fn cycle_document_links(&mut self) {
-        self.cycle_document_links_direction(1);
-    }
-
-    pub fn cycle_document_links_backward(&mut self) {
-        self.cycle_document_links_direction(-1);
-    }
-
-    fn cycle_document_links_direction(&mut self, direction: i32) {
-        if !self.available_links.is_empty() {
-            match self.current_link_index {
-                None => self.current_link_index = Some(0),
-                Some(index) => {
-                    let len = self.available_links.len() as i32;
-                    let new_index = if direction > 0 {
-                        (index as i32 + 1) % len
-                    } else {
-                        (index as i32 - 1 + len) % len
-                    };
-                    self.current_link_index = Some(new_index as usize);
-                }
-            }
-        }
-    }
-
-    pub fn clear_document_links(&mut self) {
-        self.current_link_index = None;
-        self.available_links.clear();
-    }
-
-    pub fn set_available_links(&mut self, links: Vec<String>) {
-        self.available_links = links;
-        self.current_link_index = None;
-    }
-
-    pub fn update_available_links(&mut self, llm_engine: &LlmEngine) {
-        let mut links = Vec::new();
-
-        if let Ok(messages) = llm_engine.get_chat_history(50) {
-            for msg in messages {
-                if msg.role == "assistant" {
-                    for line in msg.content.lines() {
-                        if line.contains("(from ./") {
-                            if let Some(start) = line.find("(from ") {
-                                if let Some(end) = line[start..].find(')') {
-                                    let full_path = &line[start + 6..start + end];
-                                    links.push(full_path.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        self.set_available_links(links);
-    }
-
-    pub fn scroll_chat_up(&mut self) {
-        if self.chat_scroll_offset > 0 {
-            self.chat_scroll_offset -= 1;
-        }
-    }
-
-    pub fn scroll_chat_down(&mut self, llm_engine: &LlmEngine) {
-        if let Ok(messages) = llm_engine.get_chat_history(50) {
-            let total_lines = self.calculate_chat_content_lines(&messages);
-            let visible_lines = self.get_chat_visible_lines();
-            let max_scroll = total_lines.saturating_sub(visible_lines);
-
-            if self.chat_scroll_offset < max_scroll {
-                self.chat_scroll_offset += 1;
-            }
-        }
-    }
-
-    pub fn get_chat_scroll_offset(&self) -> usize {
-        self.chat_scroll_offset
-    }
-
-    fn calculate_chat_content_lines(&self, messages: &[ChatMessage]) -> usize {
-        let mut line_count = 0;
-        for msg in messages {
-            let content_lines: Vec<&str> = msg.content.lines().collect();
-            line_count += content_lines.len() + 1; // +1 for spacing
-        }
-        line_count
-    }
-
-    fn get_chat_visible_lines(&self) -> usize {
-        // This should match the chat history area height from your layout
-        // You'll need to calculate this based on your UI layout
-        20 // Placeholder - adjust based on actual chat area height
-    }
-
-    pub fn get_current_link(&self) -> Option<&String> {
-        self.current_link_index
-            .and_then(|idx| self.available_links.get(idx))
-    }
-}
-
 /// Helper function to create LLM engine from module configuration
 pub async fn create_llm_engine_if_available(
     module_manager: &ModuleManager,
     _database: &Database,
-    bus_sender: crate::bus::BusSender,
+    bus_sender: BusSender,
 ) -> Result<Option<LlmEngine>> {
     let llm_modules = module_manager.get_modules_by_type("llm");
     if let Some(llm_module) = llm_modules.first() {

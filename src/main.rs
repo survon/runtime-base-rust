@@ -3,9 +3,9 @@ use crate::app::App;
 pub mod app;
 pub mod event;
 pub mod ui;
-pub mod module;
 pub mod bus;
 pub mod database;
+pub mod modules;
 pub mod llm;
 pub mod knowledge;
 

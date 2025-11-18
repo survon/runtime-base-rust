@@ -9,28 +9,46 @@ use ratatui::{
 use std::time::Duration;
 
 use crate::app::App;
-use crate::module::Module;
+use crate::modules::{Module, ModuleManager};
+use crate::ui::style::{dim_unless_focused};
 
 const MODULES_PER_ROW: usize = 3;
 
-pub fn render_modules_list(app: &mut App, area: Rect, buf: &mut Buffer, use_template: bool) {
-    let selected_idx = app.module_manager.selected_module;
+pub fn render_modules_list(
+    module_manager: &mut ModuleManager,
+    area: Rect,
+    buf: &mut Buffer,
+    use_template: bool,
+    is_focused: bool,
+    request_redraw: &mut bool  // Pass redraw flag by reference
+) {
+    let selected_idx = module_manager.selected_module;
 
-    let modules_count: usize = app.module_manager.get_modules()
+    let modules_count: usize = module_manager.get_modules()
         .iter()
         .count();
 
-    let displayable_count: usize = app.module_manager.get_modules()
+    let displayable_count: usize = module_manager.get_modules()
         .iter()
         .filter(|m| !m.config.template.is_empty())
         .count();
 
+    let text_style = dim_unless_focused(is_focused, Style::default().fg(Color::White));
+    let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Yellow));
+
+    let title_namespace_prefix = match module_manager.namespace.as_str() {
+        "core" => "Core ".to_owned(),
+        "wasteland" => "Wasteland ".to_owned(),
+        _ => "".to_owned(),
+    };
+
     if displayable_count == 0 {
-        let empty_msg = Paragraph::new("No displayable modules found.\n\nPlace module directories in:\n./wasteland/modules/\n\nEach directory should contain a config.yml file with:\n  - name\n  - module_type\n  - template\n  - bindings\n\nNote: Knowledge modules don't need templates.")
+        let empty_msg = Paragraph::new("No displayable modules found.\n\nPlace module directories in the configured path.\n\nEach directory should contain a config.yml file with:\n  - name\n  - module_type\n  - template\n  - bindings\n\nNote: Knowledge modules don't need templates.")
             .block(
                 Block::bordered()
-                    .title("Modules")
+                    .title(title_namespace_prefix + "Modules")
                     .border_type(BorderType::Rounded)
+                    .style(border_style)
             )
             .fg(Color::Red)
             .alignment(Alignment::Center)
@@ -41,17 +59,16 @@ pub fn render_modules_list(app: &mut App, area: Rect, buf: &mut Buffer, use_temp
 
     // Create main container
     let container = Block::bordered()
-        .title(format!("Modules ({} displayable, {} total)", displayable_count, modules_count))
+        .title(format!("{}Modules ({}/{} 👁️)", title_namespace_prefix, displayable_count, modules_count))
+        .style(border_style)
         .border_type(BorderType::Rounded);
     let inner_area = container.inner(area);
     container.render(area, buf);
 
     // Calculate grid layout
     let num_rows = (displayable_count + MODULES_PER_ROW - 1) / MODULES_PER_ROW;
-
-    // Create row constraints - each row gets equal space
     let row_constraints: Vec<Constraint> = (0..num_rows)
-        .map(|_| Constraint::Length(8)) // Height of each module box
+        .map(|_| Constraint::Length(8))
         .collect();
 
     let rows = Layout::default()
@@ -75,11 +92,11 @@ pub fn render_modules_list(app: &mut App, area: Rect, buf: &mut Buffer, use_temp
 
             let blink_interval = Duration::from_millis(500);
 
-            // Find the actual module index first (immutable borrow)
+            // Find the actual module index
             let mut displayable_idx = 0;
             let mut actual_module_idx = 0;
 
-            for (i, module) in app.module_manager.get_modules().iter().enumerate() {
+            for (i, module) in module_manager.get_modules().iter().enumerate() {
                 if !module.config.template.is_empty() {
                     if displayable_idx == module_idx {
                         actual_module_idx = i;
@@ -89,22 +106,22 @@ pub fn render_modules_list(app: &mut App, area: Rect, buf: &mut Buffer, use_temp
                 }
             }
 
-            // Check if we need to update blink and request redraw
+            // Check if we need to update blink
             let needs_redraw = {
-                let modules = app.module_manager.get_modules_mut();
+                let modules = module_manager.get_modules_mut();
                 if let Some(module) = modules.get_mut(actual_module_idx) {
                     module.config.is_blinkable() && module.render_state.update_blink(blink_interval)
                 } else {
                     false
                 }
-            }; // Mutable borrow ends here
+            };
 
             if needs_redraw {
-                app.request_redraw();
+                *request_redraw = true;
             }
 
-            // Now get another mutable borrow for rendering
-            let modules = app.module_manager.get_modules_mut();
+            // Render the module
+            let modules = module_manager.get_modules_mut();
             let is_selected = module_idx == selected_idx;
             if let Some(module) = modules.get_mut(actual_module_idx) {
                 render_module_box(
