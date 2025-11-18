@@ -1,12 +1,24 @@
+pub mod llm;
+pub mod module_handler;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use module_handler::ModuleHandler;
 use std::fs;
 use std::path::Path;
 use color_eyre::Result;
 use ratatui::prelude::*;
-use ratatui::buffer::Buffer;
+use ratatui::{
+    buffer::{Buffer},
+    DefaultTerminal,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+};
 use std::time::{Duration, Instant};
+
 use crate::ui::template::{get_template, UiTemplate};
+use crate::event::{AppEvent, Event, EventHandler};
+use crate::bus::{MessageBus, BusMessage, BusReceiver, BusSender};
+use crate::database::{Database};
 
 /// Runtime rendering state for modules (not serialized)
 #[derive(Debug, Clone)]
@@ -178,15 +190,137 @@ impl Clone for Module {
 pub struct ModuleManager {
     modules: Vec<Module>,
     modules_path: std::path::PathBuf,
+    pub namespace: String,
     pub selected_module: usize,
+    event_receivers: Vec<BusReceiver>,
+    handlers: HashMap<String, Box<dyn ModuleHandler>>,
 }
 
 impl ModuleManager {
-    pub fn new() -> Self {
+    pub fn new(modules_path: std::path::PathBuf, namespace: String) -> Self {
         Self {
             modules: Vec::new(),
-            modules_path: std::path::PathBuf::from("./wasteland/modules"),
+            modules_path,
+            namespace,
             selected_module: 0,
+            event_receivers: Vec::new(),
+            handlers: HashMap::new(),
+        }
+    }
+
+    pub async fn initialize_module_handlers(&mut self, database: &Database, bus_sender: BusSender) -> Result<()> {
+        // Collect module types that need handlers FIRST (avoid borrowing conflict)
+        let module_types: Vec<String> = self.modules
+            .iter()
+            .map(|m| m.config.module_type.clone())
+            .collect();
+
+        // Now register handlers based on collected types
+        for module_type in module_types {
+            match module_type.as_str() {
+                "llm" => {
+                    // Only register once
+                    if !self.handlers.contains_key("llm") {
+                        use crate::modules::llm;
+
+                        // Try to create engine
+                        let llm_engine = llm::create_llm_engine_if_available(
+                            self,
+                            database,
+                            bus_sender.clone(),
+                        ).await.ok().flatten();
+
+                        let llm_handler = Box::new(llm::handler::LlmHandler::new(llm_engine));
+                        self.register_handler(llm_handler);
+                    }
+                }
+                // Add other module types here as needed
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    pub fn register_handler(&mut self, handler: Box<dyn ModuleHandler>) {
+        let module_type = handler.module_type().to_string();
+        self.handlers.insert(module_type, handler);
+    }
+
+    pub fn get_handler(&self, module_type: &str) -> Option<&(dyn ModuleHandler + 'static)> {
+        self.handlers.get(module_type).map(|h| &**h)
+    }
+
+    pub fn get_handler_mut(&mut self, module_type: &str) -> Option<&mut (dyn ModuleHandler + 'static)> {
+        self.handlers.get_mut(module_type).map(|h| &mut **h)
+    }
+
+    pub fn handle_key_for_module(&mut self, module_idx: usize, key_code: KeyCode) -> Option<AppEvent> {
+        // Get the module type first (avoids split borrow issue)
+        let module_type = self.modules.get(module_idx)?.config.module_type.clone();
+
+        // Now we can safely get mutable references to both
+        let handler = self.handlers.get_mut(&module_type)?;
+        let module = self.modules.get_mut(module_idx)?;
+
+        handler.handle_key(key_code, module)
+    }
+
+    pub fn update_module_bindings(&mut self, module_idx: usize) {
+        // Get the module type first (avoids split borrow issue)
+        if let Some(module_type) = self.modules.get(module_idx).map(|m| m.config.module_type.clone()) {
+            // Now we can safely get mutable references to both
+            if let Some(handler) = self.handlers.get_mut(&module_type) {
+                if let Some(module) = self.modules.get_mut(module_idx) {
+                    handler.update_bindings(module);
+                }
+            }
+        }
+    }
+
+    /// Subscribe the module manager to app events it cares about
+    pub async fn subscribe_to_events(&mut self, message_bus: &MessageBus) {
+        let topics = vec![
+            "app.event.increment",
+            "app.event.decrement",
+            "app.event.select",
+            "app.event.refresh_modules",
+        ];
+
+        for topic in topics {
+            let receiver = message_bus.subscribe(topic.to_string()).await;
+            self.event_receivers.push(receiver);
+        }
+    }
+
+    /// Poll for incoming events and handle them
+    pub fn poll_events(&mut self) {
+        // Collect messages first, then process them
+        let mut messages = Vec::new();
+
+        for receiver in &mut self.event_receivers {
+            while let Ok(message) = receiver.try_recv() {
+                messages.push(message);
+            }
+        }
+
+        // Now process all collected messages
+        for message in messages {
+            self.handle_event_message(&message);
+        }
+    }
+
+    fn handle_event_message(&mut self, message: &BusMessage) {
+        match message.topic.strip_prefix("app.event.") {
+            Some("increment") => {
+                self.next_module();
+            }
+            Some("decrement") => {
+                self.prev_module();
+            }
+            Some("refresh_modules") => {
+                // Modules could reload their config, etc.
+            }
+            _ => {}
         }
     }
 

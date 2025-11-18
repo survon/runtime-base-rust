@@ -1,4 +1,4 @@
-// src/ui/modules/control/toggle_switch.rs
+// src/ui/module_templates/control/toggle_switch.rs
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
@@ -6,7 +6,7 @@ use ratatui::layout::{Alignment, Layout, Constraint, Direction};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::module::Module;
+use crate::modules::Module;
 use crate::ui::template::UiTemplate;
 
 #[derive(Debug)]

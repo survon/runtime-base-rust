@@ -1,9 +1,9 @@
-// src/ui/modules/com/activity_card.rs
+// src/ui/module_templates/com/activity_card.rs
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
 use ratatui::widgets::{Block, Borders, List, ListItem, Widget};
 
-use crate::module::Module;
+use crate::modules::Module;
 use crate::ui::template::UiTemplate;
 
 #[derive(Debug)]

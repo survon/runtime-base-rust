@@ -6,7 +6,7 @@ use ratatui::{
 use crate::app::{App, AppMode};
 
 // Re-export submodules
-pub mod modules;
+pub mod module_templates;
 
 pub mod overview;
 pub mod modules_list;
@@ -15,8 +15,6 @@ pub mod module_detail;
 pub mod com;
 pub mod entertainment;
 pub mod knowledge;
-pub mod llm;
-pub mod llm_chat;
 pub mod chat_history;
 pub mod document_viewer;
 pub mod document_popup_widget;
@@ -24,19 +22,14 @@ pub mod external_viewer;
 pub mod template;
 pub mod splash;
 
+pub mod style;
+
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        match self.mode {
+        match &self.mode {
             AppMode::Splash => {},
             AppMode::Overview => overview::render_overview(self, area, buf),
-            AppMode::ModuleDetail(_module_idx) => {}
-            AppMode::LlmChat(module_idx) => {
-                if let Some(module) = self.module_manager.get_modules().get(module_idx) {
-                    llm_chat::render_llm_chat(self, module, area, buf);
-                } else {
-                    overview::render_overview(self, area, buf);
-                }
-            }
+            AppMode::ModuleDetail(_source, _module_idx) => {},
         }
     }
 }

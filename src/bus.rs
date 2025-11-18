@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
 use std::collections::HashMap;
-use tokio::sync::mpsc;
 use color_eyre::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,10 +29,11 @@ impl BusMessage {
 pub type BusReceiver = mpsc::UnboundedReceiver<BusMessage>;
 pub type BusSender = mpsc::UnboundedSender<BusMessage>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageBus {
     sender: BusSender,
-    subscribers: HashMap<String, Vec<BusSender>>,
+    // Use Arc<RwLock> so the bus can be cloned and subscribers can be modified
+    subscribers: Arc<RwLock<HashMap<String, Vec<BusSender>>>>,
 }
 
 impl MessageBus {
@@ -41,19 +43,20 @@ impl MessageBus {
         (
             Self {
                 sender,
-                subscribers: HashMap::new(),
+                subscribers: Arc::new(RwLock::new(HashMap::new())),
             },
             receiver,
         )
     }
 
-    pub fn publish(&self, message: BusMessage) -> Result<()> {
+    pub async fn publish(&self, message: BusMessage) -> Result<()> {
         // Send to main receiver
         self.sender.send(message.clone())?;
 
         // Send to topic subscribers
-        if let Some(subscribers) = self.subscribers.get(&message.topic) {
-            for subscriber in subscribers {
+        let subscribers = self.subscribers.read().await;
+        if let Some(subs) = subscribers.get(&message.topic) {
+            for subscriber in subs {
                 let _ = subscriber.send(message.clone());
             }
         }
@@ -61,10 +64,11 @@ impl MessageBus {
         Ok(())
     }
 
-    pub fn subscribe(&mut self, topic: String) -> BusReceiver {
+    pub async fn subscribe(&self, topic: String) -> BusReceiver {
         let (sender, receiver) = mpsc::unbounded_channel();
 
-        self.subscribers
+        let mut subscribers = self.subscribers.write().await;
+        subscribers
             .entry(topic)
             .or_insert_with(Vec::new)
             .push(sender);
@@ -72,14 +76,41 @@ impl MessageBus {
         receiver
     }
 
+    /// Publish an app event to the bus with a standardized topic format
+    pub async fn publish_app_event(&self, event_name: &str, payload: &str) -> Result<()> {
+        let topic = format!("app.event.{}", event_name);
+        let message = BusMessage::new(topic, payload.to_string(), "survon_tui".to_string());
+        self.publish(message).await
+    }
+
     pub fn send_command(&self, topic: String, command: String, source: String) -> Result<()> {
         let message = BusMessage::new(topic, command, source);
-        self.publish(message)
+        // This needs to be sync, so just send to main receiver
+        self.sender.send(message)?;
+        Ok(())
     }
 
     pub fn get_sender(&self) -> BusSender {
         self.sender.clone()
     }
+}
+
+/// Usage:
+/// subscribe_app_events!(
+///     self.event_receivers,
+///     &message_bus,
+///     ["increment", "decrement", "select"]
+/// ).await;
+#[macro_export]
+macro_rules! subscribe_app_events {
+    ($receivers:expr, $bus:expr, [$($event:literal),* $(,)?]) => {{
+        async {
+            $(
+                let receiver = $bus.subscribe(format!("app.event.{}", $event)).await;
+                $receivers.push(receiver);
+            )*
+        }
+    }};
 }
 
 // Helper for creating common message types

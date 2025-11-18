@@ -1,5 +1,5 @@
-// src/ui/gauge_card.rs
-use crate::module::Module;
+// src/ui/module_templates/monitoring/gauge_card.rs
+use crate::modules::Module;
 use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;

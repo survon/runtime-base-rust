@@ -1,0 +1,14 @@
+name: "Chat Assistant"
+namespace: "core"
+module_type: "llm"
+version: "1.0.0"
+description: "Interactive LLM chat interface with knowledge search"
+bus_topic: "llm_response"
+template: "llm_card"
+is_blinkable: false
+model: "knowledge"
+bindings:
+  model_info: "Knowledge Search (FTS5)"
+  chat_history: []
+  chat_input: ""
+  scroll_offset: 0

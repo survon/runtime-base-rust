@@ -1,6 +1,10 @@
+// src/database.rs
+// Complete updated version with Arc<Mutex<>> wrapper for thread safety
+
 use rusqlite::{Connection, params, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -54,16 +58,28 @@ pub struct KnowledgeChunk {
     pub metadata: String, // JSON string
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Database {
-    app_conn: Connection,
-    knowledge_conn: Connection,
-    analytics_conn: Connection,
+    app_conn: Arc<Mutex<Connection>>,
+    knowledge_conn: Arc<Mutex<Connection>>,
+    analytics_conn: Arc<Mutex<Connection>>,
+}
+
+// Manual Debug implementation since Mutex<Connection> doesn't implement Debug
+impl std::fmt::Debug for Database {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Database")
+            .field("app_conn", &"Arc<Mutex<Connection>>")
+            .field("knowledge_conn", &"Arc<Mutex<Connection>>")
+            .field("analytics_conn", &"Arc<Mutex<Connection>>")
+            .finish()
+    }
 }
 
 impl Database {
     pub fn clear_knowledge(&self) -> Result<()> {
-        self.knowledge_conn.execute("DELETE FROM knowledge", [])?;
+        let conn = self.knowledge_conn.lock().unwrap();
+        conn.execute("DELETE FROM knowledge", [])?;
         Ok(())
     }
 
@@ -91,9 +107,9 @@ impl Database {
         let analytics_conn = Connection::open(analytics_db_path)?;
 
         let db = Database {
-            app_conn,
-            knowledge_conn,
-            analytics_conn
+            app_conn: Arc::new(Mutex::new(app_conn)),
+            knowledge_conn: Arc::new(Mutex::new(knowledge_conn)),
+            analytics_conn: Arc::new(Mutex::new(analytics_conn)),
         };
         db.init_tables()?;
         Ok(db)
@@ -101,82 +117,92 @@ impl Database {
 
     fn init_tables(&self) -> Result<()> {
         // App database tables
-        self.app_conn.execute(
-            "CREATE TABLE IF NOT EXISTS chat_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp INTEGER NOT NULL,
-                module_name TEXT NOT NULL
-            )",
-            [],
-        )?;
+        {
+            let conn = self.app_conn.lock().unwrap();
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS chat_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    module_name TEXT NOT NULL
+                )",
+                [],
+            )?;
 
-        self.app_conn.execute(
-            "CREATE TABLE IF NOT EXISTS module_state (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                module_name TEXT NOT NULL UNIQUE,
-                state_data TEXT NOT NULL,
-                updated_at INTEGER NOT NULL
-            )",
-            [],
-        )?;
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS module_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    module_name TEXT NOT NULL UNIQUE,
+                    state_data TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )",
+                [],
+            )?;
 
-        self.app_conn.execute(
-            "CREATE TABLE IF NOT EXISTS message_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                topic TEXT NOT NULL,
-                payload TEXT NOT NULL,
-                source TEXT NOT NULL,
-                timestamp INTEGER NOT NULL
-            )",
-            [],
-        )?;
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS message_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )",
+                [],
+            )?;
+        }
 
         // Knowledge database - FTS5 virtual table
-        self.knowledge_conn.execute(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge USING fts5(
-                source_file,
-                domain,
-                category,
-                title,
-                body,
-                chunk_index UNINDEXED,
-                metadata UNINDEXED
-            )",
-            [],
-        )?;
+        {
+            let conn = self.knowledge_conn.lock().unwrap();
+            conn.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge USING fts5(
+                    source_file,
+                    domain,
+                    category,
+                    title,
+                    body,
+                    chunk_index UNINDEXED,
+                    metadata UNINDEXED
+                )",
+                [],
+            )?;
+        }
 
         // Analytics database tables
-        self.analytics_conn.execute(
-            "CREATE TABLE IF NOT EXISTS query_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                query_text TEXT NOT NULL,
-                results_found INTEGER NOT NULL,
-                response_time_ms INTEGER NOT NULL,
-                timestamp INTEGER NOT NULL
-            )",
-            [],
-        )?;
+        {
+            let conn = self.analytics_conn.lock().unwrap();
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS query_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query_text TEXT NOT NULL,
+                    results_found INTEGER NOT NULL,
+                    response_time_ms INTEGER NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )",
+                [],
+            )?;
 
-        self.analytics_conn.execute(
-            "CREATE TABLE IF NOT EXISTS usage_patterns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                interaction_type TEXT NOT NULL,
-                duration_ms INTEGER NOT NULL,
-                timestamp INTEGER NOT NULL
-            )",
-            [],
-        )?;
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS usage_patterns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    interaction_type TEXT NOT NULL,
+                    duration_ms INTEGER NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )",
+                [],
+            )?;
+        }
 
         Ok(())
     }
 
     // App database methods
     pub fn insert_chat_message(&self, message: ChatMessage) -> Result<i64> {
-        let _id = self.app_conn.execute(
+        let conn = self.app_conn.lock().unwrap();
+        conn.execute(
             "INSERT INTO chat_messages (session_id, role, content, timestamp, module_name)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
@@ -188,11 +214,12 @@ impl Database {
             ],
         )?;
 
-        Ok(self.app_conn.last_insert_rowid())
+        Ok(conn.last_insert_rowid())
     }
 
     pub fn get_chat_history(&self, session_id: &str, limit: usize) -> Result<Vec<ChatMessage>> {
-        let mut stmt = self.app_conn.prepare(
+        let conn = self.app_conn.lock().unwrap();
+        let mut stmt = conn.prepare(
             "SELECT id, session_id, role, content, timestamp, module_name
              FROM chat_messages
              WHERE session_id = ?1
@@ -225,7 +252,8 @@ impl Database {
             .unwrap()
             .as_secs() as i64;
 
-        self.app_conn.execute(
+        let conn = self.app_conn.lock().unwrap();
+        conn.execute(
             "INSERT INTO message_log (topic, payload, source, timestamp)
              VALUES (?1, ?2, ?3, ?4)",
             params![topic, payload, source, timestamp],
@@ -240,7 +268,8 @@ impl Database {
             .unwrap()
             .as_secs() as i64;
 
-        self.app_conn.execute(
+        let conn = self.app_conn.lock().unwrap();
+        conn.execute(
             "INSERT OR REPLACE INTO module_state (module_name, state_data, updated_at)
              VALUES (?1, ?2, ?3)",
             params![module_name, state_data, timestamp],
@@ -250,7 +279,8 @@ impl Database {
     }
 
     pub fn get_module_state(&self, module_name: &str) -> Result<Option<String>> {
-        let mut stmt = self.app_conn.prepare(
+        let conn = self.app_conn.lock().unwrap();
+        let mut stmt = conn.prepare(
             "SELECT state_data FROM module_state WHERE module_name = ?1"
         )?;
 
@@ -266,7 +296,8 @@ impl Database {
 
     // Knowledge database methods
     pub fn insert_knowledge_chunk(&self, chunk: KnowledgeChunk) -> Result<()> {
-        self.knowledge_conn.execute(
+        let conn = self.knowledge_conn.lock().unwrap();
+        conn.execute(
             "INSERT INTO knowledge (source_file, domain, category, title, body, chunk_index, metadata)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
@@ -325,6 +356,8 @@ impl Database {
     }
 
     fn execute_search(&self, search_query: &str, domains: &[String], limit: usize) -> Result<Vec<KnowledgeChunk>> {
+        let conn = self.knowledge_conn.lock().unwrap();
+
         let sql = if domains.is_empty() {
             "SELECT rowid, source_file, domain, category, title, body, chunk_index, metadata
          FROM knowledge WHERE knowledge MATCH ?1 ORDER BY rank LIMIT ?2".to_string()
@@ -338,7 +371,7 @@ impl Database {
             )
         };
 
-        let mut stmt = self.knowledge_conn.prepare(&sql)?;
+        let mut stmt = conn.prepare(&sql)?;
 
         let limit_str = limit.to_string();
         let mut params_vec = vec![search_query];
