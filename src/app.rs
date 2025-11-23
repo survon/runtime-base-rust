@@ -1,27 +1,33 @@
 use ratatui::{
-    DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    DefaultTerminal,
 };
 use color_eyre::Result;
-use std::path::{Path,PathBuf};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::sync::Arc;
 use gag::Gag;
 use std::collections::HashMap;
-use ratatui::{Frame, layout::Rect};
+use ratatui::{layout::Rect, Frame};
 
-use crate::event::{AppEvent, Event, EventHandler};
+use crate::util::event::{AppEvent, Event, EventHandler};
 use crate::modules::{Module, ModuleManager};
-use crate::bus::{MessageBus, BusMessage, BusReceiver};
-use crate::database::{Database, ChatMessage};
+use crate::util::bus::{BusMessage, BusReceiver, MessageBus};
+use crate::util::database::{ChatMessage, Database};
 use crate::modules::llm::handler::LlmHandler;
 
 use crate::ui::{
-    document_viewer::{DocumentViewer, DocumentContent, DocumentManager},
-    external_viewer::ExternalViewer,
-    module_detail,
-    splash::SplashScreen,
-    messages::MessagesPanel
+    document::{
+        DocumentContent,
+        DocumentManager,
+        DocumentViewer,
+        external_viewer::ExternalViewer,
+    },
+    screens::{
+        splash::SplashScreen,
+        overview::messages::MessagesPanel,
+        module_detail::{render_module_detail_chrome,get_content_area}
+    }
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -30,7 +36,7 @@ pub enum ModuleSource {
     Core,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OverviewFocus {
     WastelandModules,
     Messages,
@@ -106,7 +112,7 @@ impl App {
         }
 
         // Knowledge ingestion...
-        let ingester = crate::knowledge::KnowledgeIngester::new(&database);
+        let ingester = crate::util::knowledge::KnowledgeIngester::new(&database);
         if ingester.should_reingest()? {
             ingester.ingest_all_knowledge()?;
         }
@@ -118,8 +124,6 @@ impl App {
                 "com_input".to_string(),
                 "sensor_data".to_string(),
                 "navigation".to_string(),
-                "app.event.increment".to_string(),
-                "app.event.decrement".to_string(),
             ]
         ).await;
 
@@ -171,16 +175,36 @@ impl App {
         let should_animate = matches!(self.mode, AppMode::Splash) ||
             (matches!(self.mode, AppMode::Overview) && self.has_active_blinks());
 
+        self.needs_redraw = self.needs_redraw || should_animate;
+
         should_animate
     }
 
+    // Replace the handle_crossterm_event method in app.rs
+
     fn handle_crossterm_event(&mut self, event: crossterm::event::Event) -> Result<bool> {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
         match event {
             crossterm::event::Event::Key(key_event) => {
                 if matches!(self.mode, AppMode::Splash) {
-                    self.mode = AppMode::Overview;
-                    self.splash_screen = None;
-                    return Ok(true);
+
+
+                    // Try to bypass the splash screen
+                    if let Some(splash) = &mut self.splash_screen {
+                        let dismissed = splash.bypass_theme();
+
+                        if dismissed {
+                            // Successfully dismissed - transition immediately
+                            self.mode = AppMode::Overview;
+                            self.splash_screen = None;
+                            self.needs_redraw = true;
+
+                            return Ok(true);
+                        }
+                    }
+                    return Ok(false);
                 }
 
                 self.handle_key_events(key_event)?;
@@ -195,19 +219,15 @@ impl App {
     /// Publish an AppEvent to the message bus
     async fn publish_app_event(&self, event: &AppEvent) -> Result<()> {
         let (topic, payload) = match event {
-            AppEvent::Increment => ("increment", String::new()),
-            AppEvent::Decrement => ("decrement", String::new()),
             AppEvent::Select => ("select", String::new()),
             AppEvent::Back => ("back", String::new()),
             AppEvent::RefreshModules => ("refresh_modules", String::new()),
             AppEvent::Quit => ("quit", String::new()),
             AppEvent::OpenDocument(path) => ("open_document", path.clone()),
             AppEvent::CloseDocument => ("close_document", String::new()),
-            AppEvent::ScrollDocumentUp => ("scroll_document_up", String::new()),
-            AppEvent::ScrollDocumentDown => ("scroll_document_down", String::new()),
             AppEvent::SendCommand(topic, cmd) => ("send_command", format!("{}:{}", topic, cmd)),
             AppEvent::ChatSubmit => ("chat_submit", String::new()),
-
+            AppEvent::ShowOverview => ("show_overview", String::new()),
         };
 
         self.message_bus.publish_app_event(topic, &payload).await
@@ -220,22 +240,6 @@ impl App {
         // Then handle local state changes that App owns
         match app_event {
             // Navigation events - App owns UI state
-            AppEvent::Increment => {
-                match self.overview_focus {
-                    OverviewFocus::WastelandModules => self.wasteland_module_manager.next_module(),
-                    OverviewFocus::CoreModules => self.core_module_manager.next_module(),
-                    _ => {}
-                }
-                Ok(true)
-            }
-            AppEvent::Decrement => {
-                match self.overview_focus {
-                    OverviewFocus::WastelandModules => self.wasteland_module_manager.prev_module(),
-                    OverviewFocus::CoreModules => self.core_module_manager.prev_module(),
-                    _ => {}
-                }
-                Ok(true)
-            }
             AppEvent::Select => Ok(self.handle_select()),
             AppEvent::Back => {
                 self.back_to_overview();
@@ -251,6 +255,10 @@ impl App {
                 self.handle_refresh_modules().await;
                 Ok(true)
             }
+            AppEvent::ShowOverview => {
+                self.mode = AppMode::Overview;
+                Ok(true)
+            }
 
             // Document events
             AppEvent::OpenDocument(file_path) => {
@@ -258,15 +266,7 @@ impl App {
                 Ok(true)
             }
             AppEvent::CloseDocument => {
-                self.handle_close_document();
-                Ok(true)
-            }
-            AppEvent::ScrollDocumentUp => {
-                self.document_manager.scroll_document_up();
-                Ok(true)
-            }
-            AppEvent::ScrollDocumentDown => {
-                self.document_manager.scroll_document_down();
+                /// TODO something someday.
                 Ok(true)
             }
 
@@ -317,12 +317,23 @@ impl App {
         }
     }
 
-    pub fn toggle_overview_focus(&mut self) {
-        self.overview_focus = match self.overview_focus {
-            OverviewFocus::WastelandModules => OverviewFocus::Messages,
-            OverviewFocus::Messages => OverviewFocus::CoreModules,
-            OverviewFocus::CoreModules => OverviewFocus::WastelandModules,
-        };
+    pub fn toggle_overview_focus(&mut self, step_direction: i32) {
+        let screens = [
+            OverviewFocus::WastelandModules,
+            OverviewFocus::Messages,
+            OverviewFocus::CoreModules,
+        ];
+
+        // Find current index
+        let current_index = screens.iter()
+            .position(|s| *s == self.overview_focus)
+            .unwrap_or(0);
+
+        // Calculate new index with wrapping
+        let len = screens.len() as i32;
+        let new_index = ((current_index as i32 + step_direction).rem_euclid(len)) as usize;
+
+        self.overview_focus = screens[new_index].clone();
     }
 
     async fn handle_refresh_modules(&mut self) {
@@ -330,16 +341,12 @@ impl App {
         self.core_module_manager.refresh_modules().await;
 
         // Re-initialize handlers after refresh
-        if let Err(e) = self.core_module_manager.initialize_module_handlers(
+        if let Err(e) = self.wasteland_module_manager.initialize_module_handlers(
             &self.database,
             self.message_bus.get_sender()
         ).await {
             eprintln!("Failed to re-initialize handlers: {}", e);
         }
-    }
-
-    fn handle_close_document(&mut self) {
-        self.document_manager.close_document();
     }
 
     fn render_current_mode(&mut self, frame: &mut Frame) {
@@ -373,10 +380,10 @@ impl App {
             ModuleSource::Wasteland => &self.wasteland_module_manager,
             ModuleSource::Core => &self.core_module_manager,
         };
-        module_detail::render_module_detail_chrome(module_manager_ref, module_idx, area, buf);
+        render_module_detail_chrome(module_manager_ref, module_idx, area, buf);
 
         // Update bindings and render template content
-        let content_area = module_detail::get_content_area(area);
+        let content_area = get_content_area(area);
 
         let module_manager = match source {
             ModuleSource::Wasteland => &mut self.wasteland_module_manager,
@@ -483,29 +490,57 @@ impl App {
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(AppEvent::Quit)
             }
-            KeyCode::Left if key_event.modifiers == KeyModifiers::SHIFT => {
-                self.events.send(AppEvent::Decrement)
-            },
-            KeyCode::Right if key_event.modifiers == KeyModifiers::SHIFT => {
-                self.events.send(AppEvent::Increment)
-            },
             _ => {}
         }
 
         match &self.mode {
             AppMode::Splash => {},
             AppMode::Overview => {
+                match self.overview_focus {
+                    OverviewFocus::WastelandModules => {
+                        match key_code {
+                            KeyCode::Left => {
+                                self.wasteland_module_manager.prev_module()
+                            },
+                            KeyCode::Right => {
+                                self.wasteland_module_manager.next_module()
+                            },
+                            _ => {}
+                        }
+                    },
+                    OverviewFocus::CoreModules => {
+                        match key_code {
+                            KeyCode::Left => {
+                                self.core_module_manager.prev_module()
+                            },
+                            KeyCode::Right => {
+                                self.core_module_manager.next_module()
+                            },
+                            _ => {}
+                        }
+                    },
+                    OverviewFocus::Messages => {
+                        match key_code {
+                            KeyCode::Up | KeyCode::Down => {
+                                if key_code == KeyCode::Up {
+                                    self.messages_panel.scroll_up();
+                                } else {
+                                    self.messages_panel.scroll_down();
+                                }
+                                return Ok(());
+                            },
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
                 match key_code {
                     KeyCode::Tab => {
-                        self.toggle_overview_focus();
+                        self.toggle_overview_focus(1);
                         return Ok(());
                     }
-                    KeyCode::Up | KeyCode::Down if matches!(self.overview_focus, OverviewFocus::Messages) => {
-                        if key_code == KeyCode::Up {
-                            self.messages_panel.scroll_up();
-                        } else {
-                            self.messages_panel.scroll_down();
-                        }
+                    KeyCode::BackTab => {
+                        self.toggle_overview_focus(-1);
                         return Ok(());
                     }
                     _ => {}
@@ -524,6 +559,9 @@ impl App {
                     // Default module navigation keys
                     match key_code {
                         KeyCode::Delete if key_event.modifiers == KeyModifiers::SHIFT => {
+                            self.events.send(AppEvent::Back)
+                        },
+                        KeyCode::Backspace if key_event.modifiers == KeyModifiers::SHIFT => {
                             self.events.send(AppEvent::Back)
                         },
                         KeyCode::Esc if key_event.modifiers == KeyModifiers::SHIFT => {

@@ -1,12 +1,14 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Stylize},
-    text::Text,
+    style::{Color, Stylize}
+    ,
     widgets::{Block, BorderType, Paragraph, Widget},
 };
 use crate::app::{App, OverviewFocus};
-use crate::ui::{messages, modules_list};
+
+pub mod messages;
+pub mod modules_list;
 
 pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let main_layout = Layout::default()

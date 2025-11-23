@@ -22,20 +22,17 @@ pub enum Event {
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     // Navigation
-    Increment,
-    Decrement,
     Select,
     Back,
 
     // System
     Quit,
     RefreshModules,
+    ShowOverview,
 
     // Documents
     OpenDocument(String),
     CloseDocument,
-    ScrollDocumentUp,
-    ScrollDocumentDown,
 
     // Commands
     SendCommand(String, String),

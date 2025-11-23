@@ -20,18 +20,11 @@ pub fn render_modules_list(
     buf: &mut Buffer,
     use_template: bool,
     is_focused: bool,
-    request_redraw: &mut bool  // Pass redraw flag by reference
+    request_redraw: &mut bool
 ) {
     let selected_idx = module_manager.selected_module;
-
-    let modules_count: usize = module_manager.get_modules()
-        .iter()
-        .count();
-
-    let displayable_count: usize = module_manager.get_modules()
-        .iter()
-        .filter(|m| !m.config.template.is_empty())
-        .count();
+    let modules_count = module_manager.get_modules().len();
+    let displayable_count = module_manager.get_displayable_modules().len();
 
     let text_style = dim_unless_focused(is_focused, Style::default().fg(Color::White));
     let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Yellow));
@@ -42,6 +35,7 @@ pub fn render_modules_list(
         _ => "".to_owned(),
     };
 
+    // Handle empty case
     if displayable_count == 0 {
         let empty_msg = Paragraph::new("No displayable modules found.\n\nPlace module directories in the configured path.\n\nEach directory should contain a config.yml file with:\n  - name\n  - module_type\n  - template\n  - bindings\n\nNote: Knowledge modules don't need templates.")
             .block(
@@ -76,6 +70,16 @@ pub fn render_modules_list(
         .constraints(row_constraints)
         .split(inner_area);
 
+    let blink_interval = Duration::from_millis(500);
+
+    // Build a mapping: displayable_idx -> actual_module_idx
+    let mut displayable_to_actual: Vec<usize> = Vec::new();
+    for (actual_idx, module) in module_manager.get_modules().iter().enumerate() {
+        if !module.config.template.is_empty() {
+            displayable_to_actual.push(actual_idx);
+        }
+    }
+
     // Render each row
     for (row_idx, row) in rows.iter().enumerate() {
         let start_idx = row_idx * MODULES_PER_ROW;
@@ -86,27 +90,15 @@ pub fn render_modules_list(
             .constraints(vec![Constraint::Percentage(100 / 3); 3])
             .split(*row);
 
-        for (col_idx, col_area) in cols.iter().enumerate().take(3) {
-            let module_idx = start_idx + col_idx;
-            if module_idx >= displayable_count { break; }
+        for col_idx in 0..3 {
+            let displayable_idx = start_idx + col_idx;
+            if displayable_idx >= displayable_count { break; }
 
-            let blink_interval = Duration::from_millis(500);
+            // Get the actual module index from our mapping
+            let actual_module_idx = displayable_to_actual[displayable_idx];
+            let col_area = cols[col_idx];
 
-            // Find the actual module index
-            let mut displayable_idx = 0;
-            let mut actual_module_idx = 0;
-
-            for (i, module) in module_manager.get_modules().iter().enumerate() {
-                if !module.config.template.is_empty() {
-                    if displayable_idx == module_idx {
-                        actual_module_idx = i;
-                        break;
-                    }
-                    displayable_idx += 1;
-                }
-            }
-
-            // Check if we need to update blink
+            // Check if we need to update blink for this module
             let needs_redraw = {
                 let modules = module_manager.get_modules_mut();
                 if let Some(module) = modules.get_mut(actual_module_idx) {
@@ -120,14 +112,16 @@ pub fn render_modules_list(
                 *request_redraw = true;
             }
 
+            // Check if this module is selected
+            let is_selected = actual_module_idx == selected_idx;
+
             // Render the module
             let modules = module_manager.get_modules_mut();
-            let is_selected = module_idx == selected_idx;
             if let Some(module) = modules.get_mut(actual_module_idx) {
                 render_module_box(
                     module,
                     is_selected,
-                    *col_area,
+                    col_area,
                     buf,
                     use_template,
                 );
@@ -138,8 +132,7 @@ pub fn render_modules_list(
 
 fn render_module_box(module: &mut Module, is_selected: bool, area: Rect, buf: &mut Buffer, use_template: bool) {
     // If use_template is true and module has a template, render it directly
-    if use_template && !module.config.template.is_empty() {
-
+    if use_template && ModuleManager::is_displayable_module(module) {
         if let Err(e) = module.render(is_selected, area, buf) {
             // If template fails, fall back to metadata view
             eprintln!("Template render failed: {}", e);

@@ -17,10 +17,8 @@ futures = "0.3"
 tui-scrollview = "0.5.1"
 throbber-widgets-tui = "0.5"
 lazy_static = "1.4"
-
-# Pure Rust GUI - no native dependencies!
-eframe = "0.24"  # egui framework
-egui = "0.24"
+rodio = "0.17"
+hound = "3.5"
 
 # Error handling
 color-eyre = "0.6"

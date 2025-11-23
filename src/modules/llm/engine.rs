@@ -1,9 +1,9 @@
 // src/modules/llm/engine.rs
 //! LLM Engine - Core implementation for language model processing
 
-use crate::database::{Database, ChatMessage};
+use crate::util::database::{Database, ChatMessage};
 use crate::modules::ModuleManager;
-use crate::bus::{BusMessage, BusSender};
+use crate::util::bus::{BusMessage, BusSender};
 use color_eyre::Result;
 use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
 use llama_cpp::standard_sampler::StandardSampler;

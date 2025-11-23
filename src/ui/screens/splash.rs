@@ -3,47 +3,57 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Paragraph, Widget},
     text::Line,
 };
 use std::time::{Duration, Instant};
+use crate::util::audio::{SurvonAudioPlayer};
 
 #[derive(Debug)]
 pub struct SplashScreen {
     pub start_time: Instant,
     pub animation_frame: f64,
+    pub is_running: bool,
+    pub user_dismissed: bool,
+    pub player: SurvonAudioPlayer,
 }
 
 impl SplashScreen {
     pub fn new() -> Self {
+        // Play audio on creation - the audio player now handles threading internally
+        let mut player = SurvonAudioPlayer::new_with_audio_jack(
+            "assets/audio/theme_compressed.wav",
+            0.1
+        );
+
+        if let Err(e) = player.play_looped() {
+            eprintln!("Failed to play theme: {}", e);
+        }
+
         Self {
             start_time: Instant::now(),
             animation_frame: 0.0,
+            is_running: true,
+            user_dismissed: false,
+            player,
+        }
+    }
+
+    pub fn bypass_theme(&mut self) -> bool {
+        // Only allow dismissal after 2 seconds
+        if self.start_time.elapsed() >= Duration::from_millis(2000) {
+            self.is_running = false;
+            self.user_dismissed = true;
+            self.player.stop().ok();
+            true  // Return true if we actually dismissed
+        } else {
+            false  // Return false if still in mandatory display period
         }
     }
 
     pub fn is_complete(&self) -> bool {
-        self.start_time.elapsed() >= Duration::from_millis(2000)
-    }
-
-    pub fn should_fade(&self) -> bool {
-        self.start_time.elapsed() >= Duration::from_millis(1700)
-    }
-
-    pub fn get_alpha(&self) -> f64 {
-        if !self.should_fade() {
-            return 1.0;
-        }
-
-        let fade_start = 1700.0;
-        let fade_end = 2000.0;
-        let elapsed = self.start_time.elapsed().as_millis() as f64;
-
-        if elapsed >= fade_end {
-            0.0
-        } else {
-            1.0 - ((elapsed - fade_start) / (fade_end - fade_start))
-        }
+        // Complete if user dismissed after the minimum time
+        self.user_dismissed
     }
 
     pub fn update(&mut self) {
@@ -52,11 +62,6 @@ impl SplashScreen {
     }
 
     fn get_rainbow_color(&self, offset: f64) -> Color {
-        let alpha = self.get_alpha();
-        if alpha <= 0.0 {
-            return Color::Black;
-        }
-
         // Create rainbow effect that cycles
         let hue = ((self.animation_frame + offset) % 360.0) / 360.0;
 
@@ -78,7 +83,6 @@ impl SplashScreen {
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         self.update();
 
-        // ASCII art for SURVON
         let logo = vec![
             "███████╗██╗   ██╗██████╗ ██╗   ██╗ ██████╗ ███╗   ██╗",
             "██╔════╝██║   ██║██╔══██╗██║   ██║██╔═══██╗████╗  ██║",
@@ -144,14 +148,20 @@ impl SplashScreen {
             tagline_paragraph.render(tagline_area, buf);
         }
 
-        // Render loading animation
+        // Render loading animation or "Press any key" message
         let loading_y = tagline_y + 2;
         if loading_y < area.height {
-            let dots = ".".repeat(((self.animation_frame / 5.0) as usize % 4) + 1);
-            let loading_text = format!("Loading{}", dots);
+            let elapsed = self.start_time.elapsed();
+            let message = if elapsed >= Duration::from_millis(2000) && !self.user_dismissed {
+                "Press any key to continue".to_string()
+            } else {
+                let dots = ".".repeat(((self.animation_frame / 5.0) as usize % 4) + 1);
+                format!("Loading{}", dots)
+            };
+
             let loading_color = self.get_rainbow_color(180.0);
 
-            let loading_line = Line::from(loading_text).style(
+            let loading_line = Line::from(message).style(
                 Style::default()
                     .fg(loading_color)
             );
@@ -167,17 +177,6 @@ impl SplashScreen {
             };
 
             loading_paragraph.render(loading_area, buf);
-        }
-
-        // Render fade overlay if fading
-        if self.should_fade() {
-            let alpha = self.get_alpha();
-            if alpha < 0.5 {
-                // When mostly faded, render a dimming overlay
-                let overlay = Block::default()
-                    .style(Style::default().bg(Color::Black));
-                overlay.render(area, buf);
-            }
         }
     }
 }
