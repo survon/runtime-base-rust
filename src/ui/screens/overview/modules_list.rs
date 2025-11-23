@@ -1,4 +1,3 @@
-use std::time;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Rect, Layout, Direction},
@@ -8,7 +7,7 @@ use ratatui::{
 };
 use std::time::Duration;
 
-use crate::app::App;
+use crate::log_error;
 use crate::modules::{Module, ModuleManager};
 use crate::ui::style::{dim_unless_focused};
 
@@ -135,7 +134,7 @@ fn render_module_box(module: &mut Module, is_selected: bool, area: Rect, buf: &m
     if use_template && ModuleManager::is_displayable_module(module) {
         if let Err(e) = module.render(is_selected, area, buf) {
             // If template fails, fall back to metadata view
-            eprintln!("Template render failed: {}", e);
+            log_error!("Template render failed: {}", e);
             render_metadata_card(module, is_selected, area, buf);
         }
         return;

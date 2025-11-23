@@ -315,6 +315,7 @@ impl Database {
     }
 
     fn sanitize_fts5_query(query: &str) -> String {
+        // More permissive sanitization - keep common search terms
         query
             .chars()
             .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-' || *c == '_')
@@ -330,28 +331,54 @@ impl Database {
             return Ok(Vec::new());
         }
 
-        // Try AND search first
-        let mut results = self.execute_search(&clean_query, domains, limit * 2)?; // Get more results to filter
-
-        // If no results and query has multiple words, try OR search
-        if results.is_empty() && clean_query.contains(' ') {
-            let or_query = clean_query.replace(' ', " OR ");
-            results = self.execute_search(&or_query, domains, limit * 2)?;
+        println!("Searching knowledge with query: '{}' (sanitized from '{}')", clean_query, query);
+        if !domains.is_empty() {
+            println!("Filtering by domains: {:?}", domains);
         }
 
-        // Filter results by relevance - require multiple keyword matches for OR queries
+        // Try different search strategies
+        let mut results = Vec::new();
+
+        // Strategy 1: Try exact phrase match with AND
+        results = self.execute_search(&clean_query, domains, limit * 2)?;
+        println!("Strategy 1 (AND search): found {} results", results.len());
+
+        // Strategy 2: If no results, try OR search
+        if results.is_empty() && clean_query.contains(' ') {
+            let or_query = clean_query.split_whitespace().collect::<Vec<_>>().join(" OR ");
+            println!("Strategy 2 (OR search): trying '{}'", or_query);
+            results = self.execute_search(&or_query, domains, limit * 2)?;
+            println!("Strategy 2 (OR search): found {} results", results.len());
+        }
+
+        // Strategy 3: If still no results, try each word individually
+        if results.is_empty() {
+            let words: Vec<&str> = clean_query.split_whitespace().collect();
+            println!("Strategy 3 (individual words): trying {} words", words.len());
+            for word in &words {
+                let word_results = self.execute_search(word, domains, limit)?;
+                println!("  Word '{}': found {} results", word, word_results.len());
+                if !word_results.is_empty() {
+                    results.extend(word_results);
+                    break; // Use first successful word
+                }
+            }
+        }
+
+        // Filter results by relevance for OR queries
         if clean_query.contains(" OR ") {
             let keywords: Vec<&str> = clean_query.split(" OR ").collect();
             results = results.into_iter()
                 .filter(|chunk| {
                     let content_lower = format!("{} {}", chunk.title, chunk.body).to_lowercase();
                     let matches = keywords.iter().filter(|&&keyword| content_lower.contains(keyword)).count();
-                    matches >= 2 || keywords.len() == 1 // Require at least 2 keyword matches for multi-word queries
+                    matches >= 2 || keywords.len() == 1
                 })
                 .take(limit)
                 .collect();
         }
 
+        println!("Final results: {} chunks", results.len());
         Ok(results.into_iter().take(limit).collect())
     }
 

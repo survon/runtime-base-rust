@@ -1,4 +1,3 @@
-use crate::util::database::{Database, KnowledgeChunk};
 use color_eyre::Result;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -7,6 +6,8 @@ use std::fs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::collections::HashMap;
+use crate::util::database::{Database, KnowledgeChunk};
+use crate::{log_error, log_debug, log_info, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleConfig {
@@ -34,7 +35,7 @@ impl<'a> KnowledgeIngester<'a> {
         // Check stored checksum in database
         match self.database.get_module_state("knowledge_checksum") {
             Ok(Some(stored_checksum)) => {
-                println!("stored_checksum is {}", stored_checksum);
+                log_debug!("stored_checksum is {}", stored_checksum);
                 let stored: u64 = stored_checksum.parse().unwrap_or(0);
                 Ok(current_checksum != stored)
             }
@@ -43,7 +44,7 @@ impl<'a> KnowledgeIngester<'a> {
     }
 
     pub fn ingest_all_knowledge(&self) -> Result<()> {
-        println!("Starting knowledge ingestion...");
+        log_info!("Starting knowledge ingestion...");
 
         // Clear existing knowledge
         self.database.clear_knowledge()?;
@@ -70,7 +71,7 @@ impl<'a> KnowledgeIngester<'a> {
                 continue;
             }
 
-            println!("Processing knowledge module: {}", config.name);
+            log_info!("Processing knowledge module: {}", config.name);
 
             let knowledge_dir = module_dir.path().join("knowledge");
             if knowledge_dir.exists() {
@@ -83,7 +84,8 @@ impl<'a> KnowledgeIngester<'a> {
         let checksum = self.calculate_modules_checksum()?;
         self.database.save_module_state("knowledge_checksum", &checksum.to_string())?;
 
-        println!("Knowledge ingestion complete. Processed {} chunks.", total_chunks);
+        log_info!("Knowledge ingestion complete. Processed {} chunks.", total_chunks);
+
         Ok(())
     }
 
@@ -123,7 +125,7 @@ impl<'a> KnowledgeIngester<'a> {
             .unwrap_or("")
             .to_lowercase();
 
-        println!("  Processing file: {}", file_path.display());
+        log_info!("  Processing file: {}", file_path.display());
 
         match extension.as_str() {
             "txt" => self.process_text_file(file_path, config),
@@ -133,7 +135,7 @@ impl<'a> KnowledgeIngester<'a> {
             "doc" | "docx" => self.process_doc_file(file_path, config),
             "jpg" | "jpeg" | "png" | "gif" | "bmp" => self.process_image_file(file_path, config),
             _ => {
-                println!("    Unsupported file type: {}", extension);
+                log_error!("    Unsupported file type: {}", extension);
                 Ok(vec![])
             }
         }
@@ -196,61 +198,61 @@ impl<'a> KnowledgeIngester<'a> {
     }
 
     fn process_pdf_file(&self, file_path: &Path, config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
-        use pdf::file::FileOptions;
+        log_info!("    Processing PDF: {}", file_path.display());
 
-        let cache_dir = PathBuf::from("./.cache/knowledge");
-        std::fs::create_dir_all(&cache_dir)?;
+        // Use pdf_extract to get the full text
+        match pdf_extract::extract_text(file_path) {
+            Ok(full_text) => {
+                log_info!("    Extracted {} characters from PDF", full_text.len());
 
-        let mut all_chunks = Vec::new();
-
-        // Try to parse PDF page by page
-        if let Ok(pdf_file) = FileOptions::cached().open(file_path) {
-            for page_num in 0..pdf_file.num_pages() {
-                if let Ok(page) = pdf_file.get_page(page_num) {
-                    // Extract text from this specific page
-                    // Note: This is simplified - you might need to use a different method
-                    let page_text = format!("Page {} content", page_num + 1); // Placeholder
-
-                    if page_text.trim().is_empty() {
-                        continue;
-                    }
-
-                    // Create chunks for this page
-                    let paragraphs: Vec<&str> = page_text.split("\n\n")
-                        .filter(|p| !p.trim().is_empty())
-                        .collect();
-
-                    for (para_index, paragraph) in paragraphs.iter().enumerate() {
-                        let inferred_domains = self.infer_domains_from_content(paragraph);
-                        let primary_domain = inferred_domains.first()
-                            .unwrap_or(&"general".to_string())
-                            .clone();
-
-                        let chunk = KnowledgeChunk {
-                            id: None,
-                            source_file: file_path.to_string_lossy().to_string(),
-                            domain: primary_domain,
-                            category: config.name.clone(),
-                            title: self.extract_title(paragraph, para_index),
-                            body: paragraph.trim().to_string(),
-                            chunk_index: ((page_num * 100) + (para_index as u32)) as i32,
-                            metadata: serde_json::json!({
-                            "file_type": "pdf",
-                            "full_path": file_path.to_string_lossy(),
-                            "page_number": page_num + 1,  // Store 1-indexed page number
-                            "paragraph_index": para_index,
-                        }).to_string(),
-                        };
-                        all_chunks.push(chunk);
-                    }
+                if full_text.trim().is_empty() {
+                    log_warn!("    WARNING: PDF appears to be empty or image-based");
+                    return Ok(vec![]);
                 }
+
+                let mut all_chunks = Vec::new();
+
+                // Split into paragraphs
+                let paragraphs: Vec<&str> = full_text
+                    .split("\n\n")
+                    .filter(|p| p.trim().len() > 50) // Skip very short paragraphs
+                    .collect();
+
+                log_debug!("    Found {} paragraphs", paragraphs.len());
+
+                for (para_index, paragraph) in paragraphs.iter().enumerate() {
+                    let inferred_domains = self.infer_domains_from_content(paragraph);
+                    let primary_domain = inferred_domains
+                        .first()
+                        .unwrap_or(&"general".to_string())
+                        .clone();
+
+                    let chunk = KnowledgeChunk {
+                        id: None,
+                        source_file: file_path.to_string_lossy().to_string(),
+                        domain: primary_domain,
+                        category: config.name.clone(),
+                        title: self.extract_title(paragraph, para_index),
+                        body: paragraph.trim().to_string(),
+                        chunk_index: para_index as i32,
+                        metadata: serde_json::json!({
+                        "file_type": "pdf",
+                        "full_path": file_path.to_string_lossy(),
+                        "paragraph_index": para_index,
+                    }).to_string(),
+                    };
+
+                    all_chunks.push(chunk);
+                }
+
+                log_info!("    Created {} chunks from PDF", all_chunks.len());
+                Ok(all_chunks)
             }
-            Ok(all_chunks)
-        } else {
-            // Fallback to old method if PDF parsing fails
-            let text = pdf_extract::extract_text(file_path)?;
-            let chunks = self.chunk_text(&text, file_path, config);
-            Ok(chunks)
+            Err(e) => {
+                log_error!("    ERROR: Failed to extract text from PDF: {}", e);
+                log_warn!("    This PDF might be image-based or encrypted");
+                Ok(vec![])
+            }
         }
     }
 
@@ -258,7 +260,7 @@ impl<'a> KnowledgeIngester<'a> {
         // For now, just extract text - image extraction requires additional PDF parsing
         match pdf_extract::extract_text(file_path) {
             Ok(content) => {
-                println!("    Extracted text from PDF: {} characters", content.len());
+                log_info!("    Extracted text from PDF: {} characters", content.len());
 
                 // TODO: Add actual image extraction using a crate like `pdf` or `poppler`
                 // For now, return text with empty image mappings
@@ -267,24 +269,24 @@ impl<'a> KnowledgeIngester<'a> {
                 Ok((content, image_mappings))
             }
             Err(e) => {
-                println!("    Failed to extract text from PDF: {}", e);
+                log_error!("    Failed to extract text from PDF: {}", e);
                 Ok((String::new(), HashMap::new()))
             }
         }
     }
 
     fn process_rtf_file(&self, _file_path: &Path, _config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
-        println!("    RTF processing not implemented yet");
+        log_warn!("    RTF processing not implemented yet");
         Ok(vec![])
     }
 
     fn process_doc_file(&self, _file_path: &Path, _config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
-        println!("    DOC/DOCX processing not implemented yet");
+        log_warn!("    DOC/DOCX processing not implemented yet");
         Ok(vec![])
     }
 
     fn process_image_file(&self, _file_path: &Path, _config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
-        println!("    Image OCR processing not implemented yet");
+        log_warn!("    Image OCR processing not implemented yet");
         Ok(vec![])
     }
 

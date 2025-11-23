@@ -4,6 +4,7 @@ use std::process::Stdio;
 use std::path::Path;
 use color_eyre::Result;
 use tokio::process::Command as AsyncCommand;
+use crate::log_debug;
 
 #[derive(Debug)]
 pub struct ExternalViewer {
@@ -271,7 +272,7 @@ impl ExternalViewer {
                 cmd.stderr(Stdio::null());
 
                 if let Ok(_) = cmd.spawn() {
-                    eprintln!("Launched document viewer with: {}", browser);
+                    log_debug!("Launched document viewer with: {}", browser);
                     return Ok(());
                 }
             }

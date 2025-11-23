@@ -10,25 +10,38 @@ use gag::Gag;
 use std::collections::HashMap;
 use ratatui::{layout::Rect, Frame};
 
-use crate::util::event::{AppEvent, Event, EventHandler};
-use crate::modules::{Module, ModuleManager};
-use crate::util::bus::{BusMessage, BusReceiver, MessageBus};
-use crate::util::database::{ChatMessage, Database};
-use crate::modules::llm::handler::LlmHandler;
+use crate::util::{
+    database::{ChatMessage, Database},
+    knowledge::KnowledgeIngester,
+    io::{
+        bus::{BusMessage, BusReceiver, MessageBus},
+        transport::TransportManager,
+        event::{AppEvent, Event, EventHandler},
+        discovery::{DiscoveryManager}
+    }
+};
+
+use crate::modules::{
+    llm::handler::LlmHandler,
+    Module,
+    ModuleManager
+};
 
 use crate::ui::{
     document::{
+        external_viewer::ExternalViewer,
         DocumentContent,
         DocumentManager,
         DocumentViewer,
-        external_viewer::ExternalViewer,
     },
     screens::{
-        splash::SplashScreen,
+        module_detail::{get_content_area, render_module_detail_chrome},
         overview::messages::MessagesPanel,
-        module_detail::{render_module_detail_chrome,get_content_area}
+        splash::SplashScreen
     }
 };
+
+use crate::{log_error};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSource {
@@ -77,17 +90,18 @@ pub struct App {
     pub document_manager: DocumentManager,
     pub messages_panel: MessagesPanel,
     pub overview_focus: OverviewFocus,
+    pub transport_manager: Option<TransportManager>,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
     pub async fn new() -> Result<Self> {
 
-        let core_modules_path = std::path::PathBuf::from("./modules/core/");
+        let core_modules_path = PathBuf::from("./modules/core/");
         let core_modules_namespace= "core".to_string();
         let mut core_module_manager = ModuleManager::new(core_modules_path, core_modules_namespace);
 
-        let wasteland_modules_path = std::path::PathBuf::from("./modules/wasteland/");
+        let wasteland_modules_path = PathBuf::from("./modules/wasteland/");
         let wasteland_modules_namespace= "wasteland".to_string();
         let mut wasteland_module_manager = ModuleManager::new(wasteland_modules_path, wasteland_modules_namespace);
 
@@ -96,10 +110,10 @@ impl App {
 
         // Discover modules on startup
         if let Err(e) = wasteland_module_manager.discover_modules() {
-            eprintln!("Failed to discover wasteland modules: {}", e);
+            panic!("Failed to discover wasteland modules: {}", e);
         }
         if let Err(e) = core_module_manager.discover_modules() {
-            eprintln!("Failed to discover core modules: {}", e);
+            panic!("Failed to discover core modules: {}", e);
         }
 
         // Subscribe module manager to events
@@ -108,24 +122,44 @@ impl App {
 
         // Initialize handlers for core modules (LLM, etc.)
         if let Err(e) = core_module_manager.initialize_module_handlers(&database, message_bus.get_sender()).await {
-            eprintln!("Failed to initialize module handlers: {}", e);
+            panic!("Failed to initialize module handlers: {}", e);
         }
 
+        // Initialize transport manager
+        let transport_manager = TransportManager::new(message_bus.clone());
+
+        // Add any custom outbound topics
+        transport_manager.add_outbound_topic("sensor_data".to_string()).await;
+        transport_manager.add_outbound_topic("arduino_ping".to_string()).await;
+
+        let discovery_manager = Arc::new(DiscoveryManager::new(
+            message_bus.clone(),
+            PathBuf::from("./modules/wasteland/"),
+        ));
+
+        let discovery_clone = discovery_manager.clone();
+        tokio::spawn(async move {
+            if let Err(e) = discovery_clone.start().await {
+                log_error!("Discovery manager failed to start: {}", e);
+            }
+        });
+
+        // Start the transport manager (spawns background tasks)
+        let transport_clone = transport_manager.clone();
+        tokio::spawn(async move {
+            if let Err(e) = transport_clone.start().await {
+                log_error!("Transport manager failed to start: {}", e);
+            }
+        });
+
         // Knowledge ingestion...
-        let ingester = crate::util::knowledge::KnowledgeIngester::new(&database);
+        let ingester = KnowledgeIngester::new(&database);
         if ingester.should_reingest()? {
             ingester.ingest_all_knowledge()?;
         }
 
         let mut messages_panel = MessagesPanel::new();
-        messages_panel.subscribe_topics(
-            &message_bus,
-            vec![
-                "com_input".to_string(),
-                "sensor_data".to_string(),
-                "navigation".to_string(),
-            ]
-        ).await;
+        messages_panel.subscribe_all(&message_bus).await;
 
         Ok(Self {
             running: true,
@@ -141,6 +175,7 @@ impl App {
             document_manager: DocumentManager::new()?,
             messages_panel,
             overview_focus: OverviewFocus::CoreModules,
+            transport_manager: Some(transport_manager),
         })
     }
 
@@ -345,7 +380,7 @@ impl App {
             &self.database,
             self.message_bus.get_sender()
         ).await {
-            eprintln!("Failed to re-initialize handlers: {}", e);
+            panic!("Failed to re-initialize handlers: {}", e);
         }
     }
 
@@ -466,7 +501,7 @@ impl App {
                             needs_redraw = true;
                         }
                     } else if let Err(e) = event {
-                        eprintln!("Event error: {}", e);
+                        panic!("Event error: {}", e);
                     }
                 }
                 message = self.bus_receiver.recv() => {
@@ -594,35 +629,17 @@ impl App {
 
     pub fn send_command(&self, topic: String, command: String) {
         if let Err(e) = self.message_bus.send_command(topic, command, "survon_tui".to_string()) {
-            eprintln!("Failed to send command: {}", e);
+            panic!("Failed to send command: {}", e);
         }
     }
 
     pub fn handle_bus_message(&mut self, message: BusMessage) {
-        // Log message to database
         if let Err(e) = self.database.log_bus_message(&message.topic, &message.payload, &message.source) {
-            eprintln!("Failed to log bus message: {}", e);
+            panic!("Failed to log bus message: {}", e);
         }
     }
 
-    // Method 1: Get LLM engine
-    pub fn get_llm_engine(&self) -> Option<&crate::modules::llm::LlmEngine> {
-        self.core_module_manager
-            .get_handler("llm")
-            .and_then(|h| h.as_any().downcast_ref::<LlmHandler>())
-            .and_then(|llm_handler| llm_handler.get_engine())
-    }
-
-    // Method 2: Get mutable LLM handler
-    fn get_llm_handler_mut(&mut self) -> Option<&mut LlmHandler> {
-        self.core_module_manager
-            .get_handler_mut("llm")
-            .and_then(|h| h.as_any_mut().downcast_mut::<LlmHandler>())
-    }
-
-    // Method 3: Handle chat submit
     async fn handle_chat_submit(&mut self) {
-        // Get the current LLM module name if we're in that view
         let module_name = if let AppMode::ModuleDetail(ModuleSource::Core, idx) = &self.mode {
             self.core_module_manager
                 .get_modules()
@@ -633,35 +650,24 @@ impl App {
         };
 
         if let Some(module_name) = module_name {
-            // Collect the knowledge module names first (before any mutable borrows)
+            // Collect knowledge module names
             let knowledge_module_names: Vec<String> = self.core_module_manager
                 .get_knowledge_modules()
                 .iter()
                 .map(|m| m.config.name.clone())
                 .collect();
 
-            // Get the input text before borrowing the handler mutably
-            let input_text = self.core_module_manager
-                .get_handler("llm")
-                .and_then(|h| h.as_any().downcast_ref::<LlmHandler>())
-                .map(|llm_handler| llm_handler.get_manager().chat_manager.get_input().to_string());
-
-            if let Some(input) = input_text {
-                if !input.trim().is_empty() {
-                    // Now get mutable access to process the message
-                    if let Some(llm_handler) = self.core_module_manager
-                        .get_handler_mut("llm")
-                        .and_then(|h| h.as_any_mut().downcast_mut::<LlmHandler>())
-                    {
-                        // Process without needing module_manager reference
-                        // The handler already has access to the engine which has the database
-                        if let Err(e) = llm_handler.submit_message(
-                            module_name,
-                            knowledge_module_names
-                        ).await {
-                            eprintln!("Failed to submit chat message: {}", e);
-                        }
-                    }
+            // Get mutable access to the LLM handler
+            if let Some(llm_handler) = self.core_module_manager
+                .get_handler_mut("llm")
+                .and_then(|h| h.as_any_mut().downcast_mut::<crate::modules::llm::LlmHandler>())
+            {
+                // Submit the message - the handler now does all the work
+                if let Err(e) = llm_handler.submit_message(
+                    module_name,
+                    knowledge_module_names
+                ).await {
+                    eprintln!("Failed to submit chat message: {}", e);
                 }
             }
         }

@@ -5,7 +5,7 @@ use ratatui::{
     text::Text,
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
-use crate::util::bus::{BusMessage, BusReceiver, MessageBus};
+use crate::util::io::bus::{BusMessage, BusReceiver, MessageBus};
 use crate::ui::style::{dim_unless_focused};
 
 #[derive(Debug)]
@@ -41,6 +41,27 @@ impl MessagesPanel {
             let receiver = message_bus.subscribe(topic).await;
             self.receivers.push(receiver);
         }
+    }
+
+    /// Subscribe to ALL bus topics for maximum observability (useful for debugging)
+    pub async fn subscribe_all(&mut self, message_bus: &MessageBus) {
+        // Subscribe to a wildcard or common patterns
+        let topics = vec![
+
+            /// THIS LIST NEEDS TO REMAIN AMBIGUOUS TO SUPPORT THIRD-PARTY UNKNOWNS
+            /// TODO MAKE THIS AN ENUM OR SOMETHING WE CAN ITERATE..
+            "com_input".to_string(),
+            "sensor_data".to_string(),
+            "navigation".to_string(),
+            "pressure_sensor".to_string(),
+            "network".to_string(),
+            "system_status".to_string(),
+            "llm_response".to_string(),
+            "control".to_string(),
+            "monitoring".to_string(),
+        ];
+
+        self.subscribe_topics(message_bus, topics).await;
     }
 
     /// Scroll up in message history

@@ -48,6 +48,14 @@ impl UiTemplate for LlmCard {
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u16;
 
+        // Get current link index for highlighting
+        let current_link_index = module
+            .config
+            .bindings
+            .get("current_link_index")
+            .and_then(|v| v.as_i64())
+            .map(|i| i as usize);
+
         // Layout: title, chat history, input, help
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -72,8 +80,8 @@ impl UiTemplate for LlmCard {
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
-        // Chat history
-        self.render_chat_history(&chat_history, scroll_offset, chunks[1], buf);
+        // Chat history with link highlighting
+        self.render_chat_history(&chat_history, scroll_offset, current_link_index, chunks[1], buf);
 
         // Input box
         let input_color = if is_selected { Color::Yellow } else { Color::DarkGray };
@@ -114,7 +122,14 @@ impl UiTemplate for LlmCard {
 }
 
 impl LlmCard {
-    fn render_chat_history(&self, messages: &[String], scroll_offset: u16, area: Rect, buf: &mut Buffer) {
+    fn render_chat_history(
+        &self,
+        messages: &[String],
+        scroll_offset: u16,
+        current_link_index: Option<usize>,
+        area: Rect,
+        buf: &mut Buffer
+    ) {
         let content = if messages.is_empty() {
             Text::from(vec![
                 Line::from("Welcome to your Survon LLM assistant!"),
@@ -127,7 +142,7 @@ impl LlmCard {
                 Line::from("Try asking: 'What can you do?' or 'Help with my gate system'"),
             ])
         } else {
-            self.format_messages(messages)
+            self.format_messages(messages, current_link_index)
         };
 
         let chat_widget = Paragraph::new(content)
@@ -142,8 +157,9 @@ impl LlmCard {
         Widget::render(chat_widget, area, buf);
     }
 
-    fn format_messages(&self, messages: &[String]) -> Text<'static> {
+    fn format_messages(&self, messages: &[String], current_link_index: Option<usize>) -> Text<'static> {
         let mut lines = Vec::new();
+        let mut link_counter = 0;
 
         for msg in messages {
             // Parse message format: "role:content"
@@ -169,8 +185,10 @@ impl LlmCard {
             ]));
 
             for line in content_lines.into_iter().skip(1) {
-                if line.contains("(from ./") {
-                    self.format_link_line(&line, &mut lines);
+                if line.contains("(from ./") || line.contains("(from ") {
+                    let is_selected = current_link_index == Some(link_counter);
+                    self.format_link_line(&line, &mut lines, is_selected);
+                    link_counter += 1;
                 } else {
                     lines.push(Line::from(vec![
                         Span::styled("    ", Style::default()),
@@ -184,7 +202,7 @@ impl LlmCard {
         Text::from(lines)
     }
 
-    fn format_link_line(&self, line: &str, lines: &mut Vec<Line<'static>>) {
+    fn format_link_line(&self, line: &str, lines: &mut Vec<Line<'static>>, is_selected: bool) {
         let parts: Vec<&str> = line.split("(from ").collect();
         if parts.len() == 2 {
             let file_part = parts[1].trim_end_matches(')');
@@ -193,15 +211,28 @@ impl LlmCard {
                 .and_then(|n| n.to_str())
                 .unwrap_or(file_part);
 
-            let link_style = Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::UNDERLINED);
+            // Style changes based on selection
+            let link_style = if is_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .bg(Color::Blue)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            } else {
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::UNDERLINED)
+            };
+
+            let indicator = if is_selected { " → " } else { " " };
 
             lines.push(Line::from(vec![
                 Span::styled("    ", Style::default()),
                 Span::styled(parts[0].to_string(), Style::default().fg(Color::White)),
                 Span::styled("(from ", Style::default().fg(Color::White)),
-                Span::styled(format!("{} [Tab to select]", filename), link_style),
+                Span::styled(
+                    format!("{}{}", indicator, filename),
+                    link_style
+                ),
                 Span::styled(")", Style::default().fg(Color::White)),
             ]));
         }
