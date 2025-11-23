@@ -1,4 +1,4 @@
-use crate::database::{Database, KnowledgeChunk};
+use crate::util::database::{Database, KnowledgeChunk};
 use color_eyre::Result;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::any::Any;
 
+pub mod module_templates;
+
 /// Every UI widget implements this
 pub trait UiTemplate: Any + Send + Sync + Debug {
     fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module);
@@ -38,27 +40,27 @@ lazy_static::lazy_static! {
 
 // Factory functions
 fn gauge_card_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::module_templates::monitoring::gauge_card::GaugeCard::default())
+    Box::new(module_templates::monitoring::gauge_card::GaugeCard::default())
 }
 
 fn history_chart_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::module_templates::monitoring::history_chart_card::HistoryChart)
+    Box::new(module_templates::monitoring::history_chart_card::HistoryChart)
 }
 
 fn activity_card_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::module_templates::com::activity_card::ActivityCard)
+    Box::new(module_templates::com::activity_card::ActivityCard)
 }
 
 fn toggle_switch_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::module_templates::control::toggle_switch_card::ToggleSwitch)
+    Box::new(module_templates::control::toggle_switch_card::ToggleSwitch)
 }
 
 fn status_badge_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::module_templates::monitoring::status_badge_card::StatusBadge)
+    Box::new(module_templates::monitoring::status_badge_card::StatusBadge)
 }
 
 fn llm_card_factory() -> Box<dyn UiTemplate> {
-    Box::new(crate::ui::module_templates::knowledge::llm_card::LlmCard)
+    Box::new(module_templates::knowledge::llm_card::LlmCard)
 }
 
 /// Helper to get a template instance

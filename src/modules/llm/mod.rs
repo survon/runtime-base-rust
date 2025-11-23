@@ -5,8 +5,8 @@ pub mod engine;
 pub mod handler;
 
 use color_eyre::Result;
-use crate::database::{Database, ChatMessage};
-use crate::bus::BusMessage;
+use crate::util::database::{Database, ChatMessage};
+use crate::util::bus::BusMessage;
 use crate::modules::Module;
 pub use engine::{LlmEngine, LlmContext, create_llm_engine_if_available, create_llm_strategy};
 

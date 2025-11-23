@@ -1,7 +1,7 @@
 // src/modules/module_handler.rs
 
 use color_eyre::Result;
-use crate::event::AppEvent;
+use crate::util::event::AppEvent;
 use crate::modules::Module;
 use ratatui::crossterm::event::KeyCode;
 use std::any::Any;

@@ -16,9 +16,9 @@ use ratatui::{
 use std::time::{Duration, Instant};
 
 use crate::ui::template::{get_template, UiTemplate};
-use crate::event::{AppEvent, Event, EventHandler};
-use crate::bus::{MessageBus, BusMessage, BusReceiver, BusSender};
-use crate::database::{Database};
+use crate::util::event::{AppEvent, Event, EventHandler};
+use crate::util::bus::{MessageBus, BusMessage, BusReceiver, BusSender};
+use crate::util::database::{Database};
 
 /// Runtime rendering state for modules (not serialized)
 #[derive(Debug, Clone)]
@@ -311,12 +311,6 @@ impl ModuleManager {
 
     fn handle_event_message(&mut self, message: &BusMessage) {
         match message.topic.strip_prefix("app.event.") {
-            Some("increment") => {
-                self.next_module();
-            }
-            Some("decrement") => {
-                self.prev_module();
-            }
             Some("refresh_modules") => {
                 // Modules could reload their config, etc.
             }
@@ -380,21 +374,62 @@ impl ModuleManager {
         self.get_modules_by_type("knowledge")
     }
 
-    pub fn next_module(&mut self) {
-        let module_count = self.get_modules().len();
-        if module_count > 0 {
-            self.selected_module = (self.selected_module + 1) % module_count;
-        }
+    pub fn is_displayable_module(module: &Module) -> bool {
+        !module.config.template.is_empty()
+    }
+
+    pub fn get_displayable_modules(&self) -> Vec<&Module> {
+        self.modules
+            .iter()
+            .filter(|m| Self::is_displayable_module(m))
+            .collect()
+    }
+
+    pub fn get_displayable_modules_mut(&mut self) -> Vec<&mut Module> {
+        self.modules
+            .iter_mut()
+            .filter(|m| Self::is_displayable_module(m))
+            .collect()
+    }
+
+    fn get_displayable_indices(&self) -> Vec<usize> {
+        self.modules
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| Self::is_displayable_module(m))
+            .map(|(i, _)| i)
+            .collect()
     }
 
     pub fn prev_module(&mut self) {
-        let module_count = self.get_modules().len();
-        if module_count > 0 {
-            self.selected_module = if self.selected_module == 0 {
-                module_count - 1
+        let displayable_indices = self.get_displayable_indices();
+        if displayable_indices.is_empty() {
+            return;
+        }
+
+        if let Some(current_pos) = displayable_indices.iter().position(|&idx| idx == self.selected_module) {
+            let new_pos = if current_pos == 0 {
+                displayable_indices.len() - 1
             } else {
-                self.selected_module - 1
+                current_pos - 1
             };
+            self.selected_module = displayable_indices[new_pos];
+        } else {
+            self.selected_module = displayable_indices[0];
+        }
+    }
+
+    pub fn next_module(&mut self) {
+        let displayable_indices = self.get_displayable_indices();
+        if displayable_indices.is_empty() {
+            return;
+        }
+
+        if let Some(current_pos) = displayable_indices.iter().position(|&idx| idx == self.selected_module) {
+            let new_pos = (current_pos + 1) % displayable_indices.len();
+            self.selected_module = displayable_indices[new_pos];
+        } else {
+            self.selected_module = displayable_indices[0];
         }
     }
 

@@ -38,7 +38,7 @@ impl ExternalViewer {
     }
 
     /// Launch external viewer for documents with images
-    pub async fn show_document_external(&self, document_path: &str, content: &crate::ui::document_viewer::DocumentContent) -> Result<()> {
+    pub async fn show_document_external(&self, document_path: &str, content: &crate::ui::document::DocumentContent) -> Result<()> {
         let path = std::path::Path::new(document_path);
         let extension = path.extension()
             .and_then(|ext| ext.to_str())
@@ -170,7 +170,7 @@ impl ExternalViewer {
         self.launch_browser(path).await
     }
 
-    fn create_document_html(&self, content: &crate::ui::document_viewer::DocumentContent) -> Result<String> {
+    fn create_document_html(&self, content: &crate::ui::document::DocumentContent) -> Result<String> {
         let mut html = String::from(r#"
 <!DOCTYPE html>
 <html>

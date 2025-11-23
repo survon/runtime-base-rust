@@ -51,7 +51,7 @@ pub fn render_module_detail_chrome(module_manager: &ModuleManager, module_idx: u
     title.render(main_layout[0], buf);
 
     // Help
-    let help = Paragraph::new("SHIFT + Backspace: Back to overview  • SHIFT + Esc: Quit")
+    let help = Paragraph::new("SHIFT + Delete: Back to overview  • SHIFT + Esc: Quit")
         .block(
             Block::bordered()
                 .title("Controls")

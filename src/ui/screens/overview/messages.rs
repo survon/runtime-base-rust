@@ -5,7 +5,7 @@ use ratatui::{
     text::Text,
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
-use crate::bus::{BusMessage, BusReceiver, MessageBus};
+use crate::util::bus::{BusMessage, BusReceiver, MessageBus};
 use crate::ui::style::{dim_unless_focused};
 
 #[derive(Debug)]

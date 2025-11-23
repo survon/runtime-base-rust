@@ -3,9 +3,9 @@
 use std::any::Any;
 use color_eyre::Result;
 use ratatui::crossterm::event::KeyCode;
-use crate::event::AppEvent;
+use crate::util::event::AppEvent;
 use crate::modules::{Module, module_handler::ModuleHandler};
-use crate::bus::BusMessage;
+use crate::util::bus::BusMessage;
 use super::{LlmEngine, LlmModuleManager};
 
 #[derive(Debug)]
