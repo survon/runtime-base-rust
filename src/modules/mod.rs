@@ -16,9 +16,13 @@ use ratatui::{
 use std::time::{Duration, Instant};
 
 use crate::ui::template::{get_template, UiTemplate};
-use crate::util::event::{AppEvent, Event, EventHandler};
-use crate::util::bus::{MessageBus, BusMessage, BusReceiver, BusSender};
-use crate::util::database::{Database};
+use crate::util::{
+    io::{
+        event::{AppEvent, Event, EventHandler},
+        bus::{MessageBus, BusMessage, BusReceiver, BusSender}
+    },
+    database::{Database}
+};
 
 /// Runtime rendering state for modules (not serialized)
 #[derive(Debug, Clone)]
@@ -105,7 +109,6 @@ impl Module {
         let config_path = path.join("config.yml");
         let config_content = fs::read_to_string(&config_path)?;
         let config: ModuleConfig = serde_yaml::from_str(&config_content)?;
-        println!("LOADED CONFIG: {:?}", config);
 
         Ok(Module {
             config,
@@ -223,14 +226,13 @@ impl ModuleManager {
                     if !self.handlers.contains_key("llm") {
                         use crate::modules::llm;
 
-                        // Try to create engine
-                        let llm_engine = llm::create_llm_engine_if_available(
+                        // Create LLM service using the new utility
+                        let llm_service = llm::create_llm_service_if_available(
                             self,
                             database,
-                            bus_sender.clone(),
                         ).await.ok().flatten();
 
-                        let llm_handler = Box::new(llm::handler::LlmHandler::new(llm_engine));
+                        let llm_handler = Box::new(llm::handler::LlmHandler::new(llm_service));
                         self.register_handler(llm_handler);
                     }
                 }
@@ -341,11 +343,11 @@ impl ModuleManager {
                 if config_path.exists() {
                     match Module::load_from_path(&path) {
                         Ok(module) => {
-                            println!("Loaded module: {}", module.config.name);
+                            // println!("Loaded module: {}", module.config.name);
                             self.modules.push(module);
                         }
                         Err(e) => {
-                            eprintln!("Failed to load module at {:?}: {}", path, e);
+                            panic!("Failed to load module at {:?}: {}", path, e);
                         }
                     }
                 }
@@ -439,7 +441,7 @@ impl ModuleManager {
 
     pub async fn refresh_modules(&mut self) {
         if let Err(e) = self.discover_modules() {
-            eprintln!("Failed to refresh modules: {}", e);
+            panic!("Failed to refresh modules: {}", e);
         }
 
         let module_count = self.get_modules().len();

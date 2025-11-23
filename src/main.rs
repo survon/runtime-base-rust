@@ -7,6 +7,9 @@ pub mod util;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
+    let _ = &*util::log::LOGGER;
+    log_info!("Survon runtime starting...");
+
     tracing_subscriber::fmt::init();
     color_eyre::install()?;
     let terminal = ratatui::init();

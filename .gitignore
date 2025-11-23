@@ -3,6 +3,7 @@
 .idea
 db
 .cache
+logs
 
 # We only keep the README in VCS. survon-os will install and pull
 # models into this space.

@@ -7,6 +7,7 @@ use ratatui::{
     text::Line,
 };
 use std::time::{Duration, Instant};
+use crate::log_error;
 use crate::util::audio::{SurvonAudioPlayer};
 
 #[derive(Debug)]
@@ -27,7 +28,7 @@ impl SplashScreen {
         );
 
         if let Err(e) = player.play_looped() {
-            eprintln!("Failed to play theme: {}", e);
+            log_error!("Failed to play theme: {}", e);
         }
 
         Self {

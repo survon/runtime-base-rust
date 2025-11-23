@@ -93,11 +93,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         OverviewFocus::CoreModules => "SHIFT + ↑/↓: Navigate Core Modules • Tab: Focus Wasteland Modules".to_string(),
     };
 
-    let help_text = if app.get_llm_engine().is_some() {
-        format!("{} • Enter: Select • 'c': Chat • 'r': Refresh • 'q': Quit", focus_hint)
-    } else {
-        format!("{} • Enter: Select • 'r': Refresh • 'q': Quit", focus_hint)
-    };
+    let help_text = format!("{} • Enter: Select • 'r': Refresh • 'q': Quit", focus_hint);
 
     let help = Paragraph::new(help_text)
         .block(

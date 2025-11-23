@@ -48,7 +48,7 @@ impl DocumentManager {
 
                 tokio::spawn(async move {
                     if let Err(e) = viewer.show_document_external(&path_clone, &content).await {
-                        eprintln!("Failed to launch external viewer: {}", e);
+                        panic!("Failed to launch external viewer: {}", e);
                     }
                 });
             }
