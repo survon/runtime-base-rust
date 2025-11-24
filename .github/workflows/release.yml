@@ -35,25 +35,21 @@ jobs:
         run: |
           cat > Cross.toml << 'EOF'
           [target.armv7-unknown-linux-gnueabihf]
-          pre-build = [
-              "dpkg --add-architecture armhf",
-              "apt-get update",
-              # Install newer LLVM from official repos
-              "apt-get install -y software-properties-common wget gnupg",
-              "wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -",
-              "add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal-16 main'",
-              "apt-get update",
-              # Install LLVM 16
-              "apt-get install -y llvm-16 llvm-16-dev libclang-16-dev clang-16",
-              # Install cross-compilation tools
-              "apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf",
-              "apt-get install -y libc6-dev-armhf-cross",
-              # Install build dependencies
-              "apt-get install -y cmake pkg-config",
-              "apt-get install -y libssl-dev:armhf",
-              # Create symlinks for clang
-              "ln -sf /usr/bin/llvm-config-16 /usr/bin/llvm-config",
-              "ln -sf /usr/lib/llvm-16/lib/libclang.so /usr/lib/libclang.so",
+          pre-build = [ 
+            "dpkg --add-architecture armhf",
+            "apt-get update",
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common wget gnupg",
+            "wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -",
+            "add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal-16 main'",
+            "apt-get update",
+            "apt-get install -y llvm-16 llvm-16-dev libclang-16-dev clang-16",
+            "apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf",
+            "apt-get install -y libc6-dev-armhf-cross",
+            # Install libdbus dev for the armhf target so pkg-config finds dbus-1: "apt-get install -y libdbus-1-dev:armhf",
+            "apt-get install -y cmake pkg-config",
+            "apt-get install -y libssl-dev:armhf",
+            "ln -sf /usr/bin/llvm-config-16 /usr/bin/llvm-config",
+            "ln -sf /usr/lib/llvm-16/lib/libclang.so /usr/lib/libclang.so",
           ]
           
           [build.env]
