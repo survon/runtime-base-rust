@@ -45,7 +45,7 @@ jobs:
             "apt-get install -y llvm-16 llvm-16-dev libclang-16-dev clang-16",
             "apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf",
             "apt-get install -y libc6-dev-armhf-cross",
-            # Install libdbus dev for the armhf target so pkg-config finds dbus-1: "apt-get install -y libdbus-1-dev:armhf",
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y libdbus-1-dev:armhf",
             "apt-get install -y cmake pkg-config",
             "apt-get install -y libssl-dev:armhf",
             "ln -sf /usr/bin/llvm-config-16 /usr/bin/llvm-config",
@@ -60,8 +60,12 @@ jobs:
               "CXX_armv7_unknown_linux_gnueabihf",
               "AR_armv7_unknown_linux_gnueabihf",
               "PKG_CONFIG_ALLOW_CROSS",
+              "PKG_CONFIG_ALLOW_SYSTEM_LIBS",
+              "PKG_CONFIG_ALLOW_SYSTEM_CFLAGS",
               "PKG_CONFIG_PATH",
               "PKG_CONFIG_LIBDIR",
+              "PKG_CONFIG_SYSROOT_DIR",
+              "TARGET_PKG_CONFIG_SYSROOT_DIR",
           ]
           EOF
 
@@ -74,10 +78,23 @@ jobs:
           export CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++
           export AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar
           export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+          export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
           export PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig
           export PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig
+          export PKG_CONFIG_SYSROOT_DIR=/usr/arm-linux-gnueabihf
+          export TARGET_PKG_CONFIG_SYSROOT_DIR=/usr/arm-linux-gnueabihf
           export CROSS_NO_WARNINGS=0
           export RUST_BACKTRACE=1
+          
+          # Debug probe to verify dbus-1 setup
+          echo "=== dpkg architectures ==="
+          dpkg --print-architecture || true
+          dpkg --print-foreign-architectures || true
+          echo "=== list pkgconfig dir ==="
+          ls -la /usr/lib/arm-linux-gnueabihf/pkgconfig || true
+          echo "=== pkg-config probe (using sysroot envs) ==="
+          PKG_CONFIG_ALLOW_CROSS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_SYSROOT_DIR=/usr/arm-linux-gnueabihf PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig pkg-config --cflags --libs dbus-1 || echo "pkg-config dbus-1 failed"
           
           # Build
           cross build --release --target ${{ matrix.target }} --verbose
