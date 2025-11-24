@@ -45,7 +45,7 @@ jobs:
             "apt-get install -y llvm-16 llvm-16-dev libclang-16-dev clang-16",
             "apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf",
             "apt-get install -y libc6-dev-armhf-cross",
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y libdbus-1-dev:armhf",
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y libdbus-1-dev:armhf libasound2-dev:armhf libbluetooth-dev:armhf",
             "apt-get install -y cmake pkg-config",
             "apt-get install -y libssl-dev:armhf",
             "ln -sf /usr/bin/llvm-config-16 /usr/bin/llvm-config",
