@@ -1,5 +1,6 @@
 pub mod llm;
 pub mod module_handler;
+mod wasteland_manager;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

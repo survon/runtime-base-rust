@@ -41,7 +41,7 @@ use crate::ui::{
     }
 };
 
-use crate::{log_error};
+use crate::{log_debug, log_error};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSource {
@@ -497,7 +497,6 @@ impl App {
             }
 
             // Poll for events from subscribed topics
-            self.messages_panel.poll_messages();
             self.wasteland_module_manager.poll_events();
             self.core_module_manager.poll_events();
 
@@ -641,9 +640,15 @@ impl App {
     }
 
     pub fn handle_bus_message(&mut self, message: BusMessage) {
+        log_debug!("here with {}", message.topic);
+
+        // Log to database
         if let Err(e) = self.database.log_bus_message(&message.topic, &message.payload, &message.source) {
             panic!("Failed to log bus message: {}", e);
         }
+
+        // Also add to messages panel
+        self.messages_panel.add_message(message);
     }
 
     async fn handle_chat_submit(&mut self) {

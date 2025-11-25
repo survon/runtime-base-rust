@@ -1,0 +1,14 @@
+name: "Wasteland Manager"
+module_type: "wasteland_manager"
+bus_topic: "wasteland_manager"
+template: "wasteland_manager_card"
+
+bindings:
+  current_view: "Main"
+  selected_index: 0
+  menu_items: []
+  device_list: []
+  module_list: []
+  installed_modules: []
+  archived_modules: []
+  is_blinkable: false

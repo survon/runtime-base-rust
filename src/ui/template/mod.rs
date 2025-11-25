@@ -34,6 +34,9 @@ lazy_static::lazy_static! {
         map.insert("activity_card", activity_card_factory as TemplateFactory);
         map.insert("llm_card", llm_card_factory as TemplateFactory);
 
+        // System templates
+        map.insert("wasteland_manager_card", wasteland_manager_card_factory as TemplateFactory);
+
         map
     };
 }
@@ -61,6 +64,10 @@ fn status_badge_factory() -> Box<dyn UiTemplate> {
 
 fn llm_card_factory() -> Box<dyn UiTemplate> {
     Box::new(module_templates::knowledge::llm_card::LlmCard)
+}
+
+fn wasteland_manager_card_factory() -> Box<dyn UiTemplate> {
+    Box::new(module_templates::system::wasteland_manager_card::WastelandManagerCard)
 }
 
 /// Helper to get a template instance
