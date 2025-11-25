@@ -14,9 +14,12 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use futures::stream::StreamExt;
 
-use crate::util::io::{
-    bus::{MessageBus, BusMessage},
-    serial::{SspMessage, SourceInfo, Transport, MessageType},
+use crate::util::{
+    database::Database,
+    io::{
+        bus::{MessageBus, BusMessage},
+        serial::{SspMessage, SourceInfo, Transport, MessageType},
+    }
 };
 use crate::{log_info, log_warn, log_error};
 
@@ -60,22 +63,25 @@ struct DiscoveredDevice {
 }
 
 /// Manages BLE device discovery and registration
+#[derive(Debug, Clone)]
 pub struct DiscoveryManager {
     adapter: Arc<RwLock<Option<Adapter>>>,
     discovered_devices: Arc<RwLock<HashMap<String, DiscoveredDevice>>>,
     registered_devices: Arc<RwLock<HashMap<String, DeviceCapabilities>>>,
     message_bus: MessageBus,
     modules_path: std::path::PathBuf,
+    database: Database,
 }
 
 impl DiscoveryManager {
-    pub fn new(message_bus: MessageBus, modules_path: std::path::PathBuf) -> Self {
+    pub fn new(message_bus: MessageBus, modules_path: std::path::PathBuf, database: Database) -> Self {
         Self {
             adapter: Arc::new(RwLock::new(None)),
             discovered_devices: Arc::new(RwLock::new(HashMap::new())),
             registered_devices: Arc::new(RwLock::new(HashMap::new())),
             message_bus,
             modules_path,
+            database,
         }
     }
 
@@ -111,19 +117,15 @@ impl DiscoveryManager {
 
     /// Main scanning loop
     async fn scan_loop(&self, adapter: Adapter) -> Result<()> {
-        // Listen for BLE events
         let mut events = adapter.events().await?;
 
         loop {
-            // Start scanning
             log_info!("Scanning for Survon field units...");
             adapter.start_scan(ScanFilter::default()).await?;
 
-            // Scan for 10 seconds
             tokio::time::sleep(Duration::from_secs(10)).await;
             adapter.stop_scan().await?;
 
-            // Process discovered devices
             let peripherals = adapter.peripherals().await?;
 
             for peripheral in peripherals {
@@ -149,9 +151,26 @@ impl DiscoveryManager {
 
                         self.discovered_devices.write().await.insert(address.clone(), device);
 
-                        // Attempt registration
-                        if let Err(e) = self.register_device(peripheral, address).await {
-                            log_error!("Failed to register device: {}", e);
+                        // Only auto-register if trusted
+                        if self.is_trusted(&address).await? {
+                            log_info!("Device {} is trusted, attempting registration", address);
+                            if let Err(e) = self.register_device(peripheral, address.clone()).await {
+                                log_error!("Failed to register trusted device: {}", e);
+                            }
+                        } else {
+                            log_info!("Device {} awaiting trust approval", address);
+
+                            // Publish discovery event to message bus for UI notification
+                            let event = BusMessage::new(
+                                "device_discovered".to_string(),
+                                serde_json::json!({
+                                "mac_address": address,
+                                "name": name,
+                                "rssi": rssi
+                            }).to_string(),
+                                "discovery_manager".to_string(),
+                            );
+                            let _ = self.message_bus.publish(event).await;
                         }
                     }
                 }
@@ -276,6 +295,49 @@ impl DiscoveryManager {
         log_info!("✓ Device {} registered successfully", capabilities.device_id);
 
         Ok(())
+    }
+
+    /// Check if a device is trusted
+    async fn is_trusted(&self, mac_address: &str) -> Result<bool> {
+        // Query database for trusted status
+        let result = self.database.is_device_trusted(mac_address)?;
+        Ok(result)
+    }
+
+    /// Trust a device (called from UI)
+    pub async fn trust_device(&self, mac_address: String) -> Result<()> {
+        log_info!("Trusting device: {}", mac_address);
+
+        // Get device name from discovered devices
+        let device_name = {
+            let devices = self.discovered_devices.read().await;
+            devices.get(&mac_address)
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| "Unknown Device".to_string())
+        };
+
+        // Store in database
+        self.database.trust_device(&mac_address, &device_name)?;
+
+        // Attempt registration
+        if let Some(device) = self.discovered_devices.read().await.get(&mac_address) {
+            let peripheral = device.peripheral.clone();
+            self.register_device(peripheral, mac_address.clone()).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Untrust a device
+    pub async fn untrust_device(&self, mac_address: &str) -> Result<()> {
+        log_info!("Untrusting device: {}", mac_address);
+        self.database.untrust_device(mac_address)?;
+        Ok(())
+    }
+
+    /// Get all trusted devices from database
+    pub async fn get_trusted_devices(&self) -> Result<Vec<(String, String)>> {
+        Ok(self.database.get_trusted_devices()?)
     }
 
     /// Generate module config.yml for the registered device

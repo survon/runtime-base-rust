@@ -4,3 +4,4 @@ pub mod io;
 pub mod audio;
 pub mod llm;
 pub mod log;
+pub mod wasteland_manager;

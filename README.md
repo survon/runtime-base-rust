@@ -48,7 +48,7 @@ All sensor data, control commands, and system events flow through the central me
 ## Installation
 Clone and build manually, or use the Survon OS installer for RPi 3B (armhf):
 ```bash
-curl -sSL https://raw.githubusercontent.com/survon/survon-os/master/scripts/install.sh | bash --cleanup
+curl -sSL https://raw.githubusercontent.com/survon/survon-os/master/scripts/install.sh | bash
 ```
 - Installer compiles llama-cli from llama.cpp, downloads models (interactive: phi3-mini or custom URL), builds release binary.
 - Post-install: Reboot for bash menu; launch app via option 4 (takes over terminal like a full-screen React component).

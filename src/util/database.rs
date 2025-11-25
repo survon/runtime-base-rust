@@ -151,6 +151,16 @@ impl Database {
                 )",
                 [],
             )?;
+
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS trusted_devices (
+                    mac_address TEXT PRIMARY KEY,
+                    device_name TEXT NOT NULL,
+                    trusted_at INTEGER NOT NULL,
+                    trusted_by TEXT DEFAULT 'user'
+                )",
+                [],
+            )?;
         }
 
         // Knowledge database - FTS5 virtual table
@@ -424,5 +434,65 @@ impl Database {
         }
 
         Ok(chunks)
+    }
+
+    /// Check if a device is trusted
+    pub fn is_device_trusted(&self, mac_address: &str) -> Result<bool> {
+        let conn = self.app_conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT COUNT(*) FROM trusted_devices WHERE mac_address = ?1"
+        )?;
+
+        let count: i64 = stmt.query_row([mac_address], |row| row.get(0))?;
+        Ok(count > 0)
+    }
+
+    /// Trust a device
+    pub fn trust_device(&self, mac_address: &str, device_name: &str) -> Result<()> {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let conn = self.app_conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO trusted_devices (mac_address, device_name, trusted_at, trusted_by)
+             VALUES (?1, ?2, ?3, 'user')",
+            params![mac_address, device_name, timestamp],
+        )?;
+
+        Ok(())
+    }
+
+    /// Untrust a device
+    pub fn untrust_device(&self, mac_address: &str) -> Result<()> {
+        let conn = self.app_conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM trusted_devices WHERE mac_address = ?1",
+            [mac_address],
+        )?;
+        Ok(())
+    }
+
+    /// Get all trusted devices
+    pub fn get_trusted_devices(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.app_conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT mac_address, device_name FROM trusted_devices ORDER BY trusted_at DESC"
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+            ))
+        })?;
+
+        let mut devices = Vec::new();
+        for row in rows {
+            devices.push(row?);
+        }
+
+        Ok(devices)
     }
 }
