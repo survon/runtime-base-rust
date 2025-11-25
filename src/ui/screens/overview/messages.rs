@@ -5,11 +5,15 @@ use ratatui::{
     text::Text,
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
+use crate::log_debug;
 use crate::util::io::bus::{BusMessage, BusReceiver, MessageBus};
 use crate::ui::style::{dim_unless_focused};
 
 #[derive(Debug)]
 pub struct MessagesPanel {
+    // Main receiver that gets ALL messages
+    main_receiver: Option<BusReceiver>,
+    // Topic-specific receivers (kept for backward compatibility)
     receivers: Vec<BusReceiver>,
     recent_messages: Vec<BusMessage>,
     max_messages: usize,
@@ -20,12 +24,19 @@ pub struct MessagesPanel {
 impl MessagesPanel {
     pub fn new() -> Self {
         Self {
+            main_receiver: None,
             receivers: Vec::new(),
             recent_messages: Vec::new(),
-            max_messages: 100,  // Keep more history for scrolling
+            max_messages: 100,
             scroll_offset: 0,
             visible_lines: 10,
         }
+    }
+
+    /// Subscribe to the main receiver to get ALL messages
+    pub fn subscribe_main(&mut self, receiver: BusReceiver) {
+        log_debug!("MessagesPanel: Subscribed to main receiver (ALL messages)");
+        self.main_receiver = Some(receiver);
     }
 
     /// Subscribe to all topics (or specific topics)
@@ -36,7 +47,6 @@ impl MessagesPanel {
 
     /// Subscribe to multiple topics
     pub async fn subscribe_topics(&mut self, message_bus: &MessageBus, topics: Vec<String>) {
-        // Subscribe to ALL topics
         for topic in topics {
             let receiver = message_bus.subscribe(topic).await;
             self.receivers.push(receiver);
@@ -45,11 +55,7 @@ impl MessagesPanel {
 
     /// Subscribe to ALL bus topics for maximum observability (useful for debugging)
     pub async fn subscribe_all(&mut self, message_bus: &MessageBus) {
-        // Subscribe to a wildcard or common patterns
         let topics = vec![
-
-            /// THIS LIST NEEDS TO REMAIN AMBIGUOUS TO SUPPORT THIRD-PARTY UNKNOWNS
-            /// TODO MAKE THIS AN ENUM OR SOMETHING WE CAN ITERATE..
             "com_input".to_string(),
             "sensor_data".to_string(),
             "navigation".to_string(),
@@ -59,6 +65,8 @@ impl MessagesPanel {
             "llm_response".to_string(),
             "control".to_string(),
             "monitoring".to_string(),
+            "device_discovered".to_string(),
+            "device_registered".to_string(),
         ];
 
         self.subscribe_topics(message_bus, topics).await;
@@ -93,17 +101,37 @@ impl MessagesPanel {
     /// Poll for new messages (call this in your event loop)
     pub fn poll_messages(&mut self) {
         let was_at_bottom = self.is_at_bottom();
+        let mut new_messages = false;
 
-        // Poll ALL receivers
-        for receiver in &mut self.receivers {
-            // Try to receive all pending messages without blocking
+        // Poll main receiver FIRST (gets ALL messages)
+        if let Some(receiver) = &mut self.main_receiver {
             while let Ok(message) = receiver.try_recv() {
-                self.recent_messages.push(message);
+                log_debug!("📨 MessagesPanel (MAIN) received: topic={}, source={}, payload={}",
+                    message.topic, message.source, message.payload);
 
-                // Keep only the most recent messages
+                self.recent_messages.push(message);
+                new_messages = true;
+
                 if self.recent_messages.len() > self.max_messages {
                     self.recent_messages.remove(0);
-                    // Adjust scroll offset if we removed a message
+                    if self.scroll_offset > 0 {
+                        self.scroll_offset -= 1;
+                    }
+                }
+            }
+        }
+
+        // Also poll topic-specific receivers (for backward compatibility)
+        for receiver in &mut self.receivers {
+            while let Ok(message) = receiver.try_recv() {
+                log_debug!("📨 MessagesPanel (topic) received: topic={}, source={}, payload={}",
+                    message.topic, message.source, message.payload);
+
+                self.recent_messages.push(message);
+                new_messages = true;
+
+                if self.recent_messages.len() > self.max_messages {
+                    self.recent_messages.remove(0);
                     if self.scroll_offset > 0 {
                         self.scroll_offset -= 1;
                     }
@@ -112,6 +140,26 @@ impl MessagesPanel {
         }
 
         // Auto-scroll to bottom when new messages arrive (only if already at bottom)
+        if new_messages && was_at_bottom {
+            self.scroll_to_bottom();
+        }
+    }
+
+    pub fn add_message(&mut self, message: BusMessage) {
+        let was_at_bottom = self.is_at_bottom();
+
+        log_debug!("📨 MessagesPanel received: topic={}, source={}, payload={}",
+        message.topic, message.source, message.payload);
+
+        self.recent_messages.push(message);
+
+        if self.recent_messages.len() > self.max_messages {
+            self.recent_messages.remove(0);
+            if self.scroll_offset > 0 {
+                self.scroll_offset -= 1;
+            }
+        }
+
         if was_at_bottom {
             self.scroll_to_bottom();
         }
@@ -124,15 +172,12 @@ impl MessagesPanel {
         let content = if self.recent_messages.is_empty() {
             Text::from("Message bus activity will appear here...\n\nWaiting for messages...\n\nPress ← or → to test!\nPress Tab to focus this panel, then ↑/↓ to scroll")
         } else {
-            // Calculate which messages to show
             let total = self.recent_messages.len();
-            let start = self.scroll_offset;
-            let end = (start + self.visible_lines).min(total);
+            let end = total.saturating_sub(self.scroll_offset);
+            let start = end.saturating_sub(self.visible_lines);
 
-            // Format messages in the visible range (reversed to show most recent at top)
             let lines: Vec<String> = self.recent_messages[start..end]
                 .iter()
-                .rev()
                 .map(|msg| {
                     format!(
                         "[{}] {}: {}",
@@ -146,18 +191,24 @@ impl MessagesPanel {
             Text::from(lines.join("\n"))
         };
 
-        // Show scroll indicator in title
         let title = if self.recent_messages.is_empty() {
             "Message Bus".to_string()
         } else {
             let total = self.recent_messages.len();
-            let viewing_end = (self.scroll_offset + self.visible_lines).min(total);
-            format!(
-                "Message Bus ({}-{}/{})",
-                self.scroll_offset + 1,
-                viewing_end,
-                total
-            )
+            let end = total.saturating_sub(self.scroll_offset);
+            let start = end.saturating_sub(self.visible_lines);
+
+            if self.scroll_offset == 0 {
+                format!("Message Bus ({}/{}) [LIVE]", total.min(self.visible_lines), total)
+            } else {
+                format!(
+                    "Message Bus ({}-{}/{}) ↑ {}",
+                    start + 1,
+                    end,
+                    total,
+                    self.scroll_offset
+                )
+            }
         };
 
         let text_style = dim_unless_focused(is_focused, Style::default().fg(Color::White));
@@ -170,7 +221,7 @@ impl MessagesPanel {
                     .border_type(BorderType::Rounded)
                     .style(border_style)
             )
-            .style(text_style)  // Use the style with dim
+            .style(text_style)
             .wrap(Wrap { trim: true });
 
         messages_widget.render(area, buf);

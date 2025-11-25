@@ -41,6 +41,7 @@ pub enum InstallSource {
 }
 
 /// Wasteland Manager
+#[derive(Debug, Clone)]
 pub struct WastelandManager {
     wasteland_path: PathBuf,
     archive_path: PathBuf,
