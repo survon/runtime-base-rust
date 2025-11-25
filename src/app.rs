@@ -91,6 +91,7 @@ pub struct App {
     pub messages_panel: MessagesPanel,
     pub overview_focus: OverviewFocus,
     pub transport_manager: Option<TransportManager>,
+    pub discovery_manager: Option<Arc<DiscoveryManager>>,
 }
 
 impl App {
@@ -116,6 +117,22 @@ impl App {
             panic!("Failed to discover core modules: {}", e);
         }
 
+        // Initialize DiscoveryManager for BLE field units
+        let wasteland_modules_path = PathBuf::from("./modules/wasteland/");
+        let discovery_manager = Arc::new(DiscoveryManager::new(
+            message_bus.clone(),
+            wasteland_modules_path.clone(),
+            database.clone(),
+        ));
+
+        // Start discovery in background
+        let discovery_clone = discovery_manager.clone();
+        tokio::spawn(async move {
+            if let Err(e) = discovery_clone.start().await {
+                log_error!("Discovery manager failed to start: {}", e);
+            }
+        });
+
         // Subscribe module manager to events
         wasteland_module_manager.subscribe_to_events(&message_bus).await;
         core_module_manager.subscribe_to_events(&message_bus).await;
@@ -131,18 +148,6 @@ impl App {
         // Add any custom outbound topics
         transport_manager.add_outbound_topic("sensor_data".to_string()).await;
         transport_manager.add_outbound_topic("arduino_ping".to_string()).await;
-
-        let discovery_manager = Arc::new(DiscoveryManager::new(
-            message_bus.clone(),
-            PathBuf::from("./modules/wasteland/"),
-        ));
-
-        let discovery_clone = discovery_manager.clone();
-        tokio::spawn(async move {
-            if let Err(e) = discovery_clone.start().await {
-                log_error!("Discovery manager failed to start: {}", e);
-            }
-        });
 
         // Start the transport manager (spawns background tasks)
         let transport_clone = transport_manager.clone();
@@ -161,6 +166,7 @@ impl App {
         let mut messages_panel = MessagesPanel::new();
         messages_panel.subscribe_all(&message_bus).await;
 
+
         Ok(Self {
             running: true,
             mode: AppMode::Splash,
@@ -176,6 +182,7 @@ impl App {
             messages_panel,
             overview_focus: OverviewFocus::CoreModules,
             transport_manager: Some(transport_manager),
+            discovery_manager: Some(discovery_manager),
         })
     }
 
