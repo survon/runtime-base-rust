@@ -255,3 +255,230 @@ Install via Arduino Library Manager.
 - Retain flag (last-known-good values)
 - Device discovery/announcement protocol
 - Firmware update over SSP
+
+
+
+
+# Survon Serial Protocol (SSP) - Compact Format
+
+## Overview
+
+SSP Compact is a memory-efficient JSON protocol for IoT devices with limited RAM (like Arduino Uno). Single-letter keys minimize message size while maintaining structure.
+
+## Message Format
+
+```json
+{
+  "p": "ssp/1.0",
+  "t": "tel",
+  "i": "device_id",
+  "s": 1234567890,
+  "d": {
+    "a": 82,
+    "b": 26,
+    "c": 42
+  }
+}
+```
+
+## Field Definitions
+
+| Key | Full Name   | Type   | Description                           | Example         |
+|-----|-------------|--------|---------------------------------------|-----------------|
+| `p` | protocol    | string | Protocol version                      | `"ssp/1.0"`     |
+| `t` | type        | string | Message type (see below)              | `"tel"`         |
+| `i` | id          | string | Device identifier (also used as topic)| `"a01"`         |
+| `s` | timestamp   | number | Unix timestamp or millis/1000         | `1234567890`    |
+| `d` | data        | object | Sensor/payload data (see below)       | `{"a":82}`      |
+
+## Message Types (`t`)
+
+| Short | Full      | Description                    |
+|-------|-----------|--------------------------------|
+| `tel` | telemetry | Sensor readings                |
+| `cmd` | command   | Control command                |
+| `res` | response  | Command acknowledgment         |
+| `evt` | event     | Status change notification     |
+
+## Data Payload (`d`)
+
+**Keys are single letters** that map to meaningful names in `config.yml`:
+
+```yaml
+# modules/a01/config.yml
+name: "Temperature Sensor"
+bus_topic: "a01"  # Must match "i" field
+bindings:
+  a: 0  # temperature_c
+  b: 0  # humidity_pct
+  c: 0  # message_count
+```
+
+### Common Data Key Conventions
+
+| Key | Suggested Use        | Unit/Type    |
+|-----|---------------------|--------------|
+| `a` | Primary sensor      | varies       |
+| `b` | Secondary sensor    | varies       |
+| `c` | Counter/sequence    | integer      |
+| `d` | Tertiary sensor     | varies       |
+| `e` | Error code          | integer      |
+| `f` | Battery/power       | percent      |
+
+**Important:** Keys are device-specific. Define mappings in your module's `config.yml`.
+
+## Arduino Example
+
+```cpp
+void sendTelemetry() {
+  StaticJsonDocument<128> doc;
+  
+  doc["p"] = "ssp/1.0";
+  doc["t"] = "tel";
+  doc["i"] = "a01";
+  doc["s"] = millis() / 1000;
+  
+  JsonObject data = doc.createNestedObject("d");
+  data["a"] = (int)readTemperature();
+  data["b"] = (int)readHumidity();
+  data["c"] = messageCount++;
+
+  String json;
+  serializeJson(doc, json);
+  
+  // Send via BLE in 20-byte chunks
+  ble.setMode(BLUEFRUIT_MODE_DATA);
+  for (size_t i = 0; i < json.length(); i += 20) {
+    String chunk = json.substring(i, min(i + 20, json.length()));
+    ble.print(chunk);
+    delay(10);
+  }
+  ble.setMode(BLUEFRUIT_MODE_COMMAND);
+}
+```
+
+Expected output: `{"p":"ssp/1.0","t":"tel","i":"a01","s":1234,"d":{"a":72,"b":45,"c":1}}`
+
+Size: **~68 bytes** vs **~180 bytes** for verbose format
+
+## Module Configuration
+
+### Step 1: Create module directory
+```bash
+mkdir -p modules/wasteland/a01
+```
+
+### Step 2: Create `config.yml`
+```yaml
+name: "Environmental Monitor"
+module_type: "monitoring"
+bus_topic: "a01"      # Must match device "i" field
+template: "gauge_card"
+
+bindings:
+  # Map data keys to display names
+  a: 0  # temperature_c - shown in gauge
+  b: 0  # humidity_pct - secondary display
+  c: 0  # message_count - debug counter
+  
+  # Metadata
+  device_id: "a01"
+  unit_of_measure_label: "°C"
+  display_name: "Temperature"
+```
+
+### Step 3: Update template (if needed)
+
+Edit your template to use the data keys:
+
+```rust
+// src/ui/module_templates/monitoring/gauge_card.rs
+
+const GAUGE_VALUE_KEY: &str = "a";  // Maps to temperature_c
+
+let value = module
+    .config
+    .bindings
+    .get(GAUGE_VALUE_KEY)
+    .and_then(|v| v.as_f64())
+    .unwrap_or(0.0);
+```
+
+## Message Flow
+
+```
+┌─────────────┐
+│  Arduino    │ {"p":"ssp/1.0","t":"tel","i":"a01","s":100,"d":{"a":72}}
+└──────┬──────┘
+       │ BLE chunks (20 bytes each)
+       ▼
+┌─────────────┐
+│ Discovery   │ Reassembles chunks → complete JSON
+│ Manager     │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│ parse_      │ Extracts: topic="a01", payload={"a":72}
+│ flexible()  │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│ Message Bus │ Publishes to topic "a01"
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│ Module a01  │ Updates binding: a=72
+│ (gauge_card)│ Renders: "72.0 °C"
+└─────────────┘
+```
+
+## Size Comparison
+
+| Format  | Example Message                                                              | Size   |
+|---------|------------------------------------------------------------------------------|--------|
+| Verbose | `{"protocol":"ssp/1.0","type":"telemetry","topic":"sensor_001",...}`        | 180 bytes |
+| Compact | `{"p":"ssp/1.0","t":"tel","i":"a01","s":100,"d":{"a":72,"b":45,"c":1}}`    | 68 bytes  |
+
+**Savings:** 62% smaller → fits in Arduino Uno RAM + faster BLE transmission
+
+## Debugging
+
+Enable debug logging in Rust to see parsing:
+
+```rust
+// Logs will show:
+[DEBUG] Parsing compact SSP: {"p":"ssp/1.0","t":"tel",...}
+[DEBUG] ✓ Parsed compact SSP - id:a01, type:telemetry, data keys:["a","b","c"]
+[INFO] 📨 Parsed SSP message: topic=a01, type=Telemetry
+[INFO] ✓ Published to message bus: topic=a01
+```
+
+On Arduino Serial Monitor:
+```
+TELEM #1
+TX_LEN:68
+TX:{"p":"ssp/1.0","t":"tel","i":"a01","s":24,"d":{"a":82,"b":26,"c":1}}
+TX_OK
+RAM:1243
+```
+
+## Best Practices
+
+1. **Keep device IDs short:** Use 2-4 characters (e.g., `"a01"`, `"tmp1"`)
+2. **Document your mappings:** Always add comments in `config.yml` explaining what `a`, `b`, `c` mean
+3. **Reserve keys:**
+    - `a`-`d`: Sensor values
+    - `e`: Error codes
+    - `f`: Battery/health metrics
+4. **Use integers when possible:** `{"a":82}` instead of `{"a":82.5}` saves bytes
+5. **Timestamp efficiency:** Use `millis()/1000` instead of full Unix timestamp
+
+## Future Enhancements
+
+- [ ] Binary format (even smaller)
+- [ ] Compression for multi-sensor devices
+- [ ] Auto-discovery broadcasts capabilities in compact format
+- [ ] Hub sends configuration updates to devices

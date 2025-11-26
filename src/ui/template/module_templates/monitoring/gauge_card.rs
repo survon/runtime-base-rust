@@ -8,19 +8,52 @@ use ratatui::widgets::{Block, Borders, Gauge, Widget};
 #[derive(Debug)]
 pub struct GaugeCard;
 
+// Compact SSP uses single-letter keys
+// "a" maps to primary sensor value (defined in config.yml)
+const GAUGE_VALUE_KEY: &str = "a";
+
 impl UiTemplate for GaugeCard {
     fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
-        // Get the pressure value from module bindings
-        let pressure = module
+        // Get the primary sensor value from module bindings
+        let gauge_value = module
             .config
             .bindings
-            .get("pressure_psi")
+            .get(GAUGE_VALUE_KEY)
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
 
-        // Calculate percentage (assuming max 100 PSI)
-        let max_pressure = 100.0;
-        let percentage = ((pressure / max_pressure) * 100.0).min(100.0) as u16;
+        // Get display label from config
+        let unit_of_measure_label = module
+            .config
+            .bindings
+            .get("unit_of_measure_label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("units");
+
+        // Calculate percentage (assuming max 100)
+        let max_value = module
+            .config
+            .bindings
+            .get("max_value")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(100.0);
+
+        let percentage = ((gauge_value / max_value) * 100.0).min(100.0) as u16;
+
+        // Color thresholds (can be configured in config.yml)
+        let warn_threshold = module
+            .config
+            .bindings
+            .get("warn_threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(60.0);
+
+        let danger_threshold = module
+            .config
+            .bindings
+            .get("danger_threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(85.0);
 
         let healthy_color_fg = Color::Green;
         let healthy_color_bg = Color::LightGreen;
@@ -30,9 +63,8 @@ impl UiTemplate for GaugeCard {
         let danger_color_bg = Color::LightRed;
         let danger_color_fg_blink = Color::Black;
 
-        // TODO USE A USER-SET THRESHOLDS instead of 85.5/60 magic constants.. maybe from module.config?
-        let in_danger_zone = pressure > 85.0;
-        let in_warn_zone = pressure > 60.0;
+        let in_danger_zone = gauge_value > danger_threshold;
+        let in_warn_zone = gauge_value > warn_threshold;
 
         if in_danger_zone && module.config.is_blinkable() {
             module.render_state.start_blinking();
@@ -76,17 +108,19 @@ impl UiTemplate for GaugeCard {
             )
             .gauge_style(Style::default().fg(gauge_color_fg).bg(gauge_color_bg))
             .percent(percentage)
-            .label(format!("{:.1} PSI", pressure));
+            .label(format!("{:.1} {}", gauge_value, unit_of_measure_label));
 
         Widget::render(gauge, area, buf);
     }
 
     fn required_bindings(&self) -> &'static [&'static str] {
-        &["pressure_psi"]
+        &["a"]  // Only "a" is required, others are optional
     }
 
     fn docs(&self) -> &'static str {
-        "Real-time pressure gauge (0-100 PSI). Shows green/yellow/red based on thresholds. Green: 0-60 PSI, Yellow: 60-85 PSI, Red: 85+ PSI. Blinks when above 85 PSI if is_blinkable is true."
+        "Real-time gauge using compact SSP format. Key 'a' = primary sensor value. \
+         Displays green (0-60), yellow (60-85), red (85+). \
+         Configure thresholds via warn_threshold/danger_threshold bindings."
     }
 }
 

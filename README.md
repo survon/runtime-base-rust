@@ -53,6 +53,25 @@ curl -sSL https://raw.githubusercontent.com/survon/survon-os/master/scripts/inst
 - Installer compiles llama-cli from llama.cpp, downloads models (interactive: phi3-mini or custom URL), builds release binary.
 - Post-install: Reboot for bash menu; launch app via option 4 (takes over terminal like a full-screen React component).
 
+## Mac Development: Configure [LE Friend Dongle](https://www.adafruit.com/product/2267) for Auto-Connect (One-Time)
+
+When developing on macOS, the LE Friend dongle does **not** auto-connect by default. The [Survon OS](https://github.com/survon/survon-os) installer 
+will send the serial commands to the dongle automatically. But, since we're building the Survon Runtime on a Mac and didn't "install" it, 
+we need to reproduce this critical step.
+
+Thankfully, you only need to do this once per dongle. Ensure the LE Friend dongle is plugged in and blinking, 
+and run the following in a terminal to permanently enable auto-connect:
+
+```bash
+PORT=$(ls /dev/cu.usbserial-* 2>/dev/null | head -n1)
+[ -z "$PORT" ] && { echo "No LE Friend found"; exit 1; }
+echo "Configuring $PORT ..."
+stty -f "$PORT" 57600 raw -echo
+(echo -e "AT+HWREGWRITE=0x01,0x01\r"; sleep 1; echo -e "ATZ\r") > "$PORT"
+sleep 2
+echo "Done — auto-connect enabled forever"
+```
+
 ## Usage
 - Development: `cargo run` or `./target/release/runtime-base-rust`
 - Production (post-install): `/usr/local/bin/runtime-base-rust` or via Survon OS menu option 4

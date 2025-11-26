@@ -4,8 +4,10 @@
 use color_eyre::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::{
+    time::{timeout, Duration},
+    sync::RwLock
+};
 use btleplug::{
     api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter, WriteType},
     platform::{Adapter, Manager, Peripheral}
@@ -129,6 +131,8 @@ impl DiscoveryManager {
             let peripherals = adapter.peripherals().await?;
 
             for peripheral in peripherals {
+                log_info!("Got peripheral: {:?}", peripheral);
+
                 if let Some(properties) = peripheral.properties().await? {
                     let name = properties
                         .local_name
@@ -172,6 +176,8 @@ impl DiscoveryManager {
                             );
                             let _ = self.message_bus.publish(event).await;
                         }
+                    } else {
+                        log_info!("Device {} not recognized as part of the Survon suite", name);
                     }
                 }
             }
@@ -183,92 +189,175 @@ impl DiscoveryManager {
 
     /// Register a discovered device
     async fn register_device(&self, peripheral: Peripheral, address: String) -> Result<()> {
-        log_info!("Attempting to register device: {}", address);
+        log_info!("Connecting to device: {}", address);
 
-        // Connect to the device
-        if !peripheral.is_connected().await? {
-            peripheral.connect().await?;
-            log_info!("Connected to {}", address);
-        }
+        // Step 1: Connect to device
+        peripheral.connect().await?;
+        log_info!("✓ Connected to {}", address);
 
-        // Discover services
+        // Step 2: Discover services
         peripheral.discover_services().await?;
+        log_info!("✓ Discovered services for {}", address);
 
-        // Find Survon service and characteristics
+        // Step 3: Find the RX characteristic (notifications from device)
         let chars = peripheral.characteristics();
-        let tx_char = chars.iter().find(|c| {
-            c.uuid == Uuid::parse_str(SURVON_TX_CHAR_UUID).unwrap()
-        });
-        let rx_char = chars.iter().find(|c| {
-            c.uuid == Uuid::parse_str(SURVON_RX_CHAR_UUID).unwrap()
-        });
+        let rx_char = chars.iter()
+            .find(|c| c.uuid == Uuid::parse_str(SURVON_RX_CHAR_UUID).unwrap())
+            .ok_or_else(|| color_eyre::eyre::eyre!("RX characteristic not found"))?;
 
-        if tx_char.is_none() || rx_char.is_none() {
-            log_warn!("Device {} doesn't have Survon characteristics", address);
-            return Ok(());
-        }
+        log_info!("✓ Found RX characteristic");
 
-        let tx_char = tx_char.unwrap();
-        let rx_char = rx_char.unwrap();
-
-        // Subscribe to notifications
+        // Step 4: Subscribe to notifications
         peripheral.subscribe(rx_char).await?;
+        log_info!("✓ Subscribed to notifications from {}", address);
 
-        // Send registration request
-        let registration_request = SspMessage {
-            protocol: "ssp/1.0".to_string(),
-            msg_type: MessageType::Command,
-            topic: "device_registration".to_string(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_secs(),
-            source: SourceInfo {
-                id: "survon_hub".to_string(),
-                transport: Transport::Internal,
-                address: "internal".to_string(),
-            },
-            payload: serde_json::json!({
-                "action": "register",
-                "request_capabilities": true
-            }),
-            qos: None,
-            retain: None,
-            reply_to: Some("survon_hub".to_string()),
-            in_reply_to: None,
-        };
+        // Step 5: Find the TX characteristic (write to device)
+        let tx_char = chars.iter()
+            .find(|c| c.uuid == Uuid::parse_str(SURVON_TX_CHAR_UUID).unwrap())
+            .ok_or_else(|| color_eyre::eyre::eyre!("TX characteristic not found"))?;
 
-        let request_json = serde_json::to_string(&registration_request)?;
-        peripheral.write(tx_char, request_json.as_bytes(), WriteType::WithResponse).await?;
+        log_info!("✓ Found TX characteristic");
 
-        log_info!("Sent registration request to {}", address);
+        // Step 6: Create a channel to receive the registration response
+        let (response_tx, mut response_rx) = tokio::sync::mpsc::channel::<DeviceCapabilities>(1);
 
-        // Wait for response (with timeout)
-        tokio::time::timeout(Duration::from_secs(5), async {
-            let mut notification_stream = peripheral.notifications().await?;
+        // Step 7: Spawn listener for incoming data
+        let bus = self.message_bus.clone();
+        let periph = peripheral.clone();
+        let addr_clone = address.clone();
 
-            while let Some(notification) = notification_stream.next().await {
-                if notification.uuid == rx_char.uuid {
-                    let response = String::from_utf8_lossy(&notification.value);
-                    log_info!("Received response: {}", response);
+        tokio::spawn(async move {
+            log_info!("🔷 BLE listener task started for {}", addr_clone);
 
-                    // Parse capabilities
-                    if let Ok(ssp_msg) = SspMessage::parse(&response) {
-                        if ssp_msg.topic == "device_registration" {
-                            if let Ok(capabilities) = serde_json::from_value::<DeviceCapabilities>(ssp_msg.payload) {
-                                self.handle_registration(capabilities).await?;
-                                return Ok::<(), color_eyre::Report>(());
+            match periph.notifications().await {
+                Ok(mut stream) => {
+                    log_info!("✓ Got notification stream for {}", addr_clone);
+
+                    let mut buffer = String::new();
+                    let mut last_chunk_time = std::time::Instant::now();
+                    let mut chunk_count = 0;
+
+                    loop {
+                        tokio::select! {
+                    maybe_data = stream.next() => {
+                        match maybe_data {
+                            Some(data) => {
+                                chunk_count += 1;
+                                let chunk = String::from_utf8_lossy(&data.value).to_string();
+
+                                log_info!("📦 Chunk #{}: {} bytes: '{}'", chunk_count, chunk.len(), chunk);
+
+                                // If more than 500ms since last chunk, assume new message
+                                if last_chunk_time.elapsed().as_millis() > 500 {
+                                    if !buffer.is_empty() {
+                                        log_warn!("⚠️ Timeout - clearing incomplete buffer: {}", buffer);
+                                    }
+                                    buffer.clear();
+                                }
+
+                                buffer.push_str(&chunk);
+                                last_chunk_time = std::time::Instant::now();
+
+                                // Check if complete
+                                if buffer.starts_with('{') && buffer.ends_with('}') {
+                                    log_info!("✅ COMPLETE MESSAGE ({} bytes): {}", buffer.len(), buffer);
+
+                                    // Check if registration response
+                                    if buffer.contains("\"device_id\"") && buffer.contains("\"device_type\"") {
+                                        log_info!("📋 Registration response detected");
+
+                                        if let Ok(capabilities) = serde_json::from_str::<DeviceCapabilities>(&buffer) {
+                                            log_info!("✓ Parsed capabilities: {:?}", capabilities);
+                                            let _ = response_tx.send(capabilities).await;
+                                        } else {
+                                            log_error!("❌ Failed to parse capabilities JSON");
+                                        }
+                                    }
+                                    // Try to parse as SSP
+                                    else {
+                                        log_info!("📊 Attempting SSP parse...");
+                                        match SspMessage::parse_flexible(&buffer) {
+                                            Ok(ssp) => {
+                                                log_info!("✅ Parsed SSP - topic:{}, type:{:?}", ssp.topic, ssp.msg_type);
+                                                log_info!("   Payload: {:?}", ssp.payload);
+
+                                                let bus_msg = ssp.to_bus_message();
+                                                log_info!("🚀 Publishing to bus - topic:{}, source:{}", bus_msg.topic, bus_msg.source);
+
+                                                match bus.publish(bus_msg).await {
+                                                    Ok(_) => log_info!("✅ Published successfully!"),
+                                                    Err(e) => log_error!("❌ Publish failed: {}", e),
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log_error!("❌ SSP parse failed: {}", e);
+                                                log_error!("   Buffer was: {}", buffer);
+                                            }
+                                        }
+                                    }
+
+                                    buffer.clear();
+                                }
+                            }
+                            None => {
+                                log_error!("❌ Stream returned None - connection lost!");
+                                break;
                             }
                         }
                     }
+
+                    // Keepalive - log every 10 seconds
+                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
+                        log_info!("💓 BLE listener alive for {} - {} chunks received", addr_clone, chunk_count);
+                    }
+                }
+                    }
+
+                    log_error!("💀 BLE notification stream ended for {}", addr_clone);
+                }
+                Err(e) => {
+                    log_error!("❌ Failed to get notification stream: {}", e);
                 }
             }
 
-            Err(color_eyre::eyre::eyre!("No valid registration response"))
-        })
-            .await
-            .map_err(|_| color_eyre::eyre::eyre!("Registration timeout"))??;
+            log_error!("🛑 BLE listener task exiting for {}", addr_clone);
+        });
 
-        Ok(())
+        // Step 8: Send registration request
+        log_info!("Sending registration request to device...");
+
+        let registration_request = serde_json::json!({
+            "hub_id": "survon_hub",
+            "request": "capabilities",
+            "timestamp": chrono::Utc::now().timestamp() as u64
+        });
+
+        let request_bytes = registration_request.to_string().into_bytes();
+        peripheral.write(tx_char, &request_bytes, WriteType::WithoutResponse).await?;
+
+        log_info!("✓ Sent registration request");
+
+        // Step 9: Wait for registration response (with timeout)
+        log_info!("Waiting for device capabilities response...");
+
+        match timeout(Duration::from_secs(10), response_rx.recv()).await {
+            Ok(Some(capabilities)) => {
+                log_info!("✓ Received device capabilities!");
+
+                // Step 10: Complete registration
+                self.handle_registration(capabilities).await?;
+
+                Ok(())
+            }
+            Ok(None) => {
+                log_error!("Registration channel closed unexpectedly");
+                Err(color_eyre::eyre::eyre!("Registration channel closed"))
+            }
+            Err(_) => {
+                log_error!("Timeout waiting for device registration response");
+                Err(color_eyre::eyre::eyre!("Device did not respond to registration request"))
+            }
+        }
     }
 
     /// Handle successful registration

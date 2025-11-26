@@ -4,7 +4,7 @@ use ratatui::{
 };
 use color_eyre::Result;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use tokio::time::Duration;
 use std::sync::Arc;
 use gag::Gag;
 use std::collections::HashMap;
@@ -41,7 +41,7 @@ use crate::ui::{
     }
 };
 
-use crate::{log_debug, log_error};
+use crate::{log_debug, log_error, log_info};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSource {
@@ -124,6 +124,7 @@ impl App {
             wasteland_modules_path.clone(),
             database.clone(),
         ));
+        discovery_manager.trust_device("00:00:00:00:00:00".to_string()).await?; // default arduino mac address for field unit
 
         // Start discovery in background
         let discovery_clone = discovery_manager.clone();
@@ -148,13 +149,37 @@ impl App {
         // Add any custom outbound topics
         transport_manager.add_outbound_topic("sensor_data".to_string()).await;
         transport_manager.add_outbound_topic("arduino_ping".to_string()).await;
+        transport_manager.add_outbound_topic("device_registration".to_string()).await;
 
         // Start the transport manager (spawns background tasks)
         let transport_clone = transport_manager.clone();
+        let bus_for_broadcast = message_bus.clone();
+
         tokio::spawn(async move {
+            // 1. Start transport manager
             if let Err(e) = transport_clone.start().await {
                 log_error!("Transport manager failed to start: {}", e);
+                return; // abort early
             }
+
+            // 2. Give devices time to connect
+            tokio::time::sleep(Duration::from_secs(3)).await;
+
+            // 3. Broadcast registration request
+            log_info!("Broadcasting device registration request to all field units...");
+
+            let _ = bus_for_broadcast.publish(BusMessage::new(
+                "device_registration".to_string(),
+                serde_json::json!({
+                "request": "capabilities",
+                "hub_id": "survon_hub",
+                "timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    }).to_string(),
+                "survon_hub".to_string(),
+            )).await;
         });
 
         // Knowledge ingestion...

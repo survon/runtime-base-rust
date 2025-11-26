@@ -6,7 +6,10 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
 use crate::log_debug;
-use crate::util::io::bus::{BusMessage, BusReceiver, MessageBus};
+use crate::util::io::{
+    get_all_event_message_topics,
+    bus::{BusMessage, BusReceiver, MessageBus}
+};
 use crate::ui::style::{dim_unless_focused};
 
 #[derive(Debug)]
@@ -55,20 +58,7 @@ impl MessagesPanel {
 
     /// Subscribe to ALL bus topics for maximum observability (useful for debugging)
     pub async fn subscribe_all(&mut self, message_bus: &MessageBus) {
-        let topics = vec![
-            "com_input".to_string(),
-            "sensor_data".to_string(),
-            "navigation".to_string(),
-            "pressure_sensor".to_string(),
-            "network".to_string(),
-            "system_status".to_string(),
-            "llm_response".to_string(),
-            "control".to_string(),
-            "monitoring".to_string(),
-            "device_discovered".to_string(),
-            "device_registered".to_string(),
-        ];
-
+        let topics = get_all_event_message_topics();
         self.subscribe_topics(message_bus, topics).await;
     }
 
@@ -170,7 +160,7 @@ impl MessagesPanel {
         self.visible_lines = (area.height.saturating_sub(2)) as usize;
 
         let content = if self.recent_messages.is_empty() {
-            Text::from("Message bus activity will appear here...\n\nWaiting for messages...\n\nPress ← or → to test!\nPress Tab to focus this panel, then ↑/↓ to scroll")
+            Text::from("Message bus activity will appear here...\n\nWaiting for messages...\nPress Tab to focus this panel, then ↑/↓ to scroll")
         } else {
             let total = self.recent_messages.len();
             let end = total.saturating_sub(self.scroll_offset);

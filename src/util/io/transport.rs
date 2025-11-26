@@ -2,13 +2,15 @@
 //! Transport Manager - Handles bidirectional communication with IoT devices
 
 use color_eyre::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio_serial::SerialPortBuilderExt;
+use std::time::{Duration};
 
 use crate::util::io::{
+    get_all_event_message_topics,
     bus::{BusMessage, BusReceiver, MessageBus},
     serial::{SspMessage, SourceInfo, Transport, MessageType},
 };
@@ -23,6 +25,7 @@ pub struct TransportManager {
     message_bus: MessageBus,
     /// Topics that should be forwarded to external devices
     outbound_topics: Arc<RwLock<Vec<String>>>,
+    known_ports: Arc<RwLock<HashSet<String>>>,
 }
 
 impl TransportManager {
@@ -30,11 +33,8 @@ impl TransportManager {
         Self {
             routing_table: Arc::new(RwLock::new(HashMap::new())),
             message_bus,
-            outbound_topics: Arc::new(RwLock::new(vec![
-                "com_input".to_string(),      // Gate control, etc.
-                "control".to_string(),         // General control commands
-                "arduino_ping".to_string(),    // Arduino ping messages
-            ])),
+            outbound_topics: Arc::new(RwLock::new(get_all_event_message_topics())),
+            known_ports: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 
@@ -71,8 +71,23 @@ impl TransportManager {
         // Start listening on available transports
         self.start_usb_listener().await?;
 
+        // Spawn port monitor
+        {
+            let manager_clone = self.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    manager_clone.check_for_new_ports().await;
+                }
+            });
+        }
+
         log_info!("Transport Manager started");
         Ok(())
+    }
+
+    async fn check_for_new_ports(&self) {
+        self.ensure_port_listeners().await;
     }
 
     /// Handle messages from the bus that need to be sent to external devices
@@ -201,45 +216,62 @@ impl TransportManager {
     }
 
     /// Detect available USB serial ports
+    /// Detect available USB serial ports (works on Linux + macOS)
     fn detect_usb_ports(&self) -> Vec<String> {
         let mut ports = Vec::new();
 
         #[cfg(target_os = "linux")]
         {
-            for i in 0..4 {
-                let path = format!("/dev/ttyUSB{}", i);
-                if std::path::Path::new(&path).exists() {
-                    ports.push(path);
-                }
-            }
-            for i in 0..4 {
-                let path = format!("/dev/ttyACM{}", i);
-                if std::path::Path::new(&path).exists() {
-                    ports.push(path);
-                }
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            // macOS USB serial paths
-            // Use ONLY cu.* devices (call-out) for bidirectional communication
-            // Avoid tty.* to prevent "device busy" errors
+            // Linux: ttyUSB* and ttyACM* are the usual suspects
             if let Ok(entries) = std::fs::read_dir("/dev") {
                 for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        // Only use cu.* devices, not tty.*
-                        if name.starts_with("cu.usbserial") ||
-                            name.starts_with("cu.usbmodem") {
-                            ports.push(path.to_string_lossy().to_string());
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.starts_with("ttyUSB") || name.starts_with("ttyACM") {
+                            ports.push(format!("/dev/{}", name));
                         }
                     }
                 }
             }
         }
 
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(entries) = std::fs::read_dir("/dev") {
+                for entry in entries.flatten() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if name.starts_with("cu.") {
+                            ports.push(format!("/dev/{}", name));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort and dedupe
+        ports.sort();
+        ports.dedup();
         ports
+    }
+
+    async fn ensure_port_listeners(&self) {
+        let current = self.detect_usb_ports();
+        let mut known = self.known_ports.write().await;
+
+        for port in current {
+            // If we already know this exact path, skip it completely
+            if known.contains(&port) {
+                continue;
+            }
+
+            // Claim it first — this line is the entire fix
+            known.insert(port.clone());
+
+            let manager = self.clone();
+            let port_clone = port.clone();
+            tokio::spawn(async move {
+                let _ = manager.listen_serial_port(port_clone).await;
+            });
+        }
     }
 
     /// Listen for inbound messages on a serial port (USB or BLE Friend)
@@ -261,20 +293,36 @@ impl TransportManager {
 
             log_info!("🔵 RAW BYTES RECEIVED (len={}): '{}'", trimmed.len(), trimmed);
 
+            // Skip obvious AT commands and empty lines
             if trimmed.is_empty() ||
-                trimmed.starts_with("AT") ||
                 trimmed == "OK" ||
-                trimmed.starts_with("ERROR") {
+                trimmed.starts_with("AT") ||
+                trimmed.starts_with("ERROR") ||
+                trimmed.starts_with("+") ||  // AT+ responses
+                trimmed.contains("Bluefruit") ||
+                trimmed.len() < 50  // too short to be real SSP
+            {
                 continue;
             }
+            // Clean trailing garbage from BLE UART
+            let cleaned = trimmed.trim_end_matches(|c: char| !c.is_ascii_alphanumeric() && c != '{' && c != '}' && c != '"');
+            let final_line = if cleaned != trimmed { cleaned } else { trimmed };
 
-            log_info!("Received raw line: {}", trimmed);
+            log_info!("Attempting to parse SSP ({} bytes): {}", final_line.len(), final_line);
+
+            // Only log raw if it's likely real data
+            log_info!("Received raw line ({} bytes): {}", trimmed.len(), trimmed);
 
             // Try to parse as SSP message
-            match SspMessage::parse(trimmed) {
+            match SspMessage::parse_flexible(trimmed) {
                 Ok(ssp_msg) => {
-                    log_info!("✓ Parsed SSP message from {}: topic={}, type={:?}",
-                             ssp_msg.source.id, ssp_msg.topic, ssp_msg.msg_type);
+
+                    log_info!("PARSED SSP from {}: topic={}, type={:?}, payload={}",
+                        ssp_msg.source.id,
+                        ssp_msg.topic,
+                        ssp_msg.msg_type,
+                        serde_json::to_string_pretty(&ssp_msg.payload).unwrap_or("???".to_string())
+                    );
 
                     // Store routing info for this device
                     {
