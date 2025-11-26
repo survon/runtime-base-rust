@@ -3,6 +3,9 @@ module_type: "monitoring"
 bus_topic: "pressure_sensor"
 template: "gauge_card"
 bindings:
-  pressure_psi: 85.5
+  a: 85.5
+  b: 0
+  c: 0
+  unit_of_measure_label: "PSX"
   bus_topic: "monitoring"
   is_blinkable: true

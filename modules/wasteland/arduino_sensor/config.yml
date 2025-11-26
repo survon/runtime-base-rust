@@ -1,0 +1,35 @@
+# modules/wasteland/a01/config.yml
+# Auto-generated for Arduino environmental sensor
+
+name: "Environmental Monitor"
+module_type: "monitoring"
+bus_topic: "a01"  # Must match Arduino's "i" field
+template: "gauge_card"
+
+bindings:
+  # Compact SSP data keys (from "d" object)
+  a: 0  # temperature_c - Primary sensor displayed in gauge
+  b: 0  # humidity_pct - Secondary sensor (if template supports)
+  c: 0  # message_count - Debug/health counter
+
+  # Display configuration
+  device_id: "a01"
+  display_name: "Temperature"
+  unit_of_measure_label: "°C"
+
+  # Gauge thresholds (optional)
+  max_value: 100.0
+  warn_threshold: 60.0
+  danger_threshold: 85.0
+
+  # Metadata
+  firmware_version: "1.0.0"
+  is_blinkable: true
+
+# Expected SSP message from Arduino:
+# {"p":"ssp/1.0","t":"tel","i":"a01","s":1234,"d":{"a":72,"b":45,"c":1}}
+#
+# Mapping:
+#   "a":72 → temperature_c → displayed as "72.0 °C"
+#   "b":45 → humidity_pct → available for secondary display
+#   "c":1  → message_count → health indicator
