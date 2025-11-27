@@ -42,12 +42,6 @@ impl MessagesPanel {
         self.main_receiver = Some(receiver);
     }
 
-    /// Subscribe to all topics (or specific topics)
-    pub async fn subscribe(&mut self, message_bus: &MessageBus) {
-        let receiver = message_bus.subscribe("navigation".to_string()).await;
-        self.receivers.push(receiver);
-    }
-
     /// Subscribe to multiple topics
     pub async fn subscribe_topics(&mut self, message_bus: &MessageBus, topics: Vec<String>) {
         for topic in topics {
@@ -86,53 +80,6 @@ impl MessagesPanel {
     fn is_at_bottom(&self) -> bool {
         let max_scroll = self.recent_messages.len().saturating_sub(self.visible_lines);
         self.scroll_offset >= max_scroll
-    }
-
-    /// Poll for new messages (call this in your event loop)
-    pub fn poll_messages(&mut self) {
-        let was_at_bottom = self.is_at_bottom();
-        let mut new_messages = false;
-
-        // Poll main receiver FIRST (gets ALL messages)
-        if let Some(receiver) = &mut self.main_receiver {
-            while let Ok(message) = receiver.try_recv() {
-                log_debug!("📨 MessagesPanel (MAIN) received: topic={}, source={}, payload={}",
-                    message.topic, message.source, message.payload);
-
-                self.recent_messages.push(message);
-                new_messages = true;
-
-                if self.recent_messages.len() > self.max_messages {
-                    self.recent_messages.remove(0);
-                    if self.scroll_offset > 0 {
-                        self.scroll_offset -= 1;
-                    }
-                }
-            }
-        }
-
-        // Also poll topic-specific receivers (for backward compatibility)
-        for receiver in &mut self.receivers {
-            while let Ok(message) = receiver.try_recv() {
-                log_debug!("📨 MessagesPanel (topic) received: topic={}, source={}, payload={}",
-                    message.topic, message.source, message.payload);
-
-                self.recent_messages.push(message);
-                new_messages = true;
-
-                if self.recent_messages.len() > self.max_messages {
-                    self.recent_messages.remove(0);
-                    if self.scroll_offset > 0 {
-                        self.scroll_offset -= 1;
-                    }
-                }
-            }
-        }
-
-        // Auto-scroll to bottom when new messages arrive (only if already at bottom)
-        if new_messages && was_at_bottom {
-            self.scroll_to_bottom();
-        }
     }
 
     pub fn add_message(&mut self, message: BusMessage) {

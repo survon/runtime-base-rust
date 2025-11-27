@@ -119,6 +119,9 @@ impl TransportManager {
 
         let routing_table = self.routing_table.read().await;
 
+        log_info!("target_device_id: {:?}", target_device_id);
+        log_info!("Outbound message routing table: {:?}", routing_table);
+
         if let Some(target_source) = routing_table.get(&target_device_id) {
             log_info!("Routing message to device '{}' via {:?}", target_device_id, target_source.transport);
 

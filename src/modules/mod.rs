@@ -1,6 +1,8 @@
 pub mod llm;
 pub mod module_handler;
 pub mod wasteland_manager;
+pub mod valve_control;
+pub mod monitoring;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -21,11 +23,13 @@ use crate::ui::template::{get_template, UiTemplate};
 use crate::util::{
     database::Database,
     io::{
+        get_all_event_message_topics,
         bus::{BusMessage, BusReceiver, BusSender, MessageBus},
-        event::{AppEvent, Event, EventHandler}
+        event::{AppEvent, Event, EventHandler},
+        discovery::{DiscoveryManager}
     }
 };
-use crate::util::io::discovery::DiscoveryManager;
+use crate::{log_info, log_error, log_debug, log_warn};
 
 /// Runtime rendering state for modules (not serialized)
 #[derive(Debug, Clone)]
@@ -221,21 +225,27 @@ impl ModuleManager {
         database: &Database,
         message_bus: &MessageBus
     ) -> Result<()> {
-        // Collect module types that need handlers FIRST (avoid borrowing conflict)
-        let module_types: Vec<String> = self.modules
+        // Collect module info that needs handlers FIRST (avoid borrowing conflict)
+        let modules_info: Vec<(String, String, String)> = self.modules
             .iter()
-            .map(|m| m.config.module_type.clone())
+            .map(|m| {
+                let device_id = m.config.bindings
+                    .get("device_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                (m.config.module_type.clone(), device_id, m.config.bus_topic.clone())
+            })
             .collect();
 
-        // Now register handlers based on collected types
-        for module_type in module_types {
+        // Now register handlers based on collected info
+        for (module_type, device_id, bus_topic) in modules_info {
             match module_type.as_str() {
                 "llm" => {
                     // Only register once
                     if !self.handlers.contains_key("llm") {
                         use crate::modules::llm;
 
-                        // Create LLM service using the new utility
                         let llm_service = llm::create_llm_service_if_available(
                             self,
                             database,
@@ -247,17 +257,70 @@ impl ModuleManager {
                 }
                 "system" => {}
                 "wasteland_manager" => {
-                    self.register_handler(Box::new(wasteland_manager::handler::WastelandManagerHandler::new(
-                        wasteland_path.clone(),
-                        discovery_manager.clone(),
-                        database.clone(),
-                        message_bus.clone()
-                    )))
+                    if !self.handlers.contains_key("wasteland_manager") {
+                        self.register_handler(Box::new(wasteland_manager::handler::WastelandManagerHandler::new(
+                            wasteland_path.clone(),
+                            discovery_manager.clone(),
+                            database.clone(),
+                            message_bus.clone()
+                        )))
+                    }
                 }
-                // Add other module types here as needed
+                "valve_control" => {
+                    if !self.handlers.contains_key("valve_control") && !device_id.is_empty() {
+                        use crate::modules::valve_control;
+
+                        log_info!("Registering valve_control handler for device: {}", device_id);
+
+                        let handler = Box::new(
+                            valve_control::handler::ValveControlHandler::new(
+                                message_bus.clone(),
+                                device_id.clone(),
+                                bus_topic.clone(),
+                            )
+                        );
+                        self.register_handler(handler);
+                    }
+                }
+                "monitoring" => {
+                    // Register one handler per monitoring module
+                    // Each handler monitors its own device_id and bus_topic
+                    let handler_key = format!("monitoring_{}", device_id);
+
+                    if !self.handlers.contains_key(&handler_key) && !device_id.is_empty() {
+                        use crate::modules::monitoring;
+
+                        log_info!("🔧 Registering monitoring handler:");
+                        log_info!("   - Handler key: {}", handler_key);
+                        log_info!("   - Device ID: {}", device_id);
+                        log_info!("   - Bus topic: {}", bus_topic);
+
+                        let handler = Box::new(
+                            monitoring::handler::MonitoringHandler::new(
+                                message_bus.clone(),
+                                device_id.clone(),
+                                bus_topic.clone(),
+                            )
+                        );
+
+                        self.handlers.insert(handler_key.clone(), handler);
+                        log_info!("✅ Monitoring handler registered: {}", handler_key);
+                    } else if device_id.is_empty() {
+                        log_warn!("⚠️ Skipping monitoring module with empty device_id");
+                    } else {
+                        log_info!("ℹ️ Monitoring handler already exists: {}", handler_key);
+                    }
+                }
                 _ => {}
             }
         }
+
+        // Log all registered handlers for debugging
+        log_info!("📋 All registered handlers:");
+        for key in self.handlers.keys() {
+            log_info!("   - {}", key);
+        }
+
         Ok(())
     }
 
@@ -271,40 +334,98 @@ impl ModuleManager {
     }
 
     pub fn get_handler_mut(&mut self, module_type: &str) -> Option<&mut (dyn ModuleHandler + 'static)> {
-        self.handlers.get_mut(module_type).map(|h| &mut **h)
+        // First try direct module type lookup
+        if let Some(handler) = self.handlers.get_mut(module_type) {
+            return Some(&mut **handler);
+        }
+
+        // For monitoring modules, look up by device_id
+        if module_type == "monitoring" {
+            // This will be called with just "monitoring", but we need the device_id
+            // The update_module_bindings method will handle this differently
+            return None;
+        }
+
+        None
     }
 
     pub fn handle_key_for_module(&mut self, module_idx: usize, key_code: KeyCode) -> Option<AppEvent> {
-        // Get the module type first (avoids split borrow issue)
-        let module_type = self.modules.get(module_idx)?.config.module_type.clone();
+        if let Some(module) = self.modules.get(module_idx) {
+            let module_type = module.config.module_type.clone();
 
-        // Now we can safely get mutable references to both
-        let handler = self.handlers.get_mut(&module_type)?;
-        let module = self.modules.get_mut(module_idx)?;
+            // For monitoring modules, use device-specific handler key
+            let handler_key = if module_type == "monitoring" {
+                let device_id = module.config.bindings
+                    .get("device_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                format!("monitoring_{}", device_id)
+            } else {
+                module_type.clone()
+            };
 
-        handler.handle_key(key_code, module)
+            log_debug!("⌨️ Key event for module {} (handler: {})", module_idx, handler_key);
+
+            // Now we can safely get mutable references to both
+            let handler = self.handlers.get_mut(&handler_key)?;
+            let module = self.modules.get_mut(module_idx)?;
+
+            handler.handle_key(key_code, module)
+        } else {
+            None
+        }
     }
 
     pub fn update_module_bindings(&mut self, module_idx: usize) {
-        // Get the module type first (avoids split borrow issue)
-        if let Some(module_type) = self.modules.get(module_idx).map(|m| m.config.module_type.clone()) {
+        if let Some(module) = self.modules.get(module_idx) {
+            let module_type = module.config.module_type.clone();
+
+            // For monitoring modules, use device-specific handler key
+            let handler_key = if module_type == "monitoring" {
+                let device_id = module.config.bindings
+                    .get("device_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                log_debug!("🔍 Looking up monitoring handler:");
+                log_debug!("   - Module index: {}", module_idx);
+                log_debug!("   - Module name: {}", module.config.name);
+                log_debug!("   - Device ID: {}", device_id);
+                log_debug!("   - Bus topic: {}", module.config.bus_topic);
+
+                let key = format!("monitoring_{}", device_id);
+                log_debug!("   - Handler key: {}", key);
+                key
+            } else {
+                module_type.clone()
+            };
+
+            // Check if handler exists
+            if self.handlers.contains_key(&handler_key) {
+                log_debug!("✅ Handler found: {}", handler_key);
+            } else {
+                log_warn!("❌ Handler NOT found: {}", handler_key);
+                log_warn!("📋 Available handlers:");
+                for key in self.handlers.keys() {
+                    log_warn!("   - {}", key);
+                }
+            }
+
             // Now we can safely get mutable references to both
-            if let Some(handler) = self.handlers.get_mut(&module_type) {
+            if let Some(handler) = self.handlers.get_mut(&handler_key) {
                 if let Some(module) = self.modules.get_mut(module_idx) {
+                    log_debug!("🔄 Calling update_bindings for {}", handler_key);
                     handler.update_bindings(module);
                 }
+            } else {
+                log_error!("❌ Failed to get handler for {}", handler_key);
             }
         }
     }
 
     /// Subscribe the module manager to app events it cares about
     pub async fn subscribe_to_events(&mut self, message_bus: &MessageBus) {
-        let topics = vec![
-            "app.event.increment",
-            "app.event.decrement",
-            "app.event.select",
-            "app.event.refresh_modules",
-        ];
+        let topics = get_all_event_message_topics();
 
         for topic in topics {
             let receiver = message_bus.subscribe(topic.to_string()).await;

@@ -1,10 +1,23 @@
 name: "Valve Control"
-module_type: "com"
-bus_topic: "control"
+module_type: "valve_control"
+bus_topic: "v01"  # <-- MUST match Arduino DEVICE_ID
 template: "toggle_switch"
+
 bindings:
-  state: true
+  # SSP Compact Format Keys (matching Arduino)
+  a: 0  # valve_open - 0=closed, 1=open (maps to "state" for UI)
+  b: 0  # position - 0-100% servo position
+  c: 0  # message_count - health counter
+
+  # Device metadata
+  device_id: "v01"  # <-- MUST match Arduino DEVICE_ID
+  device_type: "valve_ctrl"
+  firmware_version: "1.0.0"
+
+  # UI display configuration
+  state: false  # <-- Handler updates this from "a"
   label: "Primary Flow Control"
   toggle_on_label: "Open"
   toggle_off_label: "Closed"
   description: "Controls pipeline flow"
+  is_blinkable: false

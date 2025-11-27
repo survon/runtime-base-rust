@@ -289,7 +289,10 @@ impl DiscoveryManager {
         let rx_char_clone = rx_char.clone();
 
         tokio::spawn(async move {
-            log_info!("🔷 BLE listener task started for {}", addr_clone);
+            log_info!("📷 BLE listener task started for {}", addr_clone);
+
+            // Track if we've sent registration response
+            let mut registration_sent = false;
 
             // Outer loop: handles reconnection if stream dies
             loop {
@@ -310,7 +313,6 @@ impl DiscoveryManager {
                             match maybe_data {
                                 Some(data) => {
                                     chunk_count += 1;
-                                    // Note: data.value is Vec<u8> from ValueNotification
                                     let chunk = String::from_utf8_lossy(&data.value).to_string();
 
                                     log_info!("📦 Chunk #{}: {} bytes", chunk_count, chunk.len());
@@ -330,19 +332,47 @@ impl DiscoveryManager {
                                     if buffer.starts_with('{') && buffer.ends_with('}') {
                                         log_info!("✅ COMPLETE MESSAGE ({} bytes)", buffer.len());
 
-                                        // [Your existing message parsing logic here]
-                                        // Try compact format, verbose format, then SSP telemetry
+                                        // Try compact format first
+                                        if buffer.contains("\"dt\"") && buffer.contains("\"fw\"") && !registration_sent {
+                                            log_info!("📷 Detected COMPACT registration format");
 
-                                        if buffer.contains("\"dt\"") && buffer.contains("\"fw\"") {
-                                            // Compact registration handling
-                                            log_info!("🔷 Detected COMPACT registration format");
-                                            // ... (keep your existing compact parsing)
-                                        } else if buffer.contains("\"device_id\"") {
-                                            // Verbose registration handling
+                                            match serde_json::from_str::<CompactRegistrationResponse>(&buffer) {
+                                                Ok(compact_reg) => {
+                                                    log_info!("✅ Parsed compact registration");
+                                                    let capabilities = compact_reg.to_capabilities();
+
+                                                    // Send to registration handler
+                                                    if response_tx.send(capabilities).await.is_ok() {
+                                                        log_info!("✅ Sent registration response to handler");
+                                                        registration_sent = true;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    log_error!("❌ Failed to parse compact registration: {}", e);
+                                                }
+                                            }
+                                        }
+                                        // Try verbose format
+                                        else if buffer.contains("\"device_id\"") && !registration_sent {
                                             log_info!("📋 Detected VERBOSE registration format");
-                                            // ... (keep your existing verbose parsing)
-                                        } else {
-                                            // Regular telemetry
+
+                                            match serde_json::from_str::<DeviceCapabilities>(&buffer) {
+                                                Ok(capabilities) => {
+                                                    log_info!("✅ Parsed verbose registration");
+
+                                                    // Send to registration handler
+                                                    if response_tx.send(capabilities).await.is_ok() {
+                                                        log_info!("✅ Sent registration response to handler");
+                                                        registration_sent = true;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    log_error!("❌ Failed to parse verbose registration: {}", e);
+                                                }
+                                            }
+                                        }
+                                        // Regular telemetry
+                                        else {
                                             log_info!("📊 Attempting SSP telemetry parse...");
                                             match SspMessage::parse_flexible(&buffer) {
                                                 Ok(ssp) => {
@@ -355,6 +385,7 @@ impl DiscoveryManager {
                                                 }
                                                 Err(_) => {
                                                     log_warn!("⚠️ Not a recognized message format");
+                                                    log_warn!("Buffer content: {}", buffer);
                                                 }
                                             }
                                         }
@@ -363,8 +394,8 @@ impl DiscoveryManager {
                                     }
                                 }
                                 None => {
-                                    // Stream ended - this is where "Event receiver died" happens
-                                    log_warn!("⚠️ Notification stream ended for {} - will attempt reconnection", addr_clone);
+                                    // Stream ended - this is expected when device disconnects
+                                    log_info!("📡 Notification stream ended for {} (normal disconnect)", addr_clone);
                                     break; // Exit inner loop to trigger reconnection
                                 }
                             }
@@ -375,16 +406,15 @@ impl DiscoveryManager {
 
                             // Heartbeat: Check if device is still connected
                             if !periph.is_connected().await.unwrap_or(false) {
-                                log_warn!("⚠️ Device {} disconnected - breaking stream loop", addr_clone);
+                                log_info!("📡 Device {} disconnected during heartbeat check", addr_clone);
                                 break; // Exit inner loop to trigger reconnection
                             }
                         }
                     }
                         }
 
-                        // Stream died - attempt reconnection
-                        log_info!("🔄 Stream closed for {}, attempting reconnection in 5s...", addr_clone);
-
+                        // Stream closed naturally - don't log as error
+                        log_info!("🔄 Stream closed for {}, will attempt reconnection in 5s...", addr_clone);
                     }
                     Err(e) => {
                         log_error!("❌ Failed to get notification stream for {}: {}", addr_clone, e);
@@ -420,6 +450,9 @@ impl DiscoveryManager {
                             log_error!("❌ Failed to reconnect to {}: {}", addr_clone, e);
                         }
                     }
+                } else {
+                    // Device is still connected but stream died - just try to get stream again
+                    log_info!("🔄 Device {} still connected, reacquiring stream...", addr_clone);
                 }
             }
         });
