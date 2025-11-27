@@ -1,3 +1,5 @@
+// ui/screens/overview/modules_list.rs - FIXED VERSION
+
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Rect, Layout, Direction},
@@ -97,6 +99,10 @@ pub fn render_modules_list(
             let actual_module_idx = displayable_to_actual[displayable_idx];
             let col_area = cols[col_idx];
 
+            // *** CRITICAL FIX: Update bindings BEFORE rendering ***
+            // This ensures the latest data from handlers is available
+            module_manager.update_module_bindings(actual_module_idx);
+
             // Check if we need to update blink for this module
             let needs_redraw = {
                 let modules = module_manager.get_modules_mut();
@@ -114,7 +120,7 @@ pub fn render_modules_list(
             // Check if this module is selected
             let is_selected = actual_module_idx == selected_idx;
 
-            // Render the module
+            // Render the module (now with updated bindings!)
             let modules = module_manager.get_modules_mut();
             if let Some(module) = modules.get_mut(actual_module_idx) {
                 render_module_box(
@@ -152,7 +158,7 @@ fn render_metadata_card(module: &Module, is_selected: bool, area: Rect, buf: &mu
     };
 
     let icon = match module.config.module_type.as_str() {
-        "com" => "📌",
+        "com" => "🔌",
         "entertainment" => "🎮",
         "knowledge" => "📚",
         "llm" => "🤖",

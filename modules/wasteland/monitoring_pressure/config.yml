@@ -1,11 +1,42 @@
 name: "Pressure Monitor"
 module_type: "monitoring"
-bus_topic: "pressure_sensor"
+bus_topic: "p01"  # No device currently sending to this topic
 template: "gauge_card"
+
 bindings:
-  a: 85.5
-  b: 0
-  c: 0
-  unit_of_measure_label: "PSX"
-  bus_topic: "monitoring"
+  # Compact SSP data keys (from "d" object in telemetry)
+  a: 85.5  # pressure_psi - Static default value (shown until device connects)
+  b: 0     # secondary_value - Reserved for future use
+  c: 0     # message_count
+
+  # Device metadata
+  device_id: "p01"
+  device_type: "pressure_sensor"
+  firmware_version: "0.0.0"  # Unknown until device connects
+
+  # Display configuration
+  display_name: "Pressure"
+  unit_of_measure_label: "PSI"
+
+  # Gauge thresholds
+  max_value: 150.0
+  warn_threshold: 100.0
+  danger_threshold: 130.0
+
+  # Behavior
   is_blinkable: true
+
+  # Connection tracking (set by handler)
+  is_connected: false
+  seconds_since_update: 0
+  status_suffix: ""
+
+# Expected SSP message from future Arduino:
+# {"p":"ssp/1.0","t":"tel","i":"p01","s":1234,"d":{"a":85,"b":0,"c":1}}
+#
+# Until device connects, will show:
+# - Static value: 85.5 PSI
+# - Red border
+# - Warning: "⚠️ No data received"
+#
+# This allows you to set up modules before hardware is ready

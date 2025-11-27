@@ -109,7 +109,7 @@ impl UiTemplate for GaugeCard {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             )
-            .gauge_style(Style::default().fg(gauge_color_fg).bg(gauge_color_bg))
+            .gauge_style(Style::default().fg(gauge_color_fg))
             .percent(percentage)
             .label(format!("{:.1} {}", gauge_value, unit_of_measure_label));
 

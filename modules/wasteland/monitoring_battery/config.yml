@@ -1,0 +1,23 @@
+name: "Battery Monitor"
+module_type: "monitoring"
+bus_topic: "bat01"
+template: "gauge_card"
+
+bindings:
+  a: 0  # battery_voltage
+  b: 0  # charge_percentage
+  c: 0  # message_count
+
+  device_id: "bat01"
+  device_type: "battery_monitor"
+  firmware_version: "1.0.0"
+
+  display_name: "Battery"
+  unit_of_measure_label: "V"
+
+  max_value: 14.0
+  warn_threshold: 11.5
+  danger_threshold: 10.5
+
+  is_blinkable: true
+  is_connected: false

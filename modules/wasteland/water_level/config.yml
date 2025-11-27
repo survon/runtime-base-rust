@@ -1,0 +1,32 @@
+name: "Water Level"
+module_type: "monitoring"
+bus_topic: "w01"
+template: "gauge_card"
+
+bindings:
+  # Compact SSP data keys
+  a: 0    # water_level_cm
+  b: 0    # temperature_c (optional secondary)
+  c: 0    # message_count
+
+  # Device metadata
+  device_id: "w01"
+  device_type: "water_sensor"
+  firmware_version: "1.0.0"
+
+  # Display configuration
+  display_name: "Water Level"
+  unit_of_measure_label: "cm"
+
+  # Gauge thresholds (tank specific)
+  max_value: 200.0     # 2 meter tank
+  warn_threshold: 50.0  # Low water warning at 50cm
+  danger_threshold: 20.0  # Critical low at 20cm
+
+  # Behavior
+  is_blinkable: true
+
+  # Connection tracking
+  is_connected: false
+  seconds_since_update: 0
+  status_suffix: ""
