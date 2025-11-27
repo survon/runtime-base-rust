@@ -1,29 +1,31 @@
 pub mod llm;
 pub mod module_handler;
-mod wasteland_manager;
+pub mod wasteland_manager;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use module_handler::ModuleHandler;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use color_eyre::Result;
 use ratatui::prelude::*;
 use ratatui::{
-    buffer::{Buffer},
-    DefaultTerminal,
+    buffer::Buffer,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    DefaultTerminal,
 };
 use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 use crate::ui::template::{get_template, UiTemplate};
 use crate::util::{
+    database::Database,
     io::{
-        event::{AppEvent, Event, EventHandler},
-        bus::{MessageBus, BusMessage, BusReceiver, BusSender}
-    },
-    database::{Database}
+        bus::{BusMessage, BusReceiver, BusSender, MessageBus},
+        event::{AppEvent, Event, EventHandler}
+    }
 };
+use crate::util::io::discovery::DiscoveryManager;
 
 /// Runtime rendering state for modules (not serialized)
 #[derive(Debug, Clone)]
@@ -100,7 +102,7 @@ impl ModuleConfig {
 #[derive(Debug)]
 pub struct Module {
     pub config: ModuleConfig,
-    pub path: std::path::PathBuf,
+    pub path: PathBuf,
     pub cached_template: Option<Box<dyn UiTemplate>>,
     pub render_state: ModuleRenderState,
 }
@@ -193,7 +195,7 @@ impl Clone for Module {
 #[derive(Debug)]
 pub struct ModuleManager {
     modules: Vec<Module>,
-    modules_path: std::path::PathBuf,
+    pub modules_path: PathBuf,
     pub namespace: String,
     pub selected_module: usize,
     event_receivers: Vec<BusReceiver>,
@@ -201,7 +203,7 @@ pub struct ModuleManager {
 }
 
 impl ModuleManager {
-    pub fn new(modules_path: std::path::PathBuf, namespace: String) -> Self {
+    pub fn new(modules_path: PathBuf, namespace: String) -> Self {
         Self {
             modules: Vec::new(),
             modules_path,
@@ -212,7 +214,13 @@ impl ModuleManager {
         }
     }
 
-    pub async fn initialize_module_handlers(&mut self, database: &Database, bus_sender: BusSender) -> Result<()> {
+    pub async fn initialize_module_handlers(
+        &mut self,
+        wasteland_path: PathBuf,
+        discovery_manager: Option<Arc<DiscoveryManager>>,
+        database: &Database,
+        message_bus: &MessageBus
+    ) -> Result<()> {
         // Collect module types that need handlers FIRST (avoid borrowing conflict)
         let module_types: Vec<String> = self.modules
             .iter()
@@ -236,6 +244,15 @@ impl ModuleManager {
                         let llm_handler = Box::new(llm::handler::LlmHandler::new(llm_service));
                         self.register_handler(llm_handler);
                     }
+                }
+                "system" => {}
+                "wasteland_manager" => {
+                    self.register_handler(Box::new(wasteland_manager::handler::WastelandManagerHandler::new(
+                        wasteland_path.clone(),
+                        discovery_manager.clone(),
+                        database.clone(),
+                        message_bus.clone()
+                    )))
                 }
                 // Add other module types here as needed
                 _ => {}

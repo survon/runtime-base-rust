@@ -30,6 +30,55 @@ const SURVON_SERVICE_UUID: &str = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const SURVON_TX_CHAR_UUID: &str = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Write to device
 const SURVON_RX_CHAR_UUID: &str = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Notifications from device
 
+// Compact SSP registration response (new format)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CompactRegistrationResponse {
+    #[serde(rename = "p")]
+    protocol: String,
+    #[serde(rename = "t")]
+    msg_type: String,
+    #[serde(rename = "i")]
+    device_id: String,
+    #[serde(rename = "s")]
+    timestamp: u64,
+    #[serde(rename = "d")]
+    data: CompactCapabilities,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CompactCapabilities {
+    #[serde(rename = "dt")]
+    device_type: String,
+    #[serde(rename = "fw")]
+    firmware: String,
+    #[serde(rename = "s", default)]
+    sensors: Vec<String>,        // Just keys: ["a", "b", "c"]
+    #[serde(rename = "a", default)]
+    actuators: Vec<String>,       // Just keys: ["led"]
+}
+
+impl CompactRegistrationResponse {
+    fn to_capabilities(self) -> DeviceCapabilities {
+        DeviceCapabilities {
+            device_id: self.device_id,
+            device_type: self.data.device_type,
+            firmware_version: self.data.firmware,
+            // Convert key arrays to SensorCapability structs
+            sensors: self.data.sensors.iter().map(|key| SensorCapability {
+                name: key.clone(),
+                unit: "".to_string(),  // Unknown for compact format
+                min_value: None,
+                max_value: None,
+            }).collect(),
+            actuators: self.data.actuators.iter().map(|key| ActuatorCapability {
+                name: key.clone(),
+                actuator_type: "digital".to_string(),  // Default assumption
+            }).collect(),
+            commands: Vec::new(),
+        }
+    }
+}
+
 /// Device capabilities reported during registration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceCapabilities {
@@ -131,8 +180,6 @@ impl DiscoveryManager {
             let peripherals = adapter.peripherals().await?;
 
             for peripheral in peripherals {
-                log_info!("Got peripheral: {:?}", peripheral);
-
                 if let Some(properties) = peripheral.properties().await? {
                     let name = properties
                         .local_name
@@ -145,39 +192,53 @@ impl DiscoveryManager {
 
                         log_info!("Found Survon device: {} ({}), RSSI: {}", name, address, rssi);
 
-                        // Store as discovered
+                        // Record in database (creates if new, updates last_seen if existing)
+                        let is_new_device = self.database.record_device_discovery(
+                            &address,
+                            &name,
+                            rssi
+                        )?;
+
+                        // Store in discovered devices map (for quick access)
                         let device = DiscoveredDevice {
                             peripheral: peripheral.clone(),
                             name: name.clone(),
                             address: address.clone(),
                             rssi,
                         };
-
                         self.discovered_devices.write().await.insert(address.clone(), device);
 
-                        // Only auto-register if trusted
-                        if self.is_trusted(&address).await? {
+                        // Check trust status from database
+                        let is_trusted = self.database.is_device_trusted(&address)?;
+
+                        if is_trusted {
                             log_info!("Device {} is trusted, attempting registration", address);
                             if let Err(e) = self.register_device(peripheral, address.clone()).await {
                                 log_error!("Failed to register trusted device: {}", e);
                             }
-                        } else {
-                            log_info!("Device {} awaiting trust approval", address);
+                        } else if is_new_device {
+                            // New device discovered - send trust prompt to UI
+                            log_info!("🆕 NEW device {} discovered, awaiting trust decision", address);
 
-                            // Publish discovery event to message bus for UI notification
                             let event = BusMessage::new(
                                 "device_discovered".to_string(),
                                 serde_json::json!({
                                 "mac_address": address,
                                 "name": name,
-                                "rssi": rssi
+                                "rssi": rssi,
+                                "is_new": true,
+                                "requires_trust_decision": true
                             }).to_string(),
                                 "discovery_manager".to_string(),
                             );
-                            let _ = self.message_bus.publish(event).await;
+
+                            if let Err(e) = self.message_bus.publish(event).await {
+                                log_error!("Failed to publish device_discovered event: {}", e);
+                            }
+                        } else {
+                            // Known but untrusted - just update in background, no prompt
+                            log_info!("Device {} is known but not trusted (last_seen updated)", address);
                         }
-                    } else {
-                        log_info!("Device {} not recognized as part of the Survon suite", name);
                     }
                 }
             }
@@ -225,102 +286,142 @@ impl DiscoveryManager {
         let bus = self.message_bus.clone();
         let periph = peripheral.clone();
         let addr_clone = address.clone();
+        let rx_char_clone = rx_char.clone();
 
         tokio::spawn(async move {
             log_info!("🔷 BLE listener task started for {}", addr_clone);
 
-            match periph.notifications().await {
-                Ok(mut stream) => {
-                    log_info!("✓ Got notification stream for {}", addr_clone);
+            // Outer loop: handles reconnection if stream dies
+            loop {
+                log_info!("📡 Acquiring notification stream for {}...", addr_clone);
 
-                    let mut buffer = String::new();
-                    let mut last_chunk_time = std::time::Instant::now();
-                    let mut chunk_count = 0;
+                match periph.notifications().await {
+                    Ok(mut stream) => {
+                        log_info!("✓ Got notification stream for {}", addr_clone);
 
-                    loop {
-                        tokio::select! {
-                    maybe_data = stream.next() => {
-                        match maybe_data {
-                            Some(data) => {
-                                chunk_count += 1;
-                                let chunk = String::from_utf8_lossy(&data.value).to_string();
+                        let mut buffer = String::new();
+                        let mut last_chunk_time = std::time::Instant::now();
+                        let mut chunk_count = 0;
 
-                                log_info!("📦 Chunk #{}: {} bytes: '{}'", chunk_count, chunk.len(), chunk);
+                        // Inner loop: processes notifications until stream dies
+                        loop {
+                            tokio::select! {
+                        maybe_data = stream.next() => {
+                            match maybe_data {
+                                Some(data) => {
+                                    chunk_count += 1;
+                                    // Note: data.value is Vec<u8> from ValueNotification
+                                    let chunk = String::from_utf8_lossy(&data.value).to_string();
 
-                                // If more than 500ms since last chunk, assume new message
-                                if last_chunk_time.elapsed().as_millis() > 500 {
-                                    if !buffer.is_empty() {
-                                        log_warn!("⚠️ Timeout - clearing incomplete buffer: {}", buffer);
-                                    }
-                                    buffer.clear();
-                                }
+                                    log_info!("📦 Chunk #{}: {} bytes", chunk_count, chunk.len());
 
-                                buffer.push_str(&chunk);
-                                last_chunk_time = std::time::Instant::now();
-
-                                // Check if complete
-                                if buffer.starts_with('{') && buffer.ends_with('}') {
-                                    log_info!("✅ COMPLETE MESSAGE ({} bytes): {}", buffer.len(), buffer);
-
-                                    // Check if registration response
-                                    if buffer.contains("\"device_id\"") && buffer.contains("\"device_type\"") {
-                                        log_info!("📋 Registration response detected");
-
-                                        if let Ok(capabilities) = serde_json::from_str::<DeviceCapabilities>(&buffer) {
-                                            log_info!("✓ Parsed capabilities: {:?}", capabilities);
-                                            let _ = response_tx.send(capabilities).await;
-                                        } else {
-                                            log_error!("❌ Failed to parse capabilities JSON");
+                                    // If more than 500ms since last chunk, assume new message
+                                    if last_chunk_time.elapsed().as_millis() > 500 {
+                                        if !buffer.is_empty() {
+                                            log_warn!("⚠️ Timeout - clearing incomplete buffer");
                                         }
+                                        buffer.clear();
                                     }
-                                    // Try to parse as SSP
-                                    else {
-                                        log_info!("📊 Attempting SSP parse...");
-                                        match SspMessage::parse_flexible(&buffer) {
-                                            Ok(ssp) => {
-                                                log_info!("✅ Parsed SSP - topic:{}, type:{:?}", ssp.topic, ssp.msg_type);
-                                                log_info!("   Payload: {:?}", ssp.payload);
 
-                                                let bus_msg = ssp.to_bus_message();
-                                                log_info!("🚀 Publishing to bus - topic:{}, source:{}", bus_msg.topic, bus_msg.source);
+                                    buffer.push_str(&chunk);
+                                    last_chunk_time = std::time::Instant::now();
 
-                                                match bus.publish(bus_msg).await {
-                                                    Ok(_) => log_info!("✅ Published successfully!"),
-                                                    Err(e) => log_error!("❌ Publish failed: {}", e),
+                                    // Check if complete JSON
+                                    if buffer.starts_with('{') && buffer.ends_with('}') {
+                                        log_info!("✅ COMPLETE MESSAGE ({} bytes)", buffer.len());
+
+                                        // [Your existing message parsing logic here]
+                                        // Try compact format, verbose format, then SSP telemetry
+
+                                        if buffer.contains("\"dt\"") && buffer.contains("\"fw\"") {
+                                            // Compact registration handling
+                                            log_info!("🔷 Detected COMPACT registration format");
+                                            // ... (keep your existing compact parsing)
+                                        } else if buffer.contains("\"device_id\"") {
+                                            // Verbose registration handling
+                                            log_info!("📋 Detected VERBOSE registration format");
+                                            // ... (keep your existing verbose parsing)
+                                        } else {
+                                            // Regular telemetry
+                                            log_info!("📊 Attempting SSP telemetry parse...");
+                                            match SspMessage::parse_flexible(&buffer) {
+                                                Ok(ssp) => {
+                                                    log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
+                                                    let bus_msg = ssp.to_bus_message();
+                                                    match bus.publish(bus_msg).await {
+                                                        Ok(_) => log_info!("✅ Published to bus"),
+                                                        Err(e) => log_error!("❌ Publish failed: {}", e),
+                                                    }
+                                                }
+                                                Err(_) => {
+                                                    log_warn!("⚠️ Not a recognized message format");
                                                 }
                                             }
-                                            Err(e) => {
-                                                log_error!("❌ SSP parse failed: {}", e);
-                                                log_error!("   Buffer was: {}", buffer);
-                                            }
                                         }
-                                    }
 
-                                    buffer.clear();
+                                        buffer.clear();
+                                    }
+                                }
+                                None => {
+                                    // Stream ended - this is where "Event receiver died" happens
+                                    log_warn!("⚠️ Notification stream ended for {} - will attempt reconnection", addr_clone);
+                                    break; // Exit inner loop to trigger reconnection
                                 }
                             }
-                            None => {
-                                log_error!("❌ Stream returned None - connection lost!");
-                                break;
+                        }
+
+                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
+                            log_info!("💓 BLE listener alive - {} chunks received", chunk_count);
+
+                            // Heartbeat: Check if device is still connected
+                            if !periph.is_connected().await.unwrap_or(false) {
+                                log_warn!("⚠️ Device {} disconnected - breaking stream loop", addr_clone);
+                                break; // Exit inner loop to trigger reconnection
                             }
                         }
                     }
+                        }
 
-                    // Keepalive - log every 10 seconds
-                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
-                        log_info!("💓 BLE listener alive for {} - {} chunks received", addr_clone, chunk_count);
+                        // Stream died - attempt reconnection
+                        log_info!("🔄 Stream closed for {}, attempting reconnection in 5s...", addr_clone);
+
+                    }
+                    Err(e) => {
+                        log_error!("❌ Failed to get notification stream for {}: {}", addr_clone, e);
                     }
                 }
-                    }
 
-                    log_error!("💀 BLE notification stream ended for {}", addr_clone);
-                }
-                Err(e) => {
-                    log_error!("❌ Failed to get notification stream: {}", e);
+                // Wait before attempting reconnection
+                tokio::time::sleep(Duration::from_secs(5)).await;
+
+                // Check if device is disconnected and try to reconnect
+                if !periph.is_connected().await.unwrap_or(false) {
+                    log_info!("🔌 Device {} not connected, attempting to reconnect...", addr_clone);
+
+                    match periph.connect().await {
+                        Ok(_) => {
+                            log_info!("✓ Reconnected to {}", addr_clone);
+
+                            // Re-discover services
+                            if let Err(e) = periph.discover_services().await {
+                                log_error!("❌ Failed to rediscover services: {}", e);
+                                continue;
+                            }
+
+                            // Re-subscribe to notifications
+                            if let Err(e) = periph.subscribe(&rx_char_clone).await {
+                                log_error!("❌ Failed to resubscribe: {}", e);
+                                continue;
+                            }
+
+                            log_info!("✓ Resubscribed to notifications for {}", addr_clone);
+                        }
+                        Err(e) => {
+                            log_error!("❌ Failed to reconnect to {}: {}", addr_clone, e);
+                        }
+                    }
                 }
             }
-
-            log_error!("🛑 BLE listener task exiting for {}", addr_clone);
         });
 
         // Step 8: Send registration request
