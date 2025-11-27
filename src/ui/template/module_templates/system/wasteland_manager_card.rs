@@ -38,8 +38,11 @@ impl UiTemplate for WastelandManagerCard {
             "Main" => {
                 self.render_main_menu(area, buf, border_color, selected_index, status_message, module)
             }
-            "TrustDevices" => {
-                self.render_trust_devices(area, buf, border_color, selected_index, status_message, module)
+            "PendingTrust" => {
+                self.render_pending_trust(area, buf, border_color, selected_index, status_message, module)
+            }
+            "AllDevices" => {
+                self.render_all_devices(area, buf, border_color, selected_index, status_message, module)
             }
             "InstallRegistry" => {
                 self.render_install_registry(area, buf, border_color, selected_index, status_message, module)
@@ -61,7 +64,8 @@ impl UiTemplate for WastelandManagerCard {
     }
 
     fn docs(&self) -> &'static str {
-        "Wasteland Manager interface for managing modules, trusting BLE devices, and installing from registry."
+        "Wasteland Manager interface for managing modules, trusting BLE devices, and installing from registry. \
+         Integrates device trust management with pending and known devices."
     }
 }
 
@@ -75,18 +79,55 @@ impl WastelandManagerCard {
         status_message: Option<&str>,
         module: &Module,
     ) {
-        let menu_items = module
+        // Get counts for menu items
+        let pending_count = module
             .config
             .bindings
-            .get("menu_items")
+            .get("pending_devices")
             .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let known_count = module
+            .config
+            .bindings
+            .get("known_devices")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let registry_count = module
+            .config
+            .bindings
+            .get("module_list")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let installed_count = module
+            .config
+            .bindings
+            .get("installed_modules")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let archived_count = module
+            .config
+            .bindings
+            .get("archived_modules")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let menu_items = vec![
+            format!("⚠️  Trust Pending Devices ({})", pending_count),
+            format!("📡 Manage All Devices ({})", known_count),
+            format!("📦 Install from Registry ({})", registry_count),
+            format!("⚙️  Manage Installed Modules ({})", installed_count),
+            format!("📚 View Archived Modules ({})", archived_count),
+            "← Back".to_string(),
+        ];
 
         let has_status = status_message.is_some();
         let chunks = Layout::default()
@@ -107,14 +148,22 @@ impl WastelandManagerCard {
             })
             .split(area);
 
-        // Title
-        let title = Paragraph::new("⚙️  Wasteland Manager")
+        // Title with alert indicator if pending devices
+        let title_text = if pending_count > 0 {
+            format!("⚙️  Wasteland Manager ⚠️  {} Pending", pending_count)
+        } else {
+            "⚙️  Wasteland Manager".to_string()
+        };
+
+        let title_color = if pending_count > 0 { Color::Yellow } else { Color::Cyan };
+
+        let title = Paragraph::new(title_text)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             )
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(Style::default().fg(title_color).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
@@ -177,7 +226,7 @@ impl WastelandManagerCard {
         Widget::render(help, chunks[help_index], buf);
     }
 
-    fn render_trust_devices(
+    fn render_pending_trust(
         &self,
         area: Rect,
         buf: &mut Buffer,
@@ -186,10 +235,10 @@ impl WastelandManagerCard {
         status_message: Option<&str>,
         module: &Module,
     ) {
-        let device_list = module
+        let pending_devices = module
             .config
             .bindings
-            .get("device_list")
+            .get("pending_devices")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
@@ -199,17 +248,151 @@ impl WastelandManagerCard {
             })
             .unwrap_or_default();
 
+        let has_status = status_message.is_some();
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // Device list
-                Constraint::Length(3),  // Help
-            ])
+            .constraints(if has_status {
+                vec![
+                    Constraint::Length(3),  // Title
+                    Constraint::Min(1),     // Device list
+                    Constraint::Length(3),  // Status
+                    Constraint::Length(3),  // Help
+                ]
+            } else {
+                vec![
+                    Constraint::Length(3),  // Title
+                    Constraint::Min(1),     // Device list
+                    Constraint::Length(3),  // Help
+                ]
+            })
+            .split(area);
+
+        // Title with alert styling
+        let title = Paragraph::new(format!("⚠️  New Devices Discovered ({})", pending_devices.len()))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow))
+            )
+            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center);
+        Widget::render(title, chunks[0], buf);
+
+        // Device list
+        if pending_devices.is_empty() {
+            let empty_msg = Paragraph::new("No pending devices.\n\nNew devices will appear here when discovered.\n\nThey need to be trusted before registration.")
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(border_color))
+                )
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            Widget::render(empty_msg, chunks[1], buf);
+        } else {
+            let list_items: Vec<ListItem> = pending_devices
+                .iter()
+                .enumerate()
+                .map(|(i, device)| {
+                    let style = if i == selected_index {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+
+                    let prefix = if i == selected_index { "▶ " } else { "  " };
+                    ListItem::new(format!("{}{}", prefix, device)).style(style)
+                })
+                .collect();
+
+            let list = List::new(list_items)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Yellow))
+                        .title(" Select device to trust ")
+                );
+            Widget::render(list, chunks[1], buf);
+        }
+
+        // Status message if present
+        let help_index = if has_status {
+            if let Some(status) = status_message {
+                let status_widget = Paragraph::new(status)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Yellow))
+                            .title(" Status ")
+                    )
+                    .style(Style::default().fg(Color::Yellow))
+                    .alignment(Alignment::Center);
+                Widget::render(status_widget, chunks[2], buf);
+            }
+            3
+        } else {
+            2
+        };
+
+        // Help
+        let help = Paragraph::new("↑/↓: Select • Enter: Trust & Register • 'i': Ignore • 'v': View All Devices • Esc: Back")
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan))
+            )
+            .style(Style::default().fg(Color::Cyan))
+            .alignment(Alignment::Center);
+        Widget::render(help, chunks[help_index], buf);
+    }
+
+    fn render_all_devices(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        border_color: Color,
+        selected_index: usize,
+        status_message: Option<&str>,
+        module: &Module,
+    ) {
+        let known_devices = module
+            .config
+            .bindings
+            .get("known_devices")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let has_status = status_message.is_some();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(if has_status {
+                vec![
+                    Constraint::Length(3),  // Title
+                    Constraint::Min(1),     // Device list
+                    Constraint::Length(3),  // Status
+                    Constraint::Length(3),  // Help
+                ]
+            } else {
+                vec![
+                    Constraint::Length(3),  // Title
+                    Constraint::Min(1),     // Device list
+                    Constraint::Length(3),  // Help
+                ]
+            })
             .split(area);
 
         // Title
-        let title = Paragraph::new(format!("📡 Discovered BLE Devices ({})", device_list.len()))
+        let title = Paragraph::new(format!("📡 All Known Devices ({})", known_devices.len()))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -220,7 +403,7 @@ impl WastelandManagerCard {
         Widget::render(title, chunks[0], buf);
 
         // Device list
-        if device_list.is_empty() {
+        if known_devices.is_empty() {
             let empty_msg = Paragraph::new("No devices discovered yet.\n\nDevices will appear here when they're in range.\n\nPress 'r' to refresh scanning.")
                 .block(
                     Block::default()
@@ -232,20 +415,28 @@ impl WastelandManagerCard {
                 .wrap(Wrap { trim: true });
             Widget::render(empty_msg, chunks[1], buf);
         } else {
-            let list_items: Vec<ListItem> = device_list
+            let list_items: Vec<ListItem> = known_devices
                 .iter()
                 .enumerate()
                 .map(|(i, device)| {
+                    // Parse device string format: "✓ Device Name (MAC) RSSI: -65 dBm"
+                    let is_trusted = device.starts_with('✓');
+                    let is_untrusted = device.starts_with('✗');
+
                     let style = if i == selected_index {
                         Style::default()
                             .fg(Color::Black)
-                            .bg(Color::Green)
+                            .bg(if is_trusted { Color::Green } else { Color::Gray })
                             .add_modifier(Modifier::BOLD)
+                    } else if is_trusted {
+                        Style::default().fg(Color::Green)
+                    } else if is_untrusted {
+                        Style::default().fg(Color::Red)
                     } else {
-                        Style::default().fg(Color::White)
+                        Style::default().fg(Color::Gray)
                     };
 
-                    let prefix = if i == selected_index { "✓ " } else { "  " };
+                    let prefix = if i == selected_index { "▶ " } else { "  " };
                     ListItem::new(format!("{}{}", prefix, device)).style(style)
                 })
                 .collect();
@@ -255,21 +446,40 @@ impl WastelandManagerCard {
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(border_color))
-                        .title(" Select device to trust ")
+                        .title(" All Known Devices ")
                 );
             Widget::render(list, chunks[1], buf);
         }
 
+        // Status message if present
+        let help_index = if has_status {
+            if let Some(status) = status_message {
+                let status_widget = Paragraph::new(status)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Yellow))
+                            .title(" Status ")
+                    )
+                    .style(Style::default().fg(Color::Yellow))
+                    .alignment(Alignment::Center);
+                Widget::render(status_widget, chunks[2], buf);
+            }
+            3
+        } else {
+            2
+        };
+
         // Help
-        let help = Paragraph::new("↑/↓: Select • Enter: Trust Device • 'r': Refresh • Esc: Back")
+        let help = Paragraph::new("↑/↓: Navigate • 't': Toggle Trust • 'd': Delete • 'p': View Pending • 'r': Refresh • Esc: Back")
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow))
+                    .border_style(Style::default().fg(Color::Cyan))
             )
-            .style(Style::default().fg(Color::Yellow))
+            .style(Style::default().fg(Color::Cyan))
             .alignment(Alignment::Center);
-        Widget::render(help, chunks[2], buf);
+        Widget::render(help, chunks[help_index], buf);
     }
 
     fn render_install_registry(

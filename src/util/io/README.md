@@ -1,8 +1,15 @@
-# Survon Serial Protocol (SSP) v1.0
+# Survon Serial Protocol (SSP) v1.0 - Compact Format
 
 ## Overview
 
-SSP is a JSON-based protocol for bidirectional communication between the Survon hub (Raspberry Pi) and field devices (Arduino, ESP32, etc.). It's inspired by MQTT and JSON-RPC standards.
+SSP is a lightweight, memory-efficient JSON protocol for bidirectional communication between the Survon hub and IoT field devices (Arduino, ESP32, etc.). The compact format uses single-letter keys to minimize RAM usage on resource-constrained devices.
+
+**Design Philosophy:**
+- **Compact by default**: 68 bytes vs 180 bytes (62% smaller)
+- **Agnostic sensors**: Devices send generic data keys (`a`, `b`, `c`); the hub's module config maps them to meaningful names
+- **Self-documenting**: Module `config.yml` files serve as the schema definition
+
+---
 
 ## Architecture
 
@@ -12,384 +19,260 @@ SSP is a JSON-based protocol for bidirectional communication between the Survon 
 │                                                              │
 │  ┌──────────────┐         ┌──────────────┐                 │
 │  │   Modules    │◄───────►│ Message Bus  │                 │
-│  │  (Pressure,  │         │ (BusMessage) │                 │
-│  │   Gate, etc) │         └──────┬───────┘                 │
+│  │   (a01,      │         │              │                 │
+│  │    temp1)    │         └──────┬───────┘                 │
 │  └──────────────┘                │                          │
-│                                   │                          │
-│  ┌────────────────────────────────┼──────────────────────┐  │
-│  │        Transport Manager                              │  │
-│  │                                                        │  │
-│  │  • Converts: SspMessage ↔ BusMessage                │  │
-│  │  • Routes by device_id + transport type              │  │
-│  │  • Maintains routing table                           │  │
-│  └───────────────────────┬────────────────────────────────┘  │
-└──────────────────────────┼───────────────────────────────────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-         ┌────▼───┐   ┌───▼────┐  ┌───▼────┐
-         │  USB   │   │ LoRa   │  │  BLE   │
-         │ Serial │   │ Radio  │  │        │
-         └────┬───┘   └───┬────┘  └───┬────┘
+│         ▲                        │                          │
+│         │                        ▼                          │
+│  ┌──────┴──────────────────────────────────────────────┐   │
+│  │        Discovery/Transport Manager                   │   │
+│  │  • Parses compact SSP messages                       │   │
+│  │  • Routes by device_id (topic)                       │   │
+│  │  • Publishes to message bus                          │   │
+│  └──────────────────────┬───────────────────────────────┘   │
+└─────────────────────────┼───────────────────────────────────┘
+                          │
+              ┌───────────┼───────────┐
               │           │           │
-         (Arduino)   (Arduino)   (ESP32)
+         ┌────▼───┐  ┌───▼────┐ ┌───▼────┐
+         │  USB   │  │  BLE   │ │ LoRa   │
+         │ Serial │  │        │ │        │
+         └────┬───┘  └───┬────┘ └───┬────┘
+              │          │          │
+         (Arduino)  (ESP32)    (Radio)
 ```
 
-## Message Flow
-
-### Inbound (Device → Survon)
-
-1. Arduino reads sensor and creates SSP telemetry message
-2. Sends JSON over serial (newline-delimited)
-3. Transport Manager receives and parses SSP message
-4. Stores device routing info (device_id → transport + address)
-5. Converts to BusMessage and publishes to internal bus
-6. Modules subscribe to topics and receive updates
-7. UI updates with new sensor data
-
-### Outbound (Survon → Device)
-
-1. Module publishes command to internal bus (e.g., "open_gate")
-2. Transport Manager subscribes to outbound topics
-3. Extracts target device_id from payload
-4. Looks up routing info for that device
-5. Converts BusMessage to SSP command message
-6. Sends via appropriate transport (USB/BLE/LoRa)
-7. Device receives, processes, and sends SSP response
-
-## Message Types
-
-### 1. Telemetry (Sensor Data)
-
-```json
-{
-  "protocol": "ssp/1.0",
-  "type": "telemetry",
-  "topic": "pressure_sensor",
-  "timestamp": 1732377600,
-  "source": {
-    "id": "pressure_001",
-    "transport": "usb",
-    "address": "/dev/ttyUSB0"
-  },
-  "payload": {
-    "pressure_psi": 85.5,
-    "temperature_c": 22.3,
-    "battery_pct": 87
-  }
-}
-```
-
-**Updates module binding**: `module.config.bindings.pressure_psi = 85.5`
-
-### 2. Command (Control Actions)
-
-```json
-{
-  "protocol": "ssp/1.0",
-  "type": "command",
-  "topic": "com_input",
-  "timestamp": 1732377605,
-  "source": {
-    "id": "survon_hub",
-    "transport": "internal",
-    "address": "internal"
-  },
-  "payload": {
-    "action": "open_gate",
-    "duration_sec": 30
-  },
-  "reply_to": "gate_001"
-}
-```
-
-### 3. Response (Acknowledgment)
-
-```json
-{
-  "protocol": "ssp/1.0",
-  "type": "response",
-  "topic": "com_input",
-  "timestamp": 1732377606,
-  "source": {
-    "id": "gate_001",
-    "transport": "ble",
-    "address": "00:1B:44:11:3A:B7"
-  },
-  "payload": {
-    "status": "success",
-    "action": "open_gate",
-    "message": "Gate opened successfully"
-  },
-  "in_reply_to": "survon_hub"
-}
-```
-
-### 4. Event (Status Changes)
-
-```json
-{
-  "protocol": "ssp/1.0",
-  "type": "event",
-  "topic": "network",
-  "timestamp": 1732377610,
-  "source": {
-    "id": "mesh_node_003",
-    "transport": "lora",
-    "address": "868.1"
-  },
-  "payload": {
-    "event": "connection_established",
-    "message": "Node connected to mesh network"
-  }
-}
-```
-
-**Appends to activity log**: `module.config.bindings.activity_log[]`
-
-## Routing
-
-The Transport Manager maintains a routing table:
-
-```rust
-HashMap<device_id, SourceInfo> {
-  "pressure_001" => SourceInfo {
-    id: "pressure_001",
-    transport: Usb,
-    address: "/dev/ttyUSB0"
-  },
-  "gate_001" => SourceInfo {
-    id: "gate_001",
-    transport: Ble,
-    address: "00:1B:44:11:3A:B7"
-  }
-}
-```
-
-When sending commands:
-1. Extract `device_id` or `target` from payload
-2. Look up routing info
-3. Send via correct transport + address
-
-## Module Integration
-
-### Pressure Gauge Module
-
-```yaml
-# config.yml
-name: "Pressure Monitor"
-module_type: "monitoring"
-bus_topic: "pressure_sensor"
-template: "gauge_card"
-bindings:
-  pressure_psi: 0.0
-```
-
-SSP telemetry automatically updates `pressure_psi` binding.
-
-### Gate Control Module
-
-```yaml
-# config.yml
-name: "Gate Control"
-module_type: "com"
-bus_topic: "com_input"
-template: "toggle_switch"
-bindings:
-  state: false
-  toggle_on_label: "Open"
-  toggle_off_label: "Closed"
-```
-
-When user toggles, publishes to bus → Transport Manager routes to gate device.
-
-## Implementation Checklist
-
-- [x] SSP message format (src/util/ssp.rs)
-- [x] Transport Manager (src/util/transport.rs)
-- [x] Bus integration
-- [x] Routing table
-- [ ] USB serial I/O (requires `tokio-serial` crate)
-- [ ] BLE transport (requires `bluez` bindings)
-- [ ] LoRa/Radio transport (device-specific)
-
-## Dependencies Needed
-
-Add to `Cargo.toml`:
-
-```toml
-[dependencies]
-tokio-serial = "5.4"  # For USB serial I/O
-```
-
-## Testing
-
-1. **Without hardware**: Current stub mode logs messages
-2. **With USB device**: Connect Arduino running example code
-3. **Live testing**: `DEBUG=true cargo run` to see SSP messages in logs
-
-## Arduino Libraries Required
-
-```cpp
-#include <ArduinoJson.h>  // Version 6+
-```
-
-Install via Arduino Library Manager.
-
-## Performance
-
-- **Bandwidth**: 115200 baud = ~11.5 KB/s = ~100 JSON messages/sec
-- **Latency**: <10ms for USB, varies by transport
-- **Overhead**: ~200 bytes per message (JSON + metadata)
-
-## Security Considerations
-
-- No authentication in v1.0 (devices trusted on local network)
-- Future: Add HMAC signatures or encrypted payloads
-- Physical security: USB/serial connections are local-only
-
-## Future Enhancements
-
-- Message compression (MessagePack instead of JSON)
-- QoS levels (guaranteed delivery)
-- Retain flag (last-known-good values)
-- Device discovery/announcement protocol
-- Firmware update over SSP
-
-
-
-
-# Survon Serial Protocol (SSP) - Compact Format
-
-## Overview
-
-SSP Compact is a memory-efficient JSON protocol for IoT devices with limited RAM (like Arduino Uno). Single-letter keys minimize message size while maintaining structure.
+---
 
 ## Message Format
+
+### Compact SSP Structure
 
 ```json
 {
   "p": "ssp/1.0",
   "t": "tel",
-  "i": "device_id",
+  "i": "a01",
   "s": 1234567890,
   "d": {
     "a": 82,
     "b": 26,
-    "c": 42
+    "c": 1
   }
 }
 ```
 
-## Field Definitions
+### Field Reference
 
-| Key | Full Name   | Type   | Description                           | Example         |
-|-----|-------------|--------|---------------------------------------|-----------------|
-| `p` | protocol    | string | Protocol version                      | `"ssp/1.0"`     |
-| `t` | type        | string | Message type (see below)              | `"tel"`         |
-| `i` | id          | string | Device identifier (also used as topic)| `"a01"`         |
-| `s` | timestamp   | number | Unix timestamp or millis/1000         | `1234567890`    |
-| `d` | data        | object | Sensor/payload data (see below)       | `{"a":82}`      |
+| Key | Full Name   | Type   | Description                                    | Example         |
+|-----|-------------|--------|------------------------------------------------|-----------------|
+| `p` | protocol    | string | Protocol version (always `"ssp/1.0"`)          | `"ssp/1.0"`     |
+| `t` | type        | string | Message type (see types below)                 | `"tel"`         |
+| `i` | id          | string | Device identifier (used as bus topic)          | `"a01"`         |
+| `s` | timestamp   | number | Unix timestamp or `millis()/1000`              | `1234567890`    |
+| `d` | data        | object | Sensor/payload data with single-letter keys    | `{"a":82}`      |
 
-## Message Types (`t`)
+### Message Types
 
-| Short | Full      | Description                    |
-|-------|-----------|--------------------------------|
-| `tel` | telemetry | Sensor readings                |
-| `cmd` | command   | Control command                |
-| `res` | response  | Command acknowledgment         |
-| `evt` | event     | Status change notification     |
+| Short | Full      | Description                    | Use Case                        |
+|-------|-----------|--------------------------------|---------------------------------|
+| `tel` | telemetry | Sensor readings                | Temperature, humidity, pressure |
+| `cmd` | command   | Control command                | Open gate, turn on LED          |
+| `res` | response  | Command acknowledgment         | Success/failure confirmation    |
+| `evt` | event     | Status change notification     | Connection established, error   |
 
-## Data Payload (`d`)
+---
 
-**Keys are single letters** that map to meaningful names in `config.yml`:
+## Message Flow
 
-```yaml
-# modules/a01/config.yml
-name: "Temperature Sensor"
-bus_topic: "a01"  # Must match "i" field
-bindings:
-  a: 0  # temperature_c
-  b: 0  # humidity_pct
-  c: 0  # message_count
+### Inbound (Device → Hub)
+
+```
+1. Arduino creates compact JSON:
+   {"p":"ssp/1.0","t":"tel","i":"a01","s":100,"d":{"a":72,"b":45,"c":1}}
+
+2. Sends via BLE/USB (automatically chunked into 20-byte packets)
+
+3. Discovery Manager reassembles chunks → complete JSON
+
+4. parse_flexible() extracts:
+   - topic: "a01"
+   - payload: {"a":72, "b":45, "c":1}
+
+5. Message Bus publishes to topic "a01"
+
+6. Module with bus_topic: "a01" receives update
+
+7. Module bindings updated:
+   - a → temperature_c = 72
+   - b → humidity_pct = 45
+   - c → message_count = 1
+
+8. UI renders: "72.0 °C"
 ```
 
-### Common Data Key Conventions
+### Outbound (Hub → Device)
 
-| Key | Suggested Use        | Unit/Type    |
-|-----|---------------------|--------------|
-| `a` | Primary sensor      | varies       |
-| `b` | Secondary sensor    | varies       |
-| `c` | Counter/sequence    | integer      |
-| `d` | Tertiary sensor     | varies       |
-| `e` | Error code          | integer      |
-| `f` | Battery/power       | percent      |
+```
+1. Module publishes command to bus (e.g., "com_input")
 
-**Important:** Keys are device-specific. Define mappings in your module's `config.yml`.
+2. Transport Manager:
+   - Extracts target device_id from payload
+   - Looks up routing info (transport + address)
+   - Converts to SSP format
 
-## Arduino Example
+3. Sends via appropriate transport (USB/BLE/LoRa)
+
+4. Device receives, processes, and sends response
+```
+
+---
+
+## Data Payload Conventions
+
+The `"d"` (data) object uses **single-letter keys** that are device-specific. The hub's module `config.yml` maps these to human-readable names.
+
+### Recommended Key Conventions
+
+| Key | Suggested Use              | Notes                                    |
+|-----|----------------------------|------------------------------------------|
+| `a` | Primary sensor value       | Temperature, pressure, main reading      |
+| `b` | Secondary sensor value     | Humidity, secondary reading              |
+| `c` | Message counter / sequence | Health indicator, debug aid              |
+| `d` | Tertiary sensor            | Battery, third sensor                    |
+| `e` | Error code                 | 0 = OK, >0 = specific error              |
+| `f` | Battery / power level      | Percentage or voltage                    |
+
+**Important:** Keys are **not standardized** across devices. Each device defines its own schema, documented in its module config.
+
+---
+
+## Arduino Implementation
+
+### Complete Example
 
 ```cpp
+#include <ArduinoJson.h>
+#include <Adafruit_BLE.h>
+#include <Adafruit_BluefruitLE_SPI.h>
+
+Adafruit_BluefruitLE_SPI ble(8, 7, 4);
+int messageCount = 0;
+
+void setup() {
+  Serial.begin(115200);
+  ble.begin();
+  ble.setMode(BLUEFRUIT_MODE_COMMAND);
+  ble.sendCommandCheckOK("AT+GAPDEVNAME=Survon Field Unit");
+  ble.sendCommandCheckOK("AT+GAPSTARTADV");
+}
+
+void loop() {
+  sendTelemetry();
+  delay(3000);
+}
+
 void sendTelemetry() {
-  StaticJsonDocument<128> doc;
+  messageCount++;
   
+  // Read sensors
+  float temp = readTemperature();
+  float humid = readHumidity();
+  
+  // Create compact SSP message
+  StaticJsonDocument<128> doc;
   doc["p"] = "ssp/1.0";
   doc["t"] = "tel";
   doc["i"] = "a01";
   doc["s"] = millis() / 1000;
   
   JsonObject data = doc.createNestedObject("d");
-  data["a"] = (int)readTemperature();
-  data["b"] = (int)readHumidity();
-  data["c"] = messageCount++;
+  data["a"] = (int)temp;
+  data["b"] = (int)humid;
+  data["c"] = messageCount;
 
   String json;
   serializeJson(doc, json);
   
-  // Send via BLE in 20-byte chunks
+  Serial.print(F("TX:"));
+  Serial.println(json);
+  
+  // Send via BLE (let module handle chunking)
   ble.setMode(BLUEFRUIT_MODE_DATA);
-  for (size_t i = 0; i < json.length(); i += 20) {
-    String chunk = json.substring(i, min(i + 20, json.length()));
-    ble.print(chunk);
-    delay(10);
-  }
+  ble.print(json);
+  delay(100);  // Allow transmission
   ble.setMode(BLUEFRUIT_MODE_COMMAND);
+  
+  Serial.println(F("TX_OK"));
 }
 ```
 
-Expected output: `{"p":"ssp/1.0","t":"tel","i":"a01","s":1234,"d":{"a":72,"b":45,"c":1}}`
+### Expected Serial Output
 
-Size: **~68 bytes** vs **~180 bytes** for verbose format
+```
+TELEM #1
+TX:{"p":"ssp/1.0","t":"tel","i":"a01","s":24,"d":{"a":72,"b":45,"c":1}}
+TX_OK
+RAM:1243
+```
 
-## Module Configuration
+**Message size:** ~68 bytes
 
-### Step 1: Create module directory
+---
+
+## Hub Configuration
+
+### Step 1: Create Module Directory
+
 ```bash
 mkdir -p modules/wasteland/a01
 ```
 
 ### Step 2: Create `config.yml`
+
 ```yaml
+# modules/wasteland/a01/config.yml
 name: "Environmental Monitor"
 module_type: "monitoring"
 bus_topic: "a01"      # Must match device "i" field
 template: "gauge_card"
 
 bindings:
-  # Map data keys to display names
-  a: 0  # temperature_c - shown in gauge
-  b: 0  # humidity_pct - secondary display
-  c: 0  # message_count - debug counter
+  # Map single-letter keys to meaningful names
+  a: 0  # temperature_c - primary sensor (displayed)
+  b: 0  # humidity_pct - secondary sensor
+  c: 0  # message_count - health counter
   
-  # Metadata
+  # Display configuration
   device_id: "a01"
   unit_of_measure_label: "°C"
   display_name: "Temperature"
+  
+  # Gauge thresholds
+  max_value: 100.0
+  warn_threshold: 60.0
+  danger_threshold: 85.0
+  
+  # Metadata
+  firmware_version: "1.0.0"
+  is_blinkable: true
 ```
 
-### Step 3: Update template (if needed)
+### Step 3: Whitelist Topic (Temporary - Auto-registration coming)
 
-Edit your template to use the data keys:
+In `app.rs`, add the device topic to outbound topics:
+
+```rust
+transport_manager.add_outbound_topic("a01".to_string()).await;
+```
+
+**Note:** This will be automated through device registration in the future.
+
+---
+
+## Template Integration
+
+Templates access data using the single-letter keys:
 
 ```rust
 // src/ui/module_templates/monitoring/gauge_card.rs
@@ -404,81 +287,189 @@ let value = module
     .unwrap_or(0.0);
 ```
 
-## Message Flow
+The module's `config.yml` documents that `"a"` represents temperature, but the template just uses the key directly.
 
-```
-┌─────────────┐
-│  Arduino    │ {"p":"ssp/1.0","t":"tel","i":"a01","s":100,"d":{"a":72}}
-└──────┬──────┘
-       │ BLE chunks (20 bytes each)
-       ▼
-┌─────────────┐
-│ Discovery   │ Reassembles chunks → complete JSON
-│ Manager     │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│ parse_      │ Extracts: topic="a01", payload={"a":72}
-│ flexible()  │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│ Message Bus │ Publishes to topic "a01"
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│ Module a01  │ Updates binding: a=72
-│ (gauge_card)│ Renders: "72.0 °C"
-└─────────────┘
-```
-
-## Size Comparison
-
-| Format  | Example Message                                                              | Size   |
-|---------|------------------------------------------------------------------------------|--------|
-| Verbose | `{"protocol":"ssp/1.0","type":"telemetry","topic":"sensor_001",...}`        | 180 bytes |
-| Compact | `{"p":"ssp/1.0","t":"tel","i":"a01","s":100,"d":{"a":72,"b":45,"c":1}}`    | 68 bytes  |
-
-**Savings:** 62% smaller → fits in Arduino Uno RAM + faster BLE transmission
+---
 
 ## Debugging
 
-Enable debug logging in Rust to see parsing:
+### Rust Hub Logs
 
-```rust
-// Logs will show:
-[DEBUG] Parsing compact SSP: {"p":"ssp/1.0","t":"tel",...}
+```
+[INFO] 🔷 BLE listener task started for 00:00:00:00:00:00
+[INFO] ✓ Got notification stream for 00:00:00:00:00:00
+[INFO] 📦 Chunk #1: 20 bytes: '{"p":"ssp/1.0","t":'
+[INFO] 📦 Chunk #2: 20 bytes: '"tel","i":"a01","s"'
+[INFO] 📦 Chunk #3: 28 bytes: ':24,"d":{"a":72,"b":45,"c":1}}'
+[INFO] ✅ COMPLETE MESSAGE (68 bytes): {"p":"ssp/1.0","t":"tel","i":"a01","s":24,"d":{"a":72,"b":45,"c":1}}
+[DEBUG] Parsing compact SSP: {"p":"ssp/1.0",...}
 [DEBUG] ✓ Parsed compact SSP - id:a01, type:telemetry, data keys:["a","b","c"]
 [INFO] 📨 Parsed SSP message: topic=a01, type=Telemetry
-[INFO] ✓ Published to message bus: topic=a01
+[INFO] 🚀 Publishing to bus - topic:a01, source:a01
+[INFO] ✅ Published successfully!
 ```
 
-On Arduino Serial Monitor:
+### Arduino Serial Monitor
+
 ```
 TELEM #1
 TX_LEN:68
-TX:{"p":"ssp/1.0","t":"tel","i":"a01","s":24,"d":{"a":82,"b":26,"c":1}}
+TX:{"p":"ssp/1.0","t":"tel","i":"a01","s":24,"d":{"a":72,"b":45,"c":1}}
 TX_OK
 RAM:1243
 ```
 
+---
+
+## Size Comparison
+
+| Format     | Example                                                          | Size      |
+|------------|------------------------------------------------------------------|-----------|
+| **Verbose**| `{"protocol":"ssp/1.0","type":"telemetry","topic":"sensor_001","timestamp":1234567890,"source":{"id":"sensor_001","transport":"ble","address":""},"payload":{"temperature_c":72,"humidity_pct":45,"message_count":1}}` | **~180 bytes** |
+| **Compact**| `{"p":"ssp/1.0","t":"tel","i":"a01","s":1234567890,"d":{"a":72,"b":45,"c":1}}` | **~68 bytes** |
+
+**Savings:** 62% reduction → fits in Arduino Uno RAM, faster BLE transmission
+
+---
+
 ## Best Practices
 
-1. **Keep device IDs short:** Use 2-4 characters (e.g., `"a01"`, `"tmp1"`)
-2. **Document your mappings:** Always add comments in `config.yml` explaining what `a`, `b`, `c` mean
-3. **Reserve keys:**
-    - `a`-`d`: Sensor values
-    - `e`: Error codes
-    - `f`: Battery/health metrics
-4. **Use integers when possible:** `{"a":82}` instead of `{"a":82.5}` saves bytes
-5. **Timestamp efficiency:** Use `millis()/1000` instead of full Unix timestamp
+### For Device Developers
+
+1. **Keep device IDs short:** 2-4 characters (e.g., `"a01"`, `"tmp1"`)
+2. **Use integers when possible:** `{"a":82}` instead of `{"a":82.5}` saves bytes
+3. **Timestamp efficiency:** Use `millis()/1000` for relative time
+4. **Memory management:** Pre-allocate `StaticJsonDocument<128>` for compact format
+5. **Test JSON validity:** Use Serial Monitor to verify output before BLE testing
+
+### For Hub Configuration
+
+1. **Document your mappings:** Always comment what `a`, `b`, `c` mean in `config.yml`
+2. **Consistent conventions:** Within a project, try to use `a` for primary sensor, `b` for secondary, etc.
+3. **Module naming:** Use descriptive names that match the device's purpose
+4. **Topic uniqueness:** Each device needs a unique `bus_topic` matching its `"i"` field
+
+---
+
+## Troubleshooting
+
+### Issue: No messages in UI
+
+**Check:**
+1. Module directory exists: `ls modules/wasteland/a01/config.yml`
+2. `bus_topic` matches device's `"i"` field
+3. Topic is whitelisted (temp fix until auto-registration)
+4. BLE connection established (check logs for "✓ Got notification stream")
+
+### Issue: Malformed JSON / Extra braces
+
+**Cause:** Buffer overflow or improper serialization
+
+**Fix:**
+- Remove manual chunking loops
+- Let BLE module handle transmission: `ble.print(json)` with delay
+- Verify JSON with `serializeJson()` output in Serial Monitor
+
+### Issue: Stream dies after 1 minute
+
+**Cause:** BLE notification stream timeout
+
+**Fix:**
+- Ensure continuous data flow (send every 2-3 seconds)
+- Check for Arduino crashes (monitor `getFreeRam()`)
+- Verify BLE module firmware is up to date
+
+---
+
+## Performance Metrics
+
+| Metric              | Value                          |
+|---------------------|--------------------------------|
+| **Bandwidth**       | ~11.5 KB/s @ 115200 baud       |
+| **Latency**         | <50ms (BLE), <10ms (USB)       |
+| **Message overhead**| 40 bytes (protocol + metadata) |
+| **Data payload**    | 28 bytes (3 sensors)           |
+| **Total size**      | 68 bytes                       |
+| **Messages/second** | ~170 theoretical, ~10 practical|
+
+---
 
 ## Future Enhancements
 
-- [ ] Binary format (even smaller)
-- [ ] Compression for multi-sensor devices
-- [ ] Auto-discovery broadcasts capabilities in compact format
-- [ ] Hub sends configuration updates to devices
+- [ ] **Auto-registration**: Devices broadcast capabilities on connect
+- [ ] **Binary format**: Even smaller (MessagePack or CBOR)
+- [ ] **QoS levels**: Guaranteed delivery for commands
+- [ ] **Compression**: For multi-sensor devices (10+ readings)
+- [ ] **OTA updates**: Firmware updates via SSP
+- [ ] **Discovery protocol**: Automatic topic whitelisting
+- [ ] **Schema validation**: Hub validates `"d"` keys against module config
+
+---
+
+## Security Considerations
+
+**Current (v1.0):**
+- No authentication (devices trusted on local network/BLE pairing)
+- Physical security: USB/BLE connections are short-range
+
+**Future:**
+- HMAC signatures for message integrity
+- Encrypted payloads for sensitive data
+- Device certificates for authentication
+
+---
+
+## Dependencies
+
+### Arduino
+```cpp
+#include <ArduinoJson.h>  // Version 7+
+```
+Install via Arduino Library Manager
+
+### Rust (Hub)
+```toml
+[dependencies]
+tokio-serial = "5.4"
+btleplug = "0.11"
+serde_json = "1.0"
+```
+
+---
+
+## License
+
+Survon Serial Protocol is part of the Survon project.
+
+---
+
+## Appendix: Complete Device Schema Example
+
+```yaml
+# Documentation for device "a01"
+# This serves as the authoritative schema definition
+
+device_id: "a01"
+device_name: "Environmental Monitor v1"
+firmware: "1.0.0"
+hardware: "Arduino Uno + DHT22 + BLE"
+
+# SSP Message Structure
+message_format:
+  p: "ssp/1.0"
+  t: "tel"
+  i: "a01"
+  s: <timestamp>
+  d:
+    a: <int>  # temperature_c (range: -40 to 85)
+    b: <int>  # humidity_pct (range: 0 to 100)
+    c: <int>  # message_count (incrementing)
+
+# Hub Module Config
+module_config: ./modules/wasteland/a01/config.yml
+
+# Update Frequency
+interval: 3000ms
+```
+
+This schema lives in your project documentation and ensures anyone working with the device understands the data structure.

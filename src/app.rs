@@ -124,7 +124,7 @@ impl App {
             wasteland_modules_path.clone(),
             database.clone(),
         ));
-        discovery_manager.trust_device("00:00:00:00:00:00".to_string()).await?; // default arduino mac address for field unit
+        // discovery_manager.trust_device("00:00:00:00:00:00".to_string()).await?; // default arduino mac address for field unit
 
         // Start discovery in background
         let discovery_clone = discovery_manager.clone();
@@ -138,9 +138,24 @@ impl App {
         wasteland_module_manager.subscribe_to_events(&message_bus).await;
         core_module_manager.subscribe_to_events(&message_bus).await;
 
-        // Initialize handlers for core modules (LLM, etc.)
-        if let Err(e) = core_module_manager.initialize_module_handlers(&database, message_bus.get_sender()).await {
-            panic!("Failed to initialize module handlers: {}", e);
+        // 1. Initialize handlers for wasteland modules (This connects the Wasteland Manager)
+        if let Err(e) = wasteland_module_manager.initialize_module_handlers(
+            wasteland_modules_path.clone(),
+            Some(discovery_manager.clone()),
+            &database,
+            &message_bus
+        ).await {
+            panic!("Failed to initialize wasteland module handlers: {}", e);
+        }
+
+        // 2. Initialize handlers for core modules (LLM, etc.)
+        if let Err(e) = core_module_manager.initialize_module_handlers(
+            wasteland_modules_path.clone(), // Core modules might need access to wasteland paths too
+            Some(discovery_manager.clone()),
+            &database,
+            &message_bus
+        ).await {
+            panic!("Failed to initialize core module handlers: {}", e);
         }
 
         // Initialize transport manager
@@ -407,13 +422,18 @@ impl App {
         self.wasteland_module_manager.refresh_modules().await;
         self.core_module_manager.refresh_modules().await;
 
-        // Re-initialize handlers after refresh
-        if let Err(e) = self.wasteland_module_manager.initialize_module_handlers(
-            &self.database,
-            self.message_bus.get_sender()
-        ).await {
-            panic!("Failed to re-initialize handlers: {}", e);
+        if let Some(discovery_manager) = self.discovery_manager.as_ref() {
+            // Re-initialize handlers after refresh
+            if let Err(e) = self.wasteland_module_manager.initialize_module_handlers(
+                self.wasteland_module_manager.modules_path.clone(),
+                Some(discovery_manager.clone()),
+                &self.database,
+                &self.message_bus
+            ).await {
+                panic!("Failed to re-initialize handlers: {}", e);
+            }
         }
+
     }
 
     fn render_current_mode(&mut self, frame: &mut Frame) {
@@ -550,15 +570,6 @@ impl App {
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> Result<()> {
         let key_code = key_event.code;
 
-        match key_code {
-            KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
-            KeyCode::Enter => self.events.send(AppEvent::Select),
-            KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
-                self.events.send(AppEvent::Quit)
-            }
-            _ => {}
-        }
-
         match &self.mode {
             AppMode::Splash => {},
             AppMode::Overview => {
@@ -601,14 +612,12 @@ impl App {
                     _ => {}
                 }
                 match key_code {
-                    KeyCode::Tab => {
-                        self.toggle_overview_focus(1);
-                        return Ok(());
-                    }
-                    KeyCode::BackTab => {
-                        self.toggle_overview_focus(-1);
-                        return Ok(());
-                    }
+                    KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
+                    KeyCode::Enter => self.events.send(AppEvent::Select),
+                    KeyCode::Char('c' | 'C') => self.events.send(AppEvent::Quit),
+                    KeyCode::Char('r' | 'R') => self.events.send(AppEvent::RefreshModules),
+                    KeyCode::Tab => self.toggle_overview_focus(1),
+                    KeyCode::BackTab => self.toggle_overview_focus(-1),
                     _ => {}
                 }
             },
@@ -621,24 +630,6 @@ impl App {
                 // Let the module's handler handle the key
                 if let Some(event) = module_manager.handle_key_for_module(*module_idx, key_code) {
                     self.events.send(event);
-                } else {
-                    // Default module navigation keys
-                    match key_code {
-                        KeyCode::Delete if key_event.modifiers == KeyModifiers::SHIFT => {
-                            self.events.send(AppEvent::Back)
-                        },
-                        KeyCode::Backspace if key_event.modifiers == KeyModifiers::SHIFT => {
-                            self.events.send(AppEvent::Back)
-                        },
-                        KeyCode::Esc if key_event.modifiers == KeyModifiers::SHIFT => {
-                            self.events.send(AppEvent::Quit)
-                        },
-                        KeyCode::Char('r') => self.events.send(AppEvent::RefreshModules),
-                        // KeyCode::Char('1') => {
-                        //     self.events.send(AppEvent::SendCommand("com_input".to_string(), "close_gate".to_string()));
-                        // }
-                        _ => {}
-                    }
                 }
             },
         }

@@ -4,6 +4,7 @@ use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
 use ratatui::widgets::{Block, Borders, Gauge, Widget};
+use crate::log_debug;
 
 #[derive(Debug)]
 pub struct GaugeCard;
@@ -21,6 +22,8 @@ impl UiTemplate for GaugeCard {
             .get(GAUGE_VALUE_KEY)
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
+
+        log_debug!("Gauge Value: {}", gauge_value);
 
         // Get display label from config
         let unit_of_measure_label = module
