@@ -138,7 +138,7 @@ impl DiscoveryManager {
 
     /// Start the discovery service
     pub async fn start(self: Arc<Self>) -> Result<()> {
-        log_info!("Starting BLE Discovery Manager");
+        log_info!("Starting BLE Discovery Manager (manual scan mode)");
 
         // Initialize BLE adapter
         let manager = Manager::new().await?;
@@ -154,98 +154,137 @@ impl DiscoveryManager {
 
         *self.adapter.write().await = Some(adapter.clone());
 
-        // Spawn scanner task
-        let scanner = self.clone();
-        tokio::spawn(async move {
-            if let Err(e) = scanner.scan_loop(adapter).await {
-                log_error!("Scanner error: {}", e);
-            }
-        });
-
-        log_info!("BLE Discovery Manager started");
+        log_info!("BLE Discovery Manager started (manual scan mode)");
         Ok(())
     }
 
-    /// Main scanning loop
-    async fn scan_loop(&self, adapter: Adapter) -> Result<()> {
-        let mut events = adapter.events().await?;
+    /// Perform a single scan cycle (10 seconds)
+    /// Returns number of new Survon devices discovered
+    pub async fn scan_once(&self, duration_secs: u64) -> Result<usize> {
+        let adapter_lock = self.adapter.read().await;
+        let adapter = adapter_lock
+            .as_ref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("BLE adapter not initialized"))?;
 
-        loop {
-            log_info!("Scanning for Survon field units...");
-            adapter.start_scan(ScanFilter::default()).await?;
+        log_info!("Starting manual scan for Survon field units ({}s)...", duration_secs);
+        adapter.start_scan(ScanFilter::default()).await?;
 
-            tokio::time::sleep(Duration::from_secs(10)).await;
-            adapter.stop_scan().await?;
+        // Scan for the requested duration
+        tokio::time::sleep(Duration::from_secs(duration_secs)).await;
 
-            let peripherals = adapter.peripherals().await?;
+        // CRITICAL FIX: Get peripherals BEFORE stopping the scan.
+        // Many adapters return empty lists if you query after stopping.
+        let peripherals = adapter.peripherals().await?;
 
-            for peripheral in peripherals {
-                if let Some(properties) = peripheral.properties().await? {
-                    let name = properties
-                        .local_name
-                        .unwrap_or_else(|| "Unknown".to_string());
+        // Now safe to stop
+        adapter.stop_scan().await?;
 
-                    // Check if this is a Survon device
-                    if name.contains("Survon") || name.contains("Field Unit") {
-                        let address = properties.address.to_string();
-                        let rssi = properties.rssi.unwrap_or(0);
+        let mut discovered_count = 0;
 
-                        log_info!("Found Survon device: {} ({}), RSSI: {}", name, address, rssi);
+        for peripheral in peripherals {
+            if let Some(properties) = peripheral.properties().await? {
+                let name = properties
+                    .local_name
+                    .unwrap_or_else(|| "Unknown".to_string());
 
-                        // Record in database (creates if new, updates last_seen if existing)
-                        let is_new_device = self.database.record_device_discovery(
-                            &address,
-                            &name,
-                            rssi
-                        )?;
+                // Check if this is a Survon device
+                if name.contains("Survon") || name.contains("Field Unit") {
+                    let address = properties.address.to_string();
+                    let rssi = properties.rssi.unwrap_or(0);
 
-                        // Store in discovered devices map (for quick access)
-                        let device = DiscoveredDevice {
-                            peripheral: peripheral.clone(),
-                            name: name.clone(),
-                            address: address.clone(),
-                            rssi,
-                        };
-                        self.discovered_devices.write().await.insert(address.clone(), device);
+                    log_info!("Found Survon device: {} ({}), RSSI: {}", name, address, rssi);
 
-                        // Check trust status from database
-                        let is_trusted = self.database.is_device_trusted(&address)?;
+                    // Record in database (creates if new, updates last_seen if existing)
+                    let is_new_device = self.database.record_device_discovery(
+                        &address,
+                        &name,
+                        rssi
+                    )?;
 
-                        if is_trusted {
-                            log_info!("Device {} is trusted, attempting registration", address);
-                            if let Err(e) = self.register_device(peripheral, address.clone()).await {
-                                log_error!("Failed to register trusted device: {}", e);
-                            }
-                        } else if is_new_device {
-                            // New device discovered - send trust prompt to UI
-                            log_info!("🆕 NEW device {} discovered, awaiting trust decision", address);
+                    if is_new_device {
+                        discovered_count += 1;
+                    }
 
-                            let event = BusMessage::new(
-                                "device_discovered".to_string(),
-                                serde_json::json!({
+                    // Store in discovered devices map (for quick access)
+                    let device = DiscoveredDevice {
+                        peripheral: peripheral.clone(),
+                        name: name.clone(),
+                        address: address.clone(),
+                        rssi,
+                    };
+                    self.discovered_devices.write().await.insert(address.clone(), device);
+
+                    // Check trust status from database
+                    let is_trusted = self.database.is_device_trusted(&address)?;
+
+                    if is_trusted {
+                        log_info!("Device {} is trusted, attempting registration", address);
+                        if let Err(e) = self.register_device(peripheral, address.clone()).await {
+                            log_error!("Failed to register trusted device: {}", e);
+                        }
+                    } else if is_new_device {
+                        // New device discovered - send trust prompt to UI
+                        log_info!("🆕 NEW device {} discovered, awaiting trust decision", address);
+
+                        let event = BusMessage::new(
+                            "device_discovered".to_string(),
+                            serde_json::json!({
                                 "mac_address": address,
                                 "name": name,
                                 "rssi": rssi,
                                 "is_new": true,
                                 "requires_trust_decision": true
                             }).to_string(),
-                                "discovery_manager".to_string(),
-                            );
+                            "discovery_manager".to_string(),
+                        );
 
-                            if let Err(e) = self.message_bus.publish(event).await {
-                                log_error!("Failed to publish device_discovered event: {}", e);
-                            }
-                        } else {
-                            // Known but untrusted - just update in background, no prompt
-                            log_info!("Device {} is known but not trusted (last_seen updated)", address);
+                        if let Err(e) = self.message_bus.publish(event).await {
+                            log_error!("Failed to publish device_discovered event: {}", e);
                         }
+                    } else {
+                        // Known but untrusted - just update in background, no prompt
+                        log_info!("Device {} is known but not trusted (last_seen updated)", address);
                     }
                 }
             }
+        }
 
-            // Wait before next scan cycle
+        log_info!("Scan complete. {} new Survon device(s) discovered", discovered_count);
+        Ok(discovered_count)
+    }
+
+    /// Main scanning loop, disabled because it was blocking the app every 30 seconds for 10 seconds
+    /// This is now only used if you want automatic background scanning
+    async fn scan_loop(&self, adapter: Adapter) -> Result<()> {
+        // This loop is now optional and should only be spawned if desired
+        loop {
+            if let Err(e) = self.scan_once(10).await {
+                log_error!("Scan error: {}", e);
+            }
+
+            // Wait 30 seconds before next automatic scan
             tokio::time::sleep(Duration::from_secs(30)).await;
         }
+    }
+
+    // If you want to enable automatic scanning, add this method:
+    pub async fn start_auto_scan(self: Arc<Self>) -> Result<()> {
+        let adapter_lock = self.adapter.read().await;
+        let adapter = adapter_lock
+            .as_ref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("BLE adapter not initialized"))?
+            .clone();
+        drop(adapter_lock);
+
+        let scanner = self.clone();
+        tokio::spawn(async move {
+            if let Err(e) = scanner.scan_loop(adapter).await {
+                log_error!("Auto-scanner error: {}", e);
+            }
+        });
+
+        log_info!("Automatic scanning enabled");
+        Ok(())
     }
 
     /// Register a discovered device

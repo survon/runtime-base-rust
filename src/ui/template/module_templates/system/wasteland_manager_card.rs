@@ -120,6 +120,20 @@ impl WastelandManagerCard {
             .map(|arr| arr.len())
             .unwrap_or(0);
 
+        let is_scanning = module
+            .config
+            .bindings
+            .get("is_scanning")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let scan_countdown = module
+            .config
+            .bindings
+            .get("scan_countdown")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u8;
+
         let menu_items = vec![
             format!("⚠️  Trust Pending Devices ({})", pending_count),
             format!("📡 Manage All Devices ({})", known_count),
@@ -136,7 +150,7 @@ impl WastelandManagerCard {
                 vec![
                     Constraint::Length(3),  // Title
                     Constraint::Min(1),     // Menu
-                    Constraint::Length(3),  // Status
+                    Constraint::Length(3),  // Status/Scan
                     Constraint::Length(3),  // Help
                 ]
             } else {
@@ -197,7 +211,19 @@ impl WastelandManagerCard {
 
         // Status message if present
         let help_index = if has_status {
-            if let Some(status) = status_message {
+            if is_scanning {
+                let scan_msg = format!("🔍 SCANNING FOR DEVICES... {} seconds remaining", scan_countdown);
+                let scan_widget = Paragraph::new(scan_msg)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Blue))
+                            .title(" Scan in Progress ")
+                    )
+                    .style(Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD))
+                    .alignment(Alignment::Center);
+                Widget::render(scan_widget, chunks[2], buf);
+            } else if let Some(status) = status_message {
                 let status_widget = Paragraph::new(status)
                     .block(
                         Block::default()
@@ -215,7 +241,7 @@ impl WastelandManagerCard {
         };
 
         // Help
-        let help = Paragraph::new("↑/↓: Navigate • Enter: Select • 'r': Refresh • Esc: Back")
+        let help = Paragraph::new("↑/↓: Navigate • Enter: Select • 's': Scan for Devices • 'r': Refresh • Esc: Back")
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -248,14 +274,28 @@ impl WastelandManagerCard {
             })
             .unwrap_or_default();
 
-        let has_status = status_message.is_some();
+        let is_scanning = module
+            .config
+            .bindings
+            .get("is_scanning")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let scan_countdown = module
+            .config
+            .bindings
+            .get("scan_countdown")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u8;
+
+        let has_status = status_message.is_some() || is_scanning;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if has_status {
                 vec![
                     Constraint::Length(3),  // Title
                     Constraint::Min(1),     // Device list
-                    Constraint::Length(3),  // Status
+                    Constraint::Length(3),  // Status/Scan
                     Constraint::Length(3),  // Help
                 ]
             } else {
@@ -321,7 +361,19 @@ impl WastelandManagerCard {
 
         // Status message if present
         let help_index = if has_status {
-            if let Some(status) = status_message {
+            if is_scanning {
+                let scan_msg = format!("🔍 SCANNING... {} seconds", scan_countdown);
+                let scan_widget = Paragraph::new(scan_msg)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Blue))
+                            .title(" Scan in Progress ")
+                    )
+                    .style(Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD))
+                    .alignment(Alignment::Center);
+                Widget::render(scan_widget, chunks[2], buf);
+            } else if let Some(status) = status_message {
                 let status_widget = Paragraph::new(status)
                     .block(
                         Block::default()
@@ -339,7 +391,7 @@ impl WastelandManagerCard {
         };
 
         // Help
-        let help = Paragraph::new("↑/↓: Select • Enter: Trust & Register • 'i': Ignore • 'v': View All Devices • Esc: Back")
+        let help = Paragraph::new("↑/↓: Select • Enter: Trust & Register • 'i': Ignore • 's': Scan Now • 'v': View All • Esc: Back")
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -372,14 +424,28 @@ impl WastelandManagerCard {
             })
             .unwrap_or_default();
 
-        let has_status = status_message.is_some();
+        let is_scanning = module
+            .config
+            .bindings
+            .get("is_scanning")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let scan_countdown = module
+            .config
+            .bindings
+            .get("scan_countdown")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u8;
+
+        let has_status = status_message.is_some() || is_scanning;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if has_status {
                 vec![
                     Constraint::Length(3),  // Title
                     Constraint::Min(1),     // Device list
-                    Constraint::Length(3),  // Status
+                    Constraint::Length(3),  // Status/Scan
                     Constraint::Length(3),  // Help
                 ]
             } else {
@@ -453,7 +519,19 @@ impl WastelandManagerCard {
 
         // Status message if present
         let help_index = if has_status {
-            if let Some(status) = status_message {
+            if is_scanning {
+                let scan_msg = format!("🔍 SCANNING... {} seconds", scan_countdown);
+                let scan_widget = Paragraph::new(scan_msg)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Blue))
+                            .title(" Scan in Progress ")
+                    )
+                    .style(Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD))
+                    .alignment(Alignment::Center);
+                Widget::render(scan_widget, chunks[2], buf);
+            } else if let Some(status) = status_message {
                 let status_widget = Paragraph::new(status)
                     .block(
                         Block::default()
@@ -471,7 +549,7 @@ impl WastelandManagerCard {
         };
 
         // Help
-        let help = Paragraph::new("↑/↓: Navigate • 't': Toggle Trust • 'd': Delete • 'p': View Pending • 'r': Refresh • Esc: Back")
+        let help = Paragraph::new("↑/↓: Navigate • 't': Toggle Trust • 'd': Delete • 's': Scan Now • 'p': Pending • Esc: Back")
             .block(
                 Block::default()
                     .borders(Borders::ALL)

@@ -127,10 +127,31 @@ impl App {
         // discovery_manager.trust_device("00:00:00:00:00:00".to_string()).await?; // default arduino mac address for field unit
 
         // Start discovery in background
+        // Start discovery in background
         let discovery_clone = discovery_manager.clone();
+        let discovery_clone_2 = discovery_clone.clone();
         tokio::spawn(async move {
+            // Initialize the BLE adapter
             if let Err(e) = discovery_clone.start().await {
                 log_error!("Discovery manager failed to start: {}", e);
+                return;
+            }
+
+            // Wait 2 seconds for adapter to fully initialize
+            log_info!("Waiting for BLE adapter to stabilize...");
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            // Perform initial scan
+            log_info!("Performing initial device scan...");
+
+            // FIX: Pass a duration (e.g., 5 seconds)
+            match discovery_clone_2.scan_once(15).await {
+                Ok(count) => {
+                    log_info!("Initial scan complete - found {} new device(s)", count);
+                }
+                Err(e) => {
+                    log_error!("Initial scan failed: {}", e);
+                }
             }
         });
 
@@ -178,7 +199,7 @@ impl App {
             }
 
             // 2. Give devices time to connect
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
 
             // 3. Broadcast registration request
             log_info!("Broadcasting device registration request to all field units...");
