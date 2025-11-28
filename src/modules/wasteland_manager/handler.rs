@@ -26,6 +26,9 @@ enum HandlerMessage {
     DeviceDiscovered { mac: String, name: String, rssi: i16 },
     ModuleInstalled(String),
     OperationInProgress(String), // status message
+    ScanProgress(u8), // countdown in seconds
+    ScanComplete(usize),
+    ScanFailed(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,6 +60,8 @@ pub struct WastelandManagerHandler {
     archived_modules: Vec<String>,
     // Status message
     status_message: Option<String>,
+    is_scanning: bool,
+    scan_countdown: u8,
 }
 
 impl WastelandManagerHandler {
@@ -83,6 +88,8 @@ impl WastelandManagerHandler {
             installed_modules: Vec::new(),
             archived_modules: Vec::new(),
             status_message: None,
+            is_scanning: false,
+            scan_countdown: 0,
         };
 
         // Start listening for device discovery events
@@ -162,8 +169,75 @@ impl WastelandManagerHandler {
                 HandlerMessage::OperationInProgress(msg) => {
                     self.status_message = Some(msg);
                 }
+                HandlerMessage::ScanProgress(seconds) => {
+                    self.scan_countdown = seconds;
+                    self.status_message = Some(format!("🔍 Scanning... {} seconds remaining", seconds));
+                }
+                HandlerMessage::ScanComplete(count) => {
+                    self.is_scanning = false;
+                    self.scan_countdown = 0;
+                    self.status_message = Some(format!("✅ Scan complete! {} new device(s) found", count));
+                    self.refresh_data_async();
+                }
+                HandlerMessage::ScanFailed(err_msg) => {
+                    self.is_scanning = false;
+                    self.scan_countdown = 0;
+                    self.status_message = Some(err_msg);
+                }
                 _ => {}
             }
+        }
+    }
+
+    fn handle_scan_devices(&mut self) {
+        if self.is_scanning {
+            self.status_message = Some("⚠️ Scan already in progress".to_string());
+            return;
+        }
+
+        if let Some(discovery) = &self.discovery_manager {
+            self.is_scanning = true;
+            let scan_duration = 15; // Increased to 15s as requested
+            self.scan_countdown = scan_duration as u8;
+
+            let discovery_clone = discovery.clone();
+            let tx = self.message_tx.clone();
+
+            tokio::spawn(async move {
+                // Create the visual countdown task
+                let countdown_task = async {
+                    for i in (1..=scan_duration).rev() {
+                        let _ = tx.send(HandlerMessage::ScanProgress(i as u8));
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    }
+                };
+
+                // Create the actual scan task
+                // Note: We pass the duration to scan_once now
+                let scan_task = async {
+                    discovery_clone.scan_once(scan_duration).await
+                };
+
+                // Run them concurrently!
+                // We ignore the output of countdown_task, we only care about scan_result
+                let (_, scan_result) = tokio::join!(countdown_task, scan_task);
+
+                match scan_result {
+                    Ok(count) => {
+                        let _ = tx.send(HandlerMessage::ScanComplete(count));
+                    }
+                    Err(e) => {
+                        // Send ScanFailed so the flag gets reset
+                        let _ = tx.send(HandlerMessage::ScanFailed(
+                            format!("❌ Scan failed: {}", e)
+                        ));
+                    }
+                }
+            });
+
+            self.status_message = Some("🔍 Starting BLE scan...".to_string());
+        } else {
+            self.status_message = Some("❌ Discovery manager not available".to_string());
         }
     }
 
@@ -431,6 +505,10 @@ impl ModuleHandler for WastelandManagerHandler {
                         self.refresh_data_async();
                         None
                     }
+                    KeyCode::Char('s') => {
+                        self.handle_scan_devices();
+                        None
+                    }
                     _ => None,
                 }
             }
@@ -472,6 +550,10 @@ impl ModuleHandler for WastelandManagerHandler {
                         self.refresh_data_async();
                         None
                     }
+                    KeyCode::Char('s') => {
+                        self.handle_scan_devices();
+                        None
+                    }
                     _ => None,
                 }
             }
@@ -505,6 +587,10 @@ impl ModuleHandler for WastelandManagerHandler {
                     }
                     KeyCode::Char('r') => {
                         self.refresh_known_devices();
+                        None
+                    }
+                    KeyCode::Char('s') => {
+                        self.handle_scan_devices();
                         None
                     }
                     KeyCode::Esc => {
@@ -616,6 +702,16 @@ impl ModuleHandler for WastelandManagerHandler {
         module.config.bindings.insert(
             "selected_index".to_string(),
             serde_json::json!(self.selected_index),
+        );
+
+        module.config.bindings.insert(
+            "is_scanning".to_string(),
+            serde_json::json!(self.is_scanning),
+        );
+
+        module.config.bindings.insert(
+            "scan_countdown".to_string(),
+            serde_json::json!(self.scan_countdown),
         );
 
         // Add status message if present

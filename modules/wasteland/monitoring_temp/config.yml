@@ -1,4 +1,4 @@
-name: "Battery Voltage"
+name: "Temperature Trend"
 module_type: "monitoring"
 bus_topic: "a01"  # ← Same topic as a01 for demo!
 template: "chart_card"
@@ -8,19 +8,19 @@ bindings:
   b: 0
   c: 0
 
-  device_id: "bat01"
-  device_type: "battery_monitor"
+  device_id: "temp_line"
+  device_type: "env_sensor"
   firmware_version: "1.0.0"
 
-  display_name: "Battery"
-  unit_of_measure_label: "V"
+  display_name: "Temperature"
+  unit_of_measure_label: "°C"
 
   # Chart-specific settings
-  chart_type: "bar"  # ← Bar chart display
+  chart_type: "line"  # ← Line chart display
 
   max_value: 100.0
-  warn_threshold: 11.5
-  danger_threshold: 10.5
+  warn_threshold: 60.0
+  danger_threshold: 85.0
 
   is_blinkable: false
   is_connected: true
@@ -28,5 +28,5 @@ bindings:
   # Internal state (managed by template)
   _chart_history: []
 
-# NOTE: In production, this would monitor actual battery voltage
-# For demo, it shows temperature data as bars
+# This shows the same temperature data as a line chart
+# Great for seeing trends over time

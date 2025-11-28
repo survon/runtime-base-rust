@@ -26,6 +26,7 @@ lazy_static::lazy_static! {
         map.insert("gauge_card", gauge_card_factory as TemplateFactory);
         map.insert("history_chart", history_chart_factory as TemplateFactory);
         map.insert("status_badge", status_badge_factory as TemplateFactory);
+        map.insert("chart_card", chart_card_factory as TemplateFactory);
 
         // Control templates
         map.insert("toggle_switch", toggle_switch_factory as TemplateFactory);
@@ -44,6 +45,10 @@ lazy_static::lazy_static! {
 // Factory functions
 fn gauge_card_factory() -> Box<dyn UiTemplate> {
     Box::new(module_templates::monitoring::gauge_card::GaugeCard::default())
+}
+
+fn chart_card_factory() -> Box<dyn UiTemplate> {
+    Box::new(module_templates::monitoring::chart_card::ChartCard::default())
 }
 
 fn history_chart_factory() -> Box<dyn UiTemplate> {
