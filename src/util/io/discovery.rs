@@ -166,18 +166,22 @@ impl DiscoveryManager {
             .as_ref()
             .ok_or_else(|| color_eyre::eyre::eyre!("BLE adapter not initialized"))?;
 
-        log_info!("Starting manual scan for Survon field units ({}s)...", duration_secs);
+        log_info!("🔍 Starting BLE scan ({} seconds)...", duration_secs);
+
+        // Start scanning
         adapter.start_scan(ScanFilter::default()).await?;
 
-        // Scan for the requested duration
+        // CRITICAL: Scan for the requested duration
+        // This is the blocking part - must be in separate tokio task
         tokio::time::sleep(Duration::from_secs(duration_secs)).await;
 
-        // CRITICAL FIX: Get peripherals BEFORE stopping the scan.
-        // Many adapters return empty lists if you query after stopping.
+        // Get peripherals BEFORE stopping scan (critical fix from original code)
         let peripherals = adapter.peripherals().await?;
 
         // Now safe to stop
         adapter.stop_scan().await?;
+
+        log_info!("✅ Scan complete, processing {} peripheral(s)...", peripherals.len());
 
         let mut discovered_count = 0;
 
@@ -192,9 +196,9 @@ impl DiscoveryManager {
                     let address = properties.address.to_string();
                     let rssi = properties.rssi.unwrap_or(0);
 
-                    log_info!("Found Survon device: {} ({}), RSSI: {}", name, address, rssi);
+                    log_info!("📡 Found: {} ({}) RSSI: {} dBm", name, address, rssi);
 
-                    // Record in database (creates if new, updates last_seen if existing)
+                    // Record in database
                     let is_new_device = self.database.record_device_discovery(
                         &address,
                         &name,
@@ -205,7 +209,7 @@ impl DiscoveryManager {
                         discovered_count += 1;
                     }
 
-                    // Store in discovered devices map (for quick access)
+                    // Store in discovered devices map
                     let device = DiscoveredDevice {
                         peripheral: peripheral.clone(),
                         name: name.clone(),
@@ -214,27 +218,36 @@ impl DiscoveryManager {
                     };
                     self.discovered_devices.write().await.insert(address.clone(), device);
 
-                    // Check trust status from database
+                    // Check trust status
                     let is_trusted = self.database.is_device_trusted(&address)?;
 
                     if is_trusted {
-                        log_info!("Device {} is trusted, attempting registration", address);
-                        if let Err(e) = self.register_device(peripheral, address.clone()).await {
-                            log_error!("Failed to register trusted device: {}", e);
-                        }
+                        log_info!("✓ Device {} is trusted, attempting registration", address);
+
+                        // Clone what we need before spawning
+                        let periph = peripheral.clone();
+                        let addr = address.clone();
+                        let self_clone = Arc::new(self.clone());
+
+                        // Register in background to avoid blocking scan results
+                        tokio::spawn(async move {
+                            if let Err(e) = self_clone.register_device(periph, addr.clone()).await {
+                                log_error!("Failed to register trusted device {}: {}", addr, e);
+                            }
+                        });
                     } else if is_new_device {
-                        // New device discovered - send trust prompt to UI
                         log_info!("🆕 NEW device {} discovered, awaiting trust decision", address);
 
+                        // Send trust prompt to UI
                         let event = BusMessage::new(
                             "device_discovered".to_string(),
                             serde_json::json!({
-                                "mac_address": address,
-                                "name": name,
-                                "rssi": rssi,
-                                "is_new": true,
-                                "requires_trust_decision": true
-                            }).to_string(),
+                            "mac_address": address,
+                            "name": name,
+                            "rssi": rssi,
+                            "is_new": true,
+                            "requires_trust_decision": true
+                        }).to_string(),
                             "discovery_manager".to_string(),
                         );
 
@@ -242,14 +255,13 @@ impl DiscoveryManager {
                             log_error!("Failed to publish device_discovered event: {}", e);
                         }
                     } else {
-                        // Known but untrusted - just update in background, no prompt
-                        log_info!("Device {} is known but not trusted (last_seen updated)", address);
+                        log_info!("Device {} is known but not trusted", address);
                     }
                 }
             }
         }
 
-        log_info!("Scan complete. {} new Survon device(s) discovered", discovered_count);
+        log_info!("✅ Scan complete - {} new Survon device(s) discovered", discovered_count);
         Ok(discovered_count)
     }
 
@@ -263,7 +275,7 @@ impl DiscoveryManager {
             }
 
             // Wait 30 seconds before next automatic scan
-            tokio::time::sleep(Duration::from_secs(30)).await;
+            tokio::time::sleep(Duration::from_secs(40)).await;
         }
     }
 
@@ -327,10 +339,12 @@ impl DiscoveryManager {
         let addr_clone = address.clone();
         let rx_char_clone = rx_char.clone();
 
+        // Hybrid approach: Event-driven with keepalive
+        // Best of both worlds - no constant polling, but prevents timeout
+
         tokio::spawn(async move {
             log_info!("📷 BLE listener task started for {}", addr_clone);
 
-            // Track if we've sent registration response
             let mut registration_sent = false;
 
             // Outer loop: handles reconnection if stream dies
@@ -339,18 +353,22 @@ impl DiscoveryManager {
 
                 match periph.notifications().await {
                     Ok(mut stream) => {
-                        log_info!("✓ Got notification stream for {}", addr_clone);
+                        log_info!("✅ Got notification stream for {}", addr_clone);
 
                         let mut buffer = String::new();
                         let mut last_chunk_time = std::time::Instant::now();
                         let mut chunk_count = 0;
 
-                        // Inner loop: processes notifications until stream dies
+                        // Event-driven with occasional keepalive check
                         loop {
-                            tokio::select! {
-                        maybe_data = stream.next() => {
-                            match maybe_data {
-                                Some(data) => {
+                            // Wait up to 15 seconds for data (your Arduino sends every 3s)
+                            // This gives plenty of margin without constant polling
+                            match tokio::time::timeout(
+                                Duration::from_secs(15),
+                                stream.next()
+                            ).await {
+                                Ok(Some(data)) => {
+                                    // Got data! Process it normally
                                     chunk_count += 1;
                                     let chunk = String::from_utf8_lossy(&data.value).to_string();
 
@@ -380,7 +398,6 @@ impl DiscoveryManager {
                                                     log_info!("✅ Parsed compact registration");
                                                     let capabilities = compact_reg.to_capabilities();
 
-                                                    // Send to registration handler
                                                     if response_tx.send(capabilities).await.is_ok() {
                                                         log_info!("✅ Sent registration response to handler");
                                                         registration_sent = true;
@@ -399,7 +416,6 @@ impl DiscoveryManager {
                                                 Ok(capabilities) => {
                                                     log_info!("✅ Parsed verbose registration");
 
-                                                    // Send to registration handler
                                                     if response_tx.send(capabilities).await.is_ok() {
                                                         log_info!("✅ Sent registration response to handler");
                                                         registration_sent = true;
@@ -432,27 +448,28 @@ impl DiscoveryManager {
                                         buffer.clear();
                                     }
                                 }
-                                None => {
-                                    // Stream ended - this is expected when device disconnects
-                                    log_info!("📡 Notification stream ended for {} (normal disconnect)", addr_clone);
-                                    break; // Exit inner loop to trigger reconnection
+                                Ok(None) => {
+                                    // Stream ended naturally
+                                    log_warn!("📡 Notification stream ended for {} (disconnect)", addr_clone);
+                                    break;
+                                }
+                                Err(_) => {
+                                    // Timeout: No data for 15 seconds (should never happen with 3s telemetry!)
+                                    log_warn!("⚠️ No data from {} for 15 seconds - checking connection", addr_clone);
+
+                                    // Check if still connected
+                                    if !periph.is_connected().await.unwrap_or(false) {
+                                        log_error!("❌ Device {} disconnected", addr_clone);
+                                        break;
+                                    }
+
+                                    // Still connected but no data - this is suspicious
+                                    // Could mean the Arduino stopped sending or BLE link is flaky
+                                    log_warn!("⚠️ Device {} still connected but silent - continuing to listen", addr_clone);
                                 }
                             }
                         }
 
-                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
-                            log_info!("💓 BLE listener alive - {} chunks received", chunk_count);
-
-                            // Heartbeat: Check if device is still connected
-                            if !periph.is_connected().await.unwrap_or(false) {
-                                log_info!("📡 Device {} disconnected during heartbeat check", addr_clone);
-                                break; // Exit inner loop to trigger reconnection
-                            }
-                        }
-                    }
-                        }
-
-                        // Stream closed naturally - don't log as error
                         log_info!("🔄 Stream closed for {}, will attempt reconnection in 5s...", addr_clone);
                     }
                     Err(e) => {
@@ -469,7 +486,7 @@ impl DiscoveryManager {
 
                     match periph.connect().await {
                         Ok(_) => {
-                            log_info!("✓ Reconnected to {}", addr_clone);
+                            log_info!("✅ Reconnected to {}", addr_clone);
 
                             // Re-discover services
                             if let Err(e) = periph.discover_services().await {
@@ -483,14 +500,13 @@ impl DiscoveryManager {
                                 continue;
                             }
 
-                            log_info!("✓ Resubscribed to notifications for {}", addr_clone);
+                            log_info!("✅ Resubscribed to notifications for {}", addr_clone);
                         }
                         Err(e) => {
                             log_error!("❌ Failed to reconnect to {}: {}", addr_clone, e);
                         }
                     }
                 } else {
-                    // Device is still connected but stream died - just try to get stream again
                     log_info!("🔄 Device {} still connected, reacquiring stream...", addr_clone);
                 }
             }
@@ -531,6 +547,36 @@ impl DiscoveryManager {
                 Err(color_eyre::eyre::eyre!("Device did not respond to registration request"))
             }
         }
+    }
+
+    async fn get_fresh_peripheral_for_reconnect(
+        adapter_lock: &Arc<RwLock<Option<Adapter>>>,
+        address: &str,
+    ) -> Result<Peripheral> {
+        let adapter = adapter_lock.read().await;
+        let adapter = adapter.as_ref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("Adapter not available"))?;
+
+        log_info!("🔍 Rescanning to get fresh peripheral for {}", address);
+
+        // Quick 2-second scan to refresh peripheral list
+        adapter.start_scan(ScanFilter::default()).await?;
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        adapter.stop_scan().await?;
+
+        // Find our device in the FRESH peripheral list
+        let peripherals = adapter.peripherals().await?;
+
+        for periph in peripherals {
+            if let Ok(Some(props)) = periph.properties().await {
+                if props.address.to_string() == address {
+                    log_info!("✓ Found fresh peripheral for {}", address);
+                    return Ok(periph);
+                }
+            }
+        }
+
+        Err(color_eyre::eyre::eyre!("Device not found in rescan"))
     }
 
     /// Handle successful registration

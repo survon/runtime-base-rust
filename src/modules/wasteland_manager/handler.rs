@@ -4,7 +4,7 @@ use ratatui::crossterm::event::KeyCode;
 use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use crate::{log_debug,log_error};
+use crate::{log_debug,log_error, log_info};
 use crate::modules::{Module, module_handler::ModuleHandler};
 use crate::util::{
     io::{
@@ -73,6 +73,8 @@ impl WastelandManagerHandler {
     ) -> Self {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
 
+        let database_clone = database.clone();
+
         let mut handler = Self {
             current_view: WastelandView::Main,
             selected_index: 0,
@@ -95,8 +97,22 @@ impl WastelandManagerHandler {
         // Start listening for device discovery events
         handler.start_device_listener();
 
+        if let Ok(devices) = database_clone.get_all_known_devices() {
+            handler.known_devices = devices;
+        }
+
         // Do initial async refresh
-        handler.refresh_data_async();
+        handler.refresh_installed_modules();
+
+        if let Ok(archived) = handler.wasteland_manager.list_archived_modules() {
+            handler.archived_modules = archived;
+        }
+
+        // Now do async refresh for things that need network/async ops
+        handler.refresh_async_data_only();
+
+        handler.status_message = Some("Ready - Press 's' to scan for devices".to_string());
+
         handler
     }
 
@@ -241,10 +257,10 @@ impl WastelandManagerHandler {
         }
     }
 
-    fn refresh_data_async(&mut self) {
+    fn refresh_async_data_only(&mut self) {
         let tx = self.message_tx.clone();
 
-        // Refresh discovered devices
+        // Refresh discovered devices (from discovery manager)
         if let Some(discovery) = &self.discovery_manager {
             let discovery_clone = discovery.clone();
             let tx_clone = tx.clone();
@@ -254,18 +270,7 @@ impl WastelandManagerHandler {
             });
         }
 
-        // Refresh known devices from database
-        self.refresh_known_devices();
-
-        // Refresh archived modules (sync - fast enough)
-        if let Ok(archived) = self.wasteland_manager.list_archived_modules() {
-            self.archived_modules = archived;
-        }
-
-        // Refresh installed modules (sync - fast enough)
-        self.refresh_installed_modules();
-
-        // Refresh registry
+        // Refresh registry (needs network fetch)
         let manager = self.wasteland_manager.clone();
         tokio::spawn(async move {
             if let Ok(modules) = manager.list_registry_modules().await {
@@ -274,15 +279,36 @@ impl WastelandManagerHandler {
         });
     }
 
-    fn refresh_known_devices(&mut self) {
-        let tx = self.message_tx.clone();
-        let db = self.database.clone();
+    // Keep the old method but make it call synchronous loads first
+    fn refresh_data_async(&mut self) {
+        // Synchronous updates first (immediate)
+        if let Ok(devices) = self.database.get_all_known_devices() {
+            self.known_devices = devices;
+        }
 
-        tokio::spawn(async move {
-            if let Ok(devices) = db.get_all_known_devices() {
-                let _ = tx.send(HandlerMessage::KnownDevicesRefreshed(devices));
+        self.refresh_installed_modules();
+
+        if let Ok(archived) = self.wasteland_manager.list_archived_modules() {
+            self.archived_modules = archived;
+        }
+
+        // Then trigger async updates
+        self.refresh_async_data_only();
+    }
+
+    fn refresh_known_devices(&mut self) {
+        // Make this SYNCHRONOUS instead of async
+        // Database queries are fast enough
+        match self.database.get_all_known_devices() {
+            Ok(devices) => {
+                self.known_devices = devices;
+                self.status_message = None;
             }
-        });
+            Err(e) => {
+                log_error!("Failed to load known devices: {}", e);
+                self.status_message = Some(format!("Error loading devices: {}", e));
+            }
+        }
     }
 
     fn handle_main_menu_select(&mut self) {
@@ -507,6 +533,14 @@ impl ModuleHandler for WastelandManagerHandler {
                     }
                     KeyCode::Char('s') => {
                         self.handle_scan_devices();
+                        None
+                    }
+                    KeyCode::Char('t') => {
+                        log_info!("TEST: known_devices = {}, pending = {}, installed = {}",
+                            self.known_devices.len(),
+                            self.pending_devices.len(),
+                            self.installed_modules.len()
+                        );
                         None
                     }
                     _ => None,

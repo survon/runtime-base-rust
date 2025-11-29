@@ -225,60 +225,125 @@ impl ModuleManager {
         database: &Database,
         message_bus: &MessageBus
     ) -> Result<()> {
-        // Collect module info that needs handlers
-        let module_info: Vec<(String, String, String, usize)> = self.modules
+        // Collect module info that needs handlers FIRST (avoid borrowing conflict)
+        let modules_info: Vec<(String, String, String)> = self.modules
             .iter()
-            .enumerate()
-            .map(|(idx, m)| (
-                m.config.module_type.clone(),
-                m.config.bindings
+            .map(|m| {
+                let device_id = m.config.bindings
                     .get("device_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
-                    .to_string(),
-                m.config.bus_topic.clone(),
-                idx  // Module index
-            ))
+                    .to_string();
+                (m.config.module_type.clone(), device_id, m.config.bus_topic.clone())
+            })
             .collect();
 
+        log_info!("🔧 Initializing module handlers for namespace: {}", self.namespace);
+
         // Now register handlers based on collected info
-        for (module_type, device_id, bus_topic, module_idx) in module_info {
+        for (module_type, device_id, bus_topic) in modules_info {
             match module_type.as_str() {
                 "llm" => {
-                    // ... existing llm handler code ...
+                    // Only register once
+                    if !self.handlers.contains_key("llm") {
+                        use crate::modules::llm;
+
+                        log_info!("📚 Registering LLM handler");
+
+                        let llm_service = llm::create_llm_service_if_available(
+                            self,
+                            database,
+                        ).await.ok().flatten();
+
+                        let llm_handler = Box::new(llm::handler::LlmHandler::new(llm_service));
+                        self.register_handler(llm_handler);
+
+                        log_info!("✅ LLM handler registered");
+                    }
                 }
-                "system" => {}
+
                 "wasteland_manager" => {
-                    // ... existing wasteland_manager handler code ...
+                    if !self.handlers.contains_key("wasteland_manager") {
+                        log_info!("🗂️  Registering Wasteland Manager handler");
+
+                        self.register_handler(Box::new(
+                            wasteland_manager::handler::WastelandManagerHandler::new(
+                                wasteland_path.clone(),
+                                discovery_manager.clone(),
+                                database.clone(),
+                                message_bus.clone()
+                            )
+                        ));
+
+                        log_info!("✅ Wasteland Manager handler registered");
+                    }
                 }
+
                 "valve_control" => {
-                    // ... existing valve_control handler code ...
+                    if !self.handlers.contains_key("valve_control") && !device_id.is_empty() {
+                        use crate::modules::valve_control;
+
+                        log_info!("🚰 Registering valve_control handler for device: {}", device_id);
+
+                        let handler = Box::new(
+                            valve_control::handler::ValveControlHandler::new(
+                                message_bus.clone(),
+                                device_id.clone(),
+                                bus_topic.clone(),
+                            )
+                        );
+                        self.register_handler(handler);
+
+                        log_info!("✅ Valve control handler registered");
+                    }
                 }
+
                 "monitoring" => {
-                    // Register one handler per monitoring module instance
-                    // Use module_idx to make each handler unique
-                    let handler_key = format!("monitoring_{}_{}", device_id, module_idx);
+                    // Register one handler per monitoring module
+                    // Each handler monitors its own device_id and bus_topic
+                    let handler_key = format!("monitoring_{}", device_id);
 
                     if !self.handlers.contains_key(&handler_key) && !device_id.is_empty() {
                         use crate::modules::monitoring;
 
-                        log_info!("Registering monitoring handler: {} for device: {} on topic: {}",
-                        handler_key, device_id, bus_topic);
+                        log_info!("📊 Registering monitoring handler:");
+                        log_info!("   - Handler key: {}", handler_key);
+                        log_info!("   - Device ID: {}", device_id);
+                        log_info!("   - Bus topic: {}", bus_topic);
 
                         let handler = Box::new(
                             monitoring::handler::MonitoringHandler::new(
                                 message_bus.clone(),
                                 device_id.clone(),
-                                bus_topic,
+                                bus_topic.clone(),
                             )
                         );
 
-                        self.handlers.insert(handler_key, handler);
+                        self.handlers.insert(handler_key.clone(), handler);
+                        log_info!("✅ Monitoring handler registered: {}", handler_key);
+                    } else if device_id.is_empty() {
+                        log_warn!("⚠️  Skipping monitoring module with empty device_id");
+                    } else {
+                        log_debug!("ℹ️  Monitoring handler already exists: {}", handler_key);
                     }
                 }
-                _ => {}
+
+                "system" => {
+                    // System modules don't need handlers
+                }
+
+                _ => {
+                    log_debug!("No handler needed for module type: {}", module_type);
+                }
             }
         }
+
+        // Log all registered handlers for debugging
+        log_info!("📋 Handler registration complete. Active handlers:");
+        for key in self.handlers.keys() {
+            log_info!("   ✓ {}", key);
+        }
+
         Ok(())
     }
 
@@ -311,23 +376,36 @@ impl ModuleManager {
         if let Some(module) = self.modules.get(module_idx) {
             let module_type = module.config.module_type.clone();
 
-            // For monitoring modules, use device_id + module_idx for unique handler key
+            // For monitoring modules, use device_id for handler key (NOT module_idx!)
             let handler_key = if module_type == "monitoring" {
                 let device_id = module.config.bindings
                     .get("device_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("monitoring_{}_{}", device_id, module_idx)
+                format!("monitoring_{}", device_id)  // ← Must match registration!
             } else {
                 module_type.clone()
             };
+
+            log_debug!("🔑 Looking up handler: '{}' for module at index {}", handler_key, module_idx);
 
             // Now we can safely get mutable references to both
             let handler = self.handlers.get_mut(&handler_key)?;
             let module = self.modules.get_mut(module_idx)?;
 
-            handler.handle_key(key_code, module)
+            log_debug!("✓ Found handler, calling handle_key with {:?}", key_code);
+
+            let result = handler.handle_key(key_code, module);
+
+            if result.is_some() {
+                log_debug!("✓ Handler returned event: {:?}", result);
+            } else {
+                log_debug!("Handler returned None");
+            }
+
+            result
         } else {
+            log_error!("❌ Module at index {} not found!", module_idx);
             None
         }
     }
@@ -336,13 +414,13 @@ impl ModuleManager {
         if let Some(module) = self.modules.get(module_idx) {
             let module_type = module.config.module_type.clone();
 
-            // For monitoring modules, use device_id + module_idx for unique handler key
+            // For monitoring modules, use device_id for handler key (NOT module_idx!)
             let handler_key = if module_type == "monitoring" {
                 let device_id = module.config.bindings
                     .get("device_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("monitoring_{}_{}", device_id, module_idx)
+                format!("monitoring_{}", device_id)  // ← Must match registration!
             } else {
                 module_type.clone()
             };

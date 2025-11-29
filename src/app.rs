@@ -60,7 +60,13 @@ pub enum OverviewFocus {
 pub enum AppMode {
     Splash,
     Overview,
+
+    // TODO Decide which way is better overall.. tuple or struct..
     ModuleDetail(ModuleSource, usize),
+    InitialScan {
+        countdown: u8,
+        start_time: std::time::Instant,
+    },
 }
 
 /// Application.
@@ -92,6 +98,8 @@ pub struct App {
     pub overview_focus: OverviewFocus,
     pub transport_manager: Option<TransportManager>,
     pub discovery_manager: Option<Arc<DiscoveryManager>>,
+
+    pub initial_scan_complete: bool,
 }
 
 impl App {
@@ -127,9 +135,7 @@ impl App {
         // discovery_manager.trust_device("00:00:00:00:00:00".to_string()).await?; // default arduino mac address for field unit
 
         // Start discovery in background
-        // Start discovery in background
         let discovery_clone = discovery_manager.clone();
-        let discovery_clone_2 = discovery_clone.clone();
         tokio::spawn(async move {
             // Initialize the BLE adapter
             if let Err(e) = discovery_clone.start().await {
@@ -137,22 +143,14 @@ impl App {
                 return;
             }
 
-            // Wait 2 seconds for adapter to fully initialize
-            log_info!("Waiting for BLE adapter to stabilize...");
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            // Wait for adapter to stabilize
+            log_info!("BLE adapter initializing...");
+            tokio::time::sleep(Duration::from_secs(2)).await;
 
-            // Perform initial scan
-            log_info!("Performing initial device scan...");
+            log_info!("BLE Discovery ready - use 's' key in Wasteland Manager to scan for devices");
 
-            // FIX: Pass a duration (e.g., 5 seconds)
-            match discovery_clone_2.scan_once(15).await {
-                Ok(count) => {
-                    log_info!("Initial scan complete - found {} new device(s)", count);
-                }
-                Err(e) => {
-                    log_error!("Initial scan failed: {}", e);
-                }
-            }
+            // DON'T do initial scan here - let user trigger it manually
+            // This prevents blocking on startup and allows UI to be responsive
         });
 
         // Subscribe module manager to events
@@ -244,6 +242,7 @@ impl App {
             overview_focus: OverviewFocus::CoreModules,
             transport_manager: Some(transport_manager),
             discovery_manager: Some(discovery_manager),
+            initial_scan_complete: false,
         })
     }
 
@@ -275,8 +274,9 @@ impl App {
 
     fn handle_tick(&mut self) -> bool {
         // During splash, we need continuous redraws for animation
-        let should_animate = matches!(self.mode, AppMode::Splash) ||
-            (matches!(self.mode, AppMode::Overview) && self.has_active_blinks());
+        let should_animate = matches!(self.mode, AppMode::Splash)
+            || matches!(self.mode, AppMode::InitialScan { .. })
+            || (matches!(self.mode, AppMode::Overview) && self.has_active_blinks());
 
         self.needs_redraw = self.needs_redraw || should_animate;
 
@@ -299,10 +299,17 @@ impl App {
                         let dismissed = splash.bypass_theme();
 
                         if dismissed {
-                            // Successfully dismissed - transition immediately
-                            self.mode = AppMode::Overview;
-                            self.splash_screen = None;
-                            self.needs_redraw = true;
+                            if splash.is_complete() {
+                                self.mode = AppMode::InitialScan {
+                                    countdown: 15,
+                                    start_time: std::time::Instant::now(),
+                                };
+                                self.splash_screen = None;
+                                self.needs_redraw = true;
+
+                                // Trigger the scan
+                                self.start_initial_scan();
+                            }
 
                             return Ok(true);
                         }
@@ -464,6 +471,9 @@ impl App {
             AppMode::ModuleDetail(source, module_idx) => {
                 self.render_module_detail(frame, source.clone(), *module_idx)
             },
+            AppMode::InitialScan { countdown, .. } => {
+                self.render_initial_scan(frame, *countdown)
+            }
         }
     }
 
@@ -509,6 +519,66 @@ impl App {
         }
     }
 
+    fn render_initial_scan(&self, frame: &mut Frame, countdown: u8) {
+        use ratatui::widgets::{Block, Borders, Paragraph};
+        use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+        use ratatui::style::{Color, Style, Modifier};
+        use ratatui::text::{Line, Span};
+
+        let area = frame.area();
+
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(35),
+                Constraint::Length(10),
+                Constraint::Percentage(35),
+            ])
+            .split(area);
+
+        // Progress bar calculation
+        let elapsed = 15 - countdown;
+        let progress = (elapsed as f32 / 15.0 * 20.0) as usize;
+        let bar = format!("[{}{}]",
+                          "█".repeat(progress),
+                          "░".repeat(20 - progress)
+        );
+
+        let scan_text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "🔍 Scanning for BLE devices...",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                format!("⏱️  {} seconds remaining", countdown),
+                Style::default().fg(Color::Yellow)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                bar,
+                Style::default().fg(Color::Blue)
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Press any key to skip",
+                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM)
+            )),
+        ];
+
+        let scan_widget = Paragraph::new(scan_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Blue))
+                    .title(" Initial Device Discovery ")
+            )
+            .alignment(Alignment::Center);
+
+        frame.render_widget(scan_widget, chunks[1]);
+    }
+
     fn render_template_error(&self, frame: &mut Frame, area: Rect, error: String) {
         use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
         use ratatui::style::{Color, Style};
@@ -544,11 +614,24 @@ impl App {
         let mut needs_redraw = true;
 
         while self.running {
-            if matches!(self.mode, AppMode::Splash) {
-                if let Some(splash) = &self.splash_screen {
-                    if splash.is_complete() {
-                        self.mode = AppMode::Overview;
-                        self.splash_screen = None;
+
+            if let AppMode::InitialScan { countdown, start_time } = self.mode {
+                let elapsed = start_time.elapsed().as_secs() as u8;
+
+                if elapsed >= 15 {
+                    // Scan complete, transition to overview
+                    log_info!("Initial scan complete, transitioning to overview");
+                    self.mode = AppMode::Overview;
+                    self.initial_scan_complete = true;
+                    needs_redraw = true;
+                } else {
+                    let new_countdown = 15 - elapsed;
+                    if countdown != new_countdown {
+                        // Update countdown and force redraw
+                        self.mode = AppMode::InitialScan {
+                            countdown: new_countdown,
+                            start_time,
+                        };
                         needs_redraw = true;
                     }
                 }
@@ -587,12 +670,41 @@ impl App {
         Ok(())
     }
 
+    fn start_initial_scan(&self) {
+        if let Some(discovery) = &self.discovery_manager {
+            let discovery_clone = discovery.clone();
+            tokio::spawn(async move {
+                log_info!("🔍 Starting initial device scan...");
+                match discovery_clone.scan_once(15).await {
+                    Ok(count) => {
+                        log_info!("✅ Initial scan complete - found {} new device(s)", count);
+                    }
+                    Err(e) => {
+                        log_error!("❌ Initial scan failed: {}", e);
+                    }
+                }
+            });
+        }
+    }
+
     /// Handles the key events and updates the state of [`App`].
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> Result<()> {
         let key_code = key_event.code;
 
         match &self.mode {
             AppMode::Splash => {},
+            AppMode::InitialScan{ countdown, start_time } => {
+                match key_code {
+                    KeyCode::Enter => {
+                        log_info!("User skipped initial scan");
+                        self.mode = AppMode::Overview;
+                        self.initial_scan_complete = true;
+                        self.needs_redraw = true;
+                        return Ok(());
+                    },
+                    _ => {}
+                }
+            },
             AppMode::Overview => {
                 match self.overview_focus {
                     OverviewFocus::WastelandModules => {

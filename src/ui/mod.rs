@@ -18,6 +18,7 @@ impl Widget for &mut App {
             AppMode::Splash => {},
             AppMode::Overview => render_overview(self, area, buf),
             AppMode::ModuleDetail(_source, _module_idx) => {},
+            AppMode::InitialScan{ .. } => {},
         }
     }
 }
