@@ -1,0 +1,33 @@
+# Auto-generated module for a01
+# Device Type: field_unit
+# Firmware: unknown
+
+# Sample SSP Telemetry Payload:
+# {
+#   "payload": {
+#     "a": 0.0,
+#     "b": 0.0,
+#     "c": 0.0
+#   },
+#   "protocol": "ssp/1.0",
+#   "source": {
+#     "address": "XX:XX:XX:XX:XX:XX",
+#     "id": "a01",
+#     "transport": "ble"
+#   },
+#   "timestamp": 1732377600,
+#   "topic": "a01",
+#   "type": "telemetry"
+# }
+
+name: a01 (field_unit)
+module_type: monitoring
+bus_topic: a01
+template: status_badge_card
+bindings:
+  a: 0
+  b: 0
+  c: 0
+  device_id: a01
+  firmware_version: unknown
+  is_blinkable: true

@@ -272,40 +272,6 @@ impl DiscoveryManager {
         Ok(discovered_count)
     }
 
-    /// Main scanning loop, disabled because it was blocking the app every 30 seconds for 10 seconds
-    /// This is now only used if you want automatic background scanning
-    async fn scan_loop(&self, adapter: Adapter) -> Result<()> {
-        // This loop is now optional and should only be spawned if desired
-        loop {
-            if let Err(e) = self.scan_once(10).await {
-                log_error!("Scan error: {}", e);
-            }
-
-            // Wait 30 seconds before next automatic scan
-            tokio::time::sleep(Duration::from_secs(120)).await;
-        }
-    }
-
-    // If you want to enable automatic scanning, add this method:
-    pub async fn start_auto_scan(self: Arc<Self>) -> Result<()> {
-        let adapter_lock = self.adapter.read().await;
-        let adapter = adapter_lock
-            .as_ref()
-            .ok_or_else(|| color_eyre::eyre::eyre!("BLE adapter not initialized"))?
-            .clone();
-        drop(adapter_lock);
-
-        let scanner = self.clone();
-        tokio::spawn(async move {
-            if let Err(e) = scanner.scan_loop(adapter).await {
-                log_error!("Auto-scanner error: {}", e);
-            }
-        });
-
-        log_info!("Automatic scanning enabled");
-        Ok(())
-    }
-
     pub async fn send_command(
         &self,
         device_id: String,
@@ -341,6 +307,9 @@ impl DiscoveryManager {
         peripheral.connect().await?;
         log_info!("✓ Connected to {}", address);
 
+        // Small delay for CoreBluetooth to stabilize
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
         peripheral.discover_services().await?;
         log_info!("✓ Discovered services for {}", address);
 
@@ -356,116 +325,231 @@ impl DiscoveryManager {
             .find(|c| c.uuid == Uuid::parse_str(SURVON_TX_CHAR_UUID).unwrap())
             .ok_or_else(|| color_eyre::eyre::eyre!("TX characteristic not found"))?;
 
-        let (response_tx, mut response_rx) = tokio::sync::mpsc::channel::<DeviceCapabilities>(1);
+        // 🔑 KEY CHANGE: No registration channel - we'll auto-register from telemetry
+
+        // Register peripheral with scheduler immediately
+        self.command_scheduler.register_peripheral(
+            address.clone(),
+            peripheral.clone()
+        ).await;
 
         // Spawn listener for incoming data
         let bus = self.message_bus.clone();
-        let periph = peripheral.clone();
         let addr_clone = address.clone();
         let rx_char_clone = rx_char.clone();
         let scheduler = self.command_scheduler.clone();
+        let adapter_lock = self.adapter.clone();
+        let peripheral_clone = peripheral.clone();
+
+        // 🔑 NEW: Clone self for auto-registration
+        let self_clone = Arc::new(self.clone());
 
         tokio::spawn(async move {
             log_info!("📻 BLE listener task started for {}", addr_clone);
 
-            let mut registration_sent = false;
+            let mut current_peripheral = peripheral_clone;
+            let mut device_registered = false;  // Track if we've registered capabilities
 
             loop {
                 log_info!("📡 Acquiring notification stream for {}...", addr_clone);
 
-                match periph.notifications().await {
+                match current_peripheral.notifications().await {
                     Ok(mut stream) => {
                         log_info!("✅ Got notification stream for {}", addr_clone);
+
+                        // 🫀 KEEP-ALIVE TASK
+                        let keepalive_peripheral = current_peripheral.clone();
+                        let keepalive_char = rx_char_clone.clone();
+                        let keepalive_addr = addr_clone.clone();
+
+                        let keepalive_handle = tokio::spawn(async move {
+                            let mut iteration = 0;
+                            loop {
+                                tokio::time::sleep(Duration::from_secs(10)).await;
+                                iteration += 1;
+
+                                log_info!("🫀 Keep-alive iteration {} for {}", iteration, keepalive_addr);
+
+                                match keepalive_peripheral.read(&keepalive_char).await {
+                                    Ok(data) => {
+                                        log_info!("🫀 Keep-alive read OK for {} (got {} bytes)", keepalive_addr, data.len());
+                                    }
+                                    Err(e) => {
+                                        log_warn!("🫀 Keep-alive failed for {}: {}", keepalive_addr, e);
+                                        break;
+                                    }
+                                }
+                            }
+                        });
 
                         let mut buffer = String::new();
                         let mut last_chunk_time = std::time::Instant::now();
 
                         loop {
                             match tokio::time::timeout(
-                                Duration::from_secs(5),
+                                Duration::from_secs(5),  // Increased from 3 to 5
                                 stream.next()
                             ).await {
                                 Ok(Some(data)) => {
+                                    log_info!("📥 Received {} bytes from {}", data.value.len(), addr_clone);
+
                                     let chunk = String::from_utf8_lossy(&data.value).to_string();
 
-                                    if last_chunk_time.elapsed().as_millis() > 500 {
+                                    // Clear stale buffers
+                                    if last_chunk_time.elapsed().as_secs() > 3 {
                                         if !buffer.is_empty() {
-                                            log_warn!("⚠️ Timeout - clearing incomplete buffer");
+                                            log_warn!("⚠️ Clearing stale buffer ({} bytes)", buffer.len());
+                                            buffer.clear();
                                         }
-                                        buffer.clear();
                                     }
 
                                     buffer.push_str(&chunk);
                                     last_chunk_time = std::time::Instant::now();
 
-                                    if buffer.starts_with('{') && buffer.ends_with('}') {
-                                        log_info!("✅ COMPLETE MESSAGE ({} bytes)", buffer.len());
+                                    log_info!("📝 Buffer now {} bytes", buffer.len());
 
-                                        // Try registration formats first
-                                        if buffer.contains("\"dt\"") && !registration_sent {
-                                            match serde_json::from_str::<CompactRegistrationResponse>(&buffer) {
-                                                Ok(compact_reg) => {
-                                                    let capabilities = compact_reg.to_capabilities();
-                                                    if response_tx.send(capabilities).await.is_ok() {
-                                                        registration_sent = true;
-                                                    }
-                                                }
-                                                Err(e) => log_error!("Failed to parse compact registration: {}", e),
-                                            }
-                                        } else if buffer.contains("\"device_id\"") && !registration_sent {
-                                            match serde_json::from_str::<DeviceCapabilities>(&buffer) {
-                                                Ok(capabilities) => {
-                                                    if response_tx.send(capabilities).await.is_ok() {
-                                                        registration_sent = true;
-                                                    }
-                                                }
-                                                Err(e) => log_error!("Failed to parse verbose registration: {}", e),
-                                            }
-                                        }
-                                        // Regular telemetry
-                                        else {
-                                            match SspMessage::parse_flexible(&buffer) {
-                                                Ok(ssp) => {
-                                                    log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
+                                    // 🔑 Process ALL complete messages in buffer
+                                    loop {
+                                        match Self::extract_one_json_message(&buffer) {
+                                            Ok((json_message, remaining)) => {
+                                                log_info!("✅ EXTRACTED MESSAGE ({} bytes)", json_message.len());
 
-                                                    // NEW: Extract schedule metadata and update scheduler
-                                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&buffer) {
-                                                        if let Some(metadata) = extract_schedule_metadata(&json) {
-                                                            log_info!("📅 Updating schedule for {}", addr_clone);
-                                                            if let Err(e) = scheduler.update_schedule_from_telemetry(
-                                                                addr_clone.clone(),
-                                                                &metadata
-                                                            ).await {
-                                                                log_error!("Failed to update schedule: {}", e);
+                                                // 🔑 AUTO-REGISTRATION: First telemetry message triggers registration
+                                                if !device_registered {
+                                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_message) {
+                                                        // Extract device info from telemetry
+                                                        if let Some(device_id) = json.get("i").and_then(|v| v.as_str()) {
+                                                            log_info!("🆔 Discovered device ID: {}", device_id);
+
+                                                            // Create minimal capabilities from telemetry
+                                                            let capabilities = DeviceCapabilities {
+                                                                device_id: device_id.to_string(),
+                                                                device_type: "field_unit".to_string(),
+                                                                firmware_version: "unknown".to_string(),
+                                                                sensors: vec![
+                                                                    SensorCapability {
+                                                                        name: "a".to_string(),
+                                                                        unit: "".to_string(),
+                                                                        min_value: None,
+                                                                        max_value: None,
+                                                                    },
+                                                                    SensorCapability {
+                                                                        name: "b".to_string(),
+                                                                        unit: "".to_string(),
+                                                                        min_value: None,
+                                                                        max_value: None,
+                                                                    },
+                                                                    SensorCapability {
+                                                                        name: "c".to_string(),
+                                                                        unit: "".to_string(),
+                                                                        min_value: None,
+                                                                        max_value: None,
+                                                                    },
+                                                                ],
+                                                                actuators: Vec::new(),
+                                                                commands: Vec::new(),
+                                                            };
+
+                                                            // Register the device
+                                                            if let Err(e) = self_clone.handle_registration(capabilities).await {
+                                                                log_error!("Failed to register device: {}", e);
+                                                            } else {
+                                                                log_info!("✅ Device {} auto-registered from telemetry", device_id);
+                                                                device_registered = true;
                                                             }
                                                         }
                                                     }
+                                                }
 
-                                                    let bus_msg = ssp.to_bus_message();
-                                                    match bus.publish(bus_msg).await {
-                                                        Ok(_) => log_info!("✅ Published to bus"),
-                                                        Err(e) => log_error!("❌ Publish failed: {}", e),
+                                                // Parse as telemetry
+                                                match SspMessage::parse_flexible(&json_message) {
+                                                    Ok(ssp) => {
+                                                        log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
+
+                                                        // Extract schedule metadata
+                                                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_message) {
+                                                            if let Some(metadata) = extract_schedule_metadata(&json) {
+                                                                if let Err(e) = scheduler.update_schedule_from_telemetry(
+                                                                    addr_clone.clone(),
+                                                                    &metadata
+                                                                ).await {
+                                                                    log_error!("Failed to update schedule: {}", e);
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Publish to bus
+                                                        let bus_msg = ssp.to_bus_message();
+                                                        match bus.publish(bus_msg).await {
+                                                            Ok(_) => log_info!("✅ Published to bus"),
+                                                            Err(e) => log_error!("❌ Publish failed: {}", e),
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        log_warn!("⚠️ Failed to parse as SSP: {}", e);
                                                     }
                                                 }
-                                                Err(_) => {
-                                                    log_warn!("⚠️ Not a recognized message format");
+
+                                                buffer = remaining;
+
+                                                if buffer.is_empty() || !buffer.contains('{') {
+                                                    buffer.clear();
+                                                    break;
                                                 }
                                             }
+                                            Err(_) => {
+                                                log_info!("⏳ Incomplete message, waiting for more data...");
+                                                break;
+                                            }
                                         }
-
-                                        buffer.clear();
                                     }
                                 }
                                 Ok(None) => {
-                                    log_warn!("📡 Notification stream ended for {}", addr_clone);
+                                    log_warn!("📡 Stream returned None");
+
+                                    let is_connected = current_peripheral.is_connected().await.unwrap_or(false);
+                                    log_info!("🔌 Connection state: {}", if is_connected { "CONNECTED" } else { "DISCONNECTED" });
+
+                                    keepalive_handle.abort();
+
+                                    if let Err(e) = Self::handle_reconnect(
+                                        &adapter_lock,
+                                        &addr_clone,
+                                        &rx_char_clone,
+                                        &mut current_peripheral,
+                                        &scheduler
+                                    ).await {
+                                        log_error!("❌ Reconnect failed: {}", e);
+                                        tokio::time::sleep(Duration::from_secs(5)).await;
+                                    }
+
                                     break;
                                 }
                                 Err(_) => {
-                                    // 5 second gap - no data
-                                    log_info!("⏰ No data for 5 seconds");
+                                    log_warn!("⏰ Timeout waiting for chunk (buffer: {} bytes)", buffer.len());
 
-                                    if !periph.is_connected().await.unwrap_or(false) {
-                                        log_error!("❌ Device {} disconnected", addr_clone);
+                                    if !buffer.is_empty() {
+                                        log_warn!("⚠️ Clearing incomplete message");
+                                        buffer.clear();
+                                    }
+
+                                    let is_connected = current_peripheral.is_connected().await.unwrap_or(false);
+
+                                    if !is_connected {
+                                        log_error!("📡 Device disconnected during timeout");
+                                        keepalive_handle.abort();
+
+                                        if let Err(e) = Self::handle_reconnect(
+                                            &adapter_lock,
+                                            &addr_clone,
+                                            &rx_char_clone,
+                                            &mut current_peripheral,
+                                            &scheduler
+                                        ).await {
+                                            log_error!("❌ Reconnect failed: {}", e);
+                                            tokio::time::sleep(Duration::from_secs(5)).await;
+                                        }
+
                                         break;
                                     }
                                 }
@@ -474,68 +558,110 @@ impl DiscoveryManager {
                     }
                     Err(e) => {
                         log_error!("❌ Failed to get notification stream: {}", e);
+                        tokio::time::sleep(Duration::from_secs(5)).await;
                     }
                 }
 
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                log_info!("🔄 Restarting stream loop for {}...", addr_clone);
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        });
 
-                // Reconnection logic
-                if !periph.is_connected().await.unwrap_or(false) {
-                    log_info!("🔌 Attempting to reconnect...");
-                    match periph.connect().await {
-                        Ok(_) => {
-                            log_info!("✅ Reconnected");
-                            if let Err(e) = periph.discover_services().await {
-                                log_error!("❌ Failed to rediscover services: {}", e);
-                                continue;
-                            }
-                            if let Err(e) = periph.subscribe(&rx_char_clone).await {
-                                log_error!("❌ Failed to resubscribe: {}", e);
-                                continue;
-                            }
-                        }
-                        Err(e) => {
-                            log_error!("❌ Failed to reconnect: {}", e);
-                        }
+        // 🔑 KEY CHANGE: Return immediately, don't wait for registration
+        log_info!("✅ Listener spawned for {}, will auto-register from telemetry", address);
+
+        Ok(())
+    }
+
+    fn extract_one_json_message(buffer: &str) -> Result<(String, String), String> {
+        let start = buffer.find('{').ok_or("No JSON start found")?;
+
+        let mut depth = 0;
+        let mut end = None;
+
+        for (i, ch) in buffer[start..].chars().enumerate() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(start + i + 1);
+                        break;
                     }
                 }
-            }
-        });
-
-        // Send initial registration request
-        log_info!("Sending registration request...");
-
-        let registration_request = serde_json::json!({
-            "hub_id": "survon_hub",
-            "request": "capabilities",
-            "timestamp": chrono::Utc::now().timestamp() as u64
-        });
-
-        let request_bytes = registration_request.to_string().into_bytes();
-        peripheral.write(tx_char, &request_bytes, WriteType::WithoutResponse).await?;
-
-        // Wait for registration response
-        match timeout(Duration::from_secs(10), response_rx.recv()).await {
-            Ok(Some(capabilities)) => {
-                log_info!("✓ Received device capabilities!");
-
-                // Register peripheral with scheduler
-                self.command_scheduler.register_peripheral(
-                    capabilities.device_id.clone(),
-                    peripheral.clone()
-                ).await;
-
-                self.handle_registration(capabilities).await?;
-
-                Ok(())
-            }
-            Ok(None) => {
-                Err(color_eyre::eyre::eyre!("Registration channel closed"))
-            }
-            Err(_) => {
-                Err(color_eyre::eyre::eyre!("Device did not respond to registration request"))
+                _ => {}
             }
         }
+
+        let end = end.ok_or("No matching closing brace")?;
+
+        let json_message = buffer[start..end].to_string();
+        let remaining = if end < buffer.len() {
+            buffer[end..].to_string()
+        } else {
+            String::new()
+        };
+
+        Ok((json_message, remaining))
+    }
+
+    async fn handle_reconnect(
+        adapter_lock: &Arc<RwLock<Option<Adapter>>>,
+        address: &str,
+        rx_char: &btleplug::api::Characteristic,
+        current_peripheral: &mut Peripheral,
+        scheduler: &Arc<BleCommandScheduler>,
+    ) -> Result<()> {
+        log_info!("🔄 Starting reconnect for {}", address);
+
+        let adapter = adapter_lock.read().await;
+        let adapter = adapter.as_ref()
+            .ok_or_else(|| color_eyre::eyre::eyre!("Adapter not available"))?;
+
+        // Quick 3-second scan to refresh peripheral list
+        log_info!("🔍 Rescanning for {}", address);
+        adapter.start_scan(ScanFilter::default()).await?;
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        let peripherals = adapter.peripherals().await?;
+        adapter.stop_scan().await?;
+
+        // Find device in fresh peripheral list
+        for periph in peripherals {
+            if let Ok(Some(props)) = periph.properties().await {
+                if props.address.to_string() == address {
+                    log_info!("✅ Found peripheral for {}", address);
+
+                    // Connect
+                    periph.connect().await?;
+                    log_info!("✅ Connected to {}", address);
+
+                    // Small delay for CoreBluetooth to stabilize
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+
+                    // Discover services
+                    periph.discover_services().await?;
+                    log_info!("✅ Services discovered for {}", address);
+
+                    // Subscribe to notifications
+                    periph.subscribe(rx_char).await?;
+                    log_info!("✅ Subscribed to notifications for {}", address);
+
+                    // Update peripheral reference
+                    *current_peripheral = periph.clone();
+
+                    // Re-register with scheduler
+                    scheduler.register_peripheral(
+                        address.to_string(),
+                        periph
+                    ).await;
+
+                    log_info!("✅ Reconnect complete for {}", address);
+                    return Ok(());
+                }
+            }
+        }
+
+        Err(color_eyre::eyre::eyre!("Device {} not found in rescan", address))
     }
 
     /// Connect to all trusted devices from database
@@ -600,36 +726,6 @@ impl DiscoveryManager {
                 self.command_scheduler.prune_stale_schedules().await;
             }
         });
-    }
-
-    async fn get_fresh_peripheral_for_reconnect(
-        adapter_lock: &Arc<RwLock<Option<Adapter>>>,
-        address: &str,
-    ) -> Result<Peripheral> {
-        let adapter = adapter_lock.read().await;
-        let adapter = adapter.as_ref()
-            .ok_or_else(|| color_eyre::eyre::eyre!("Adapter not available"))?;
-
-        log_info!("🔍 Rescanning to get fresh peripheral for {}", address);
-
-        // Quick 2-second scan to refresh peripheral list
-        adapter.start_scan(ScanFilter::default()).await?;
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        adapter.stop_scan().await?;
-
-        // Find our device in the FRESH peripheral list
-        let peripherals = adapter.peripherals().await?;
-
-        for periph in peripherals {
-            if let Ok(Some(props)) = periph.properties().await {
-                if props.address.to_string() == address {
-                    log_info!("✓ Found fresh peripheral for {}", address);
-                    return Ok(periph);
-                }
-            }
-        }
-
-        Err(color_eyre::eyre::eyre!("Device not found in rescan"))
     }
 
     /// Handle successful registration
