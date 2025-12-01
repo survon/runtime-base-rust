@@ -17,7 +17,8 @@ use crate::util::{
         bus::{BusMessage, BusReceiver, MessageBus},
         transport::TransportManager,
         event::{AppEvent, Event, EventHandler},
-        discovery::{DiscoveryManager}
+        discovery::{DiscoveryManager},
+        ble_scheduler::{CommandPriority, QueuedCommand},
     }
 };
 
@@ -63,10 +64,11 @@ pub enum AppMode {
 
     // TODO Decide which way is better overall.. tuple or struct..
     ModuleDetail(ModuleSource, usize),
-    InitialScan {
-        countdown: u8,
-        start_time: std::time::Instant,
-    },
+    // this is no longer used, just keeping commented for reference for the todo...
+    // InitialScan {
+    //     countdown: u8,
+    //     start_time: std::time::Instant,
+    // },
 }
 
 /// Application.
@@ -98,8 +100,6 @@ pub struct App {
     pub overview_focus: OverviewFocus,
     pub transport_manager: Option<TransportManager>,
     pub discovery_manager: Option<Arc<DiscoveryManager>>,
-
-    pub initial_scan_complete: bool,
 }
 
 impl App {
@@ -132,26 +132,33 @@ impl App {
             wasteland_modules_path.clone(),
             database.clone(),
         ));
-        // discovery_manager.trust_device("00:00:00:00:00:00".to_string()).await?; // default arduino mac address for field unit
 
         // Start discovery in background
         let discovery_clone = discovery_manager.clone();
+        let discovery_clone_b = discovery_manager.clone();
         tokio::spawn(async move {
-            // Initialize the BLE adapter
+            // 1. Initialize BLE adapter
             if let Err(e) = discovery_clone.start().await {
                 log_error!("Discovery manager failed to start: {}", e);
                 return;
             }
 
-            // Wait for adapter to stabilize
-            log_info!("BLE adapter initializing...");
+            // 2. Wait for stabilization
+            log_info!("🔌 BLE adapter initializing...");
             tokio::time::sleep(Duration::from_secs(2)).await;
 
-            log_info!("BLE Discovery ready - use 's' key in Wasteland Manager to scan for devices");
+            // 3. Auto-connect to trusted devices
+            log_info!("🔍 Connecting to trusted devices...");
+            match discovery_clone_b.connect_trusted_devices().await {
+                Ok(_) => log_info!("✅ Trusted device auto-connect complete"),
+                Err(e) => log_error!("❌ Auto-connect failed: {}", e),
+            }
 
-            // DON'T do initial scan here - let user trigger it manually
-            // This prevents blocking on startup and allows UI to be responsive
+            log_info!("✅ BLE Discovery ready");
         });
+
+        // Start scheduler maintenance
+        discovery_manager.clone().start_maintenance_task().await;
 
         // Subscribe module manager to events
         wasteland_module_manager.subscribe_to_events(&message_bus).await;
@@ -242,8 +249,87 @@ impl App {
             overview_focus: OverviewFocus::CoreModules,
             transport_manager: Some(transport_manager),
             discovery_manager: Some(discovery_manager),
-            initial_scan_complete: false,
         })
+    }
+
+    /// Queue a command for a BLE device (uses scheduler)
+    pub async fn queue_device_command(
+        &self,
+        device_id: String,
+        action: &str,
+        payload: Option<serde_json::Value>,
+        priority: CommandPriority,
+    ) -> Result<()> {
+        if let Some(discovery) = &self.discovery_manager {
+            let device_id_clone = device_id.clone();
+            discovery.send_command(
+                device_id,
+                action,
+                payload,
+                priority,
+            ).await?;
+
+            log_info!("✅ Command queued: {} -> {}", device_id_clone, action);
+        } else {
+            log_error!("❌ Discovery manager not available");
+        }
+
+        Ok(())
+    }
+
+    /// Get queue status for a device
+    pub async fn get_device_queue_status(&self, device_id: &str) -> Option<crate::util::io::ble_scheduler::QueueStatus> {
+        if let Some(discovery) = &self.discovery_manager {
+            let scheduler = discovery.get_scheduler();
+            scheduler.get_queue_status(device_id).await
+        } else {
+            None
+        }
+    }
+
+    /// Send a ping to a device (normal priority)
+    pub async fn ping_device(&self, device_id: String) -> Result<()> {
+        self.queue_device_command(
+            device_id,
+            "ping",
+            None,
+            CommandPriority::Normal,
+        ).await
+    }
+
+    /// Blink a device LED (high priority)
+    pub async fn blink_device(&self, device_id: String, times: u32) -> Result<()> {
+        let payload = serde_json::json!({
+            "times": times,
+            "duration_ms": 200
+        });
+
+        self.queue_device_command(
+            device_id,
+            "blink",
+            Some(payload),
+            CommandPriority::High,
+        ).await
+    }
+
+    /// Emergency reset (critical priority - bypasses queue)
+    pub async fn emergency_reset_device(&self, device_id: String) -> Result<()> {
+        self.queue_device_command(
+            device_id,
+            "reset",
+            None,
+            CommandPriority::Critical,
+        ).await
+    }
+
+    /// Get status from device (low priority)
+    pub async fn request_device_status(&self, device_id: String) -> Result<()> {
+        self.queue_device_command(
+            device_id,
+            "status",
+            None,
+            CommandPriority::Low,
+        ).await
     }
 
     async fn publish_event(&self, topic: &str, payload: &str) {
@@ -275,7 +361,6 @@ impl App {
     fn handle_tick(&mut self) -> bool {
         // During splash, we need continuous redraws for animation
         let should_animate = matches!(self.mode, AppMode::Splash)
-            || matches!(self.mode, AppMode::InitialScan { .. })
             || (matches!(self.mode, AppMode::Overview) && self.has_active_blinks());
 
         self.needs_redraw = self.needs_redraw || should_animate;
@@ -293,22 +378,15 @@ impl App {
             crossterm::event::Event::Key(key_event) => {
                 if matches!(self.mode, AppMode::Splash) {
 
-
                     // Try to bypass the splash screen
                     if let Some(splash) = &mut self.splash_screen {
                         let dismissed = splash.bypass_theme();
 
                         if dismissed {
                             if splash.is_complete() {
-                                self.mode = AppMode::InitialScan {
-                                    countdown: 15,
-                                    start_time: std::time::Instant::now(),
-                                };
+                                self.mode = AppMode::Overview;
                                 self.splash_screen = None;
                                 self.needs_redraw = true;
-
-                                // Trigger the scan
-                                self.start_initial_scan();
                             }
 
                             return Ok(true);
@@ -471,9 +549,6 @@ impl App {
             AppMode::ModuleDetail(source, module_idx) => {
                 self.render_module_detail(frame, source.clone(), *module_idx)
             },
-            AppMode::InitialScan { countdown, .. } => {
-                self.render_initial_scan(frame, *countdown)
-            }
         }
     }
 
@@ -519,66 +594,6 @@ impl App {
         }
     }
 
-    fn render_initial_scan(&self, frame: &mut Frame, countdown: u8) {
-        use ratatui::widgets::{Block, Borders, Paragraph};
-        use ratatui::layout::{Alignment, Constraint, Direction, Layout};
-        use ratatui::style::{Color, Style, Modifier};
-        use ratatui::text::{Line, Span};
-
-        let area = frame.area();
-
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(35),
-                Constraint::Length(10),
-                Constraint::Percentage(35),
-            ])
-            .split(area);
-
-        // Progress bar calculation
-        let elapsed = 15 - countdown;
-        let progress = (elapsed as f32 / 15.0 * 20.0) as usize;
-        let bar = format!("[{}{}]",
-                          "█".repeat(progress),
-                          "░".repeat(20 - progress)
-        );
-
-        let scan_text = vec![
-            Line::from(""),
-            Line::from(Span::styled(
-                "🔍 Scanning for BLE devices...",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                format!("⏱️  {} seconds remaining", countdown),
-                Style::default().fg(Color::Yellow)
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                bar,
-                Style::default().fg(Color::Blue)
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "Press any key to skip",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM)
-            )),
-        ];
-
-        let scan_widget = Paragraph::new(scan_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Blue))
-                    .title(" Initial Device Discovery ")
-            )
-            .alignment(Alignment::Center);
-
-        frame.render_widget(scan_widget, chunks[1]);
-    }
-
     fn render_template_error(&self, frame: &mut Frame, area: Rect, error: String) {
         use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
         use ratatui::style::{Color, Style};
@@ -615,28 +630,6 @@ impl App {
 
         while self.running {
 
-            if let AppMode::InitialScan { countdown, start_time } = self.mode {
-                let elapsed = start_time.elapsed().as_secs() as u8;
-
-                if elapsed >= 15 {
-                    // Scan complete, transition to overview
-                    log_info!("Initial scan complete, transitioning to overview");
-                    self.mode = AppMode::Overview;
-                    self.initial_scan_complete = true;
-                    needs_redraw = true;
-                } else {
-                    let new_countdown = 15 - elapsed;
-                    if countdown != new_countdown {
-                        // Update countdown and force redraw
-                        self.mode = AppMode::InitialScan {
-                            countdown: new_countdown,
-                            start_time,
-                        };
-                        needs_redraw = true;
-                    }
-                }
-            }
-
             if needs_redraw || self.needs_redraw {
                 terminal.draw(|frame| {
                     self.render_current_mode(frame);
@@ -670,41 +663,12 @@ impl App {
         Ok(())
     }
 
-    fn start_initial_scan(&self) {
-        if let Some(discovery) = &self.discovery_manager {
-            let discovery_clone = discovery.clone();
-            tokio::spawn(async move {
-                log_info!("🔍 Starting initial device scan...");
-                match discovery_clone.scan_once(15).await {
-                    Ok(count) => {
-                        log_info!("✅ Initial scan complete - found {} new device(s)", count);
-                    }
-                    Err(e) => {
-                        log_error!("❌ Initial scan failed: {}", e);
-                    }
-                }
-            });
-        }
-    }
-
     /// Handles the key events and updates the state of [`App`].
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> Result<()> {
         let key_code = key_event.code;
 
         match &self.mode {
             AppMode::Splash => {},
-            AppMode::InitialScan{ countdown, start_time } => {
-                match key_code {
-                    KeyCode::Enter => {
-                        log_info!("User skipped initial scan");
-                        self.mode = AppMode::Overview;
-                        self.initial_scan_complete = true;
-                        self.needs_redraw = true;
-                        return Ok(());
-                    },
-                    _ => {}
-                }
-            },
             AppMode::Overview => {
                 match self.overview_focus {
                     OverviewFocus::WastelandModules => {
@@ -755,19 +719,73 @@ impl App {
                 }
             },
             AppMode::ModuleDetail(source, module_idx) => {
-                let module_manager = match source {
-                    ModuleSource::Core => &mut self.core_module_manager,
-                    ModuleSource::Wasteland => &mut self.wasteland_module_manager,
-                };
-
-                // Let the module's handler handle the key
-                if let Some(event) = module_manager.handle_key_for_module(*module_idx, key_code) {
-                    self.events.send(event);
+                match key_code {
+                    KeyCode::Char('p') => {
+                        // Ping current device - queue directly without spawn
+                        if let Some(device_id) = self.get_current_device_id(source, *module_idx) {
+                            if let Some(discovery) = &self.discovery_manager {
+                                let discovery_clone = discovery.clone();
+                                let device_id_clone = device_id.clone();
+                                tokio::spawn(async move {
+                                    let _ = discovery_clone.send_command(
+                                        device_id_clone,
+                                        "ping",
+                                        None,
+                                        CommandPriority::Normal,
+                                    ).await;
+                                });
+                            }
+                        }
+                    }
+                    KeyCode::Char('b') => {
+                        // Blink current device
+                        if let Some(device_id) = self.get_current_device_id(source, *module_idx) {
+                            if let Some(discovery) = &self.discovery_manager {
+                                let discovery_clone = discovery.clone();
+                                let device_id_clone = device_id.clone();
+                                tokio::spawn(async move {
+                                    let payload = serde_json::json!({"times": 3});
+                                    let _ = discovery_clone.send_command(
+                                        device_id_clone,
+                                        "blink",
+                                        Some(payload),
+                                        CommandPriority::High,
+                                    ).await;
+                                });
+                            }
+                        }
+                    }
+                    _ => {
+                        // Let module handler process other keys
+                        let module_manager = match source {
+                            ModuleSource::Core => &mut self.core_module_manager,
+                            ModuleSource::Wasteland => &mut self.wasteland_module_manager,
+                        };
+                        if let Some(event) = module_manager.handle_key_for_module(*module_idx, key_code) {
+                            self.events.send(event);
+                        }
+                    }
                 }
-            },
+            }
         }
-
         Ok(())
+    }
+
+    /// Helper to get device_id from current module
+    fn get_current_device_id(&self, source: &ModuleSource, module_idx: usize) -> Option<String> {
+        let module_manager = match source {
+            ModuleSource::Core => &self.core_module_manager,
+            ModuleSource::Wasteland => &self.wasteland_module_manager,
+        };
+
+        module_manager.get_modules()
+            .get(module_idx)
+            .and_then(|m| {
+                m.config.bindings
+                    .get("device_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
     }
 
     /// Handles the tick event of the terminal.

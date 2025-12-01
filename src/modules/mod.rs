@@ -225,7 +225,6 @@ impl ModuleManager {
         database: &Database,
         message_bus: &MessageBus
     ) -> Result<()> {
-        // Collect module info that needs handlers FIRST (avoid borrowing conflict)
         let modules_info: Vec<(String, String, String)> = self.modules
             .iter()
             .map(|m| {
@@ -240,11 +239,9 @@ impl ModuleManager {
 
         log_info!("🔧 Initializing module handlers for namespace: {}", self.namespace);
 
-        // Now register handlers based on collected info
         for (module_type, device_id, bus_topic) in modules_info {
             match module_type.as_str() {
                 "llm" => {
-                    // Only register once
                     if !self.handlers.contains_key("llm") {
                         use crate::modules::llm;
 
@@ -264,7 +261,7 @@ impl ModuleManager {
 
                 "wasteland_manager" => {
                     if !self.handlers.contains_key("wasteland_manager") {
-                        log_info!("🗂️  Registering Wasteland Manager handler");
+                        log_info!("🗂️ Registering Wasteland Manager handler");
 
                         self.register_handler(Box::new(
                             wasteland_manager::handler::WastelandManagerHandler::new(
@@ -285,11 +282,13 @@ impl ModuleManager {
 
                         log_info!("🚰 Registering valve_control handler for device: {}", device_id);
 
+                        // NEW: Pass discovery_manager to valve handler
                         let handler = Box::new(
                             valve_control::handler::ValveControlHandler::new(
                                 message_bus.clone(),
                                 device_id.clone(),
                                 bus_topic.clone(),
+                                discovery_manager.clone(),  // ← NEW!
                             )
                         );
                         self.register_handler(handler);
@@ -299,8 +298,6 @@ impl ModuleManager {
                 }
 
                 "monitoring" => {
-                    // Register one handler per monitoring module
-                    // Each handler monitors its own device_id and bus_topic
                     let handler_key = format!("monitoring_{}", device_id);
 
                     if !self.handlers.contains_key(&handler_key) && !device_id.is_empty() {
@@ -322,9 +319,9 @@ impl ModuleManager {
                         self.handlers.insert(handler_key.clone(), handler);
                         log_info!("✅ Monitoring handler registered: {}", handler_key);
                     } else if device_id.is_empty() {
-                        log_warn!("⚠️  Skipping monitoring module with empty device_id");
+                        log_warn!("⚠️ Skipping monitoring module with empty device_id");
                     } else {
-                        log_debug!("ℹ️  Monitoring handler already exists: {}", handler_key);
+                        log_debug!("ℹ️ Monitoring handler already exists: {}", handler_key);
                     }
                 }
 
@@ -338,7 +335,6 @@ impl ModuleManager {
             }
         }
 
-        // Log all registered handlers for debugging
         log_info!("📋 Handler registration complete. Active handlers:");
         for key in self.handlers.keys() {
             log_info!("   ✓ {}", key);

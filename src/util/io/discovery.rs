@@ -21,6 +21,7 @@ use crate::util::{
     io::{
         bus::{MessageBus, BusMessage},
         serial::{SspMessage, SourceInfo, Transport, MessageType},
+        ble_scheduler::{BleCommandScheduler, QueuedCommand, CommandPriority, extract_schedule_metadata},
     }
 };
 use crate::{log_info, log_warn, log_error};
@@ -122,10 +123,15 @@ pub struct DiscoveryManager {
     message_bus: MessageBus,
     modules_path: std::path::PathBuf,
     database: Database,
+    command_scheduler: Arc<BleCommandScheduler>,
 }
 
 impl DiscoveryManager {
     pub fn new(message_bus: MessageBus, modules_path: std::path::PathBuf, database: Database) -> Self {
+        let command_scheduler = Arc::new(
+            BleCommandScheduler::new().with_message_bus(message_bus.clone())
+        );
+
         Self {
             adapter: Arc::new(RwLock::new(None)),
             discovered_devices: Arc::new(RwLock::new(HashMap::new())),
@@ -133,6 +139,7 @@ impl DiscoveryManager {
             message_bus,
             modules_path,
             database,
+            command_scheduler,
         }
     }
 
@@ -275,7 +282,7 @@ impl DiscoveryManager {
             }
 
             // Wait 30 seconds before next automatic scan
-            tokio::time::sleep(Duration::from_secs(40)).await;
+            tokio::time::sleep(Duration::from_secs(120)).await;
         }
     }
 
@@ -299,55 +306,70 @@ impl DiscoveryManager {
         Ok(())
     }
 
+    pub async fn send_command(
+        &self,
+        device_id: String,
+        action: &str,
+        payload: Option<serde_json::Value>,
+        priority: CommandPriority,
+    ) -> Result<()> {
+        log_info!("🎯 Command request: {} -> {}", device_id, action);
+
+        let command = crate::util::io::ble_scheduler::create_control_command(
+            &device_id,
+            action,
+            payload,
+        );
+
+        let queued_cmd = QueuedCommand {
+            device_id: device_id.clone(),
+            command,
+            priority,
+            queued_at: tokio::time::Instant::now(),
+            max_age: Some(Duration::from_secs(300)),  // Commands expire after 5 minutes
+        };
+
+        self.command_scheduler.queue_command(queued_cmd).await?;
+
+        Ok(())
+    }
+
     /// Register a discovered device
     async fn register_device(&self, peripheral: Peripheral, address: String) -> Result<()> {
         log_info!("Connecting to device: {}", address);
 
-        // Step 1: Connect to device
         peripheral.connect().await?;
         log_info!("✓ Connected to {}", address);
 
-        // Step 2: Discover services
         peripheral.discover_services().await?;
         log_info!("✓ Discovered services for {}", address);
 
-        // Step 3: Find the RX characteristic (notifications from device)
         let chars = peripheral.characteristics();
         let rx_char = chars.iter()
             .find(|c| c.uuid == Uuid::parse_str(SURVON_RX_CHAR_UUID).unwrap())
             .ok_or_else(|| color_eyre::eyre::eyre!("RX characteristic not found"))?;
 
-        log_info!("✓ Found RX characteristic");
-
-        // Step 4: Subscribe to notifications
         peripheral.subscribe(rx_char).await?;
         log_info!("✓ Subscribed to notifications from {}", address);
 
-        // Step 5: Find the TX characteristic (write to device)
         let tx_char = chars.iter()
             .find(|c| c.uuid == Uuid::parse_str(SURVON_TX_CHAR_UUID).unwrap())
             .ok_or_else(|| color_eyre::eyre::eyre!("TX characteristic not found"))?;
 
-        log_info!("✓ Found TX characteristic");
-
-        // Step 6: Create a channel to receive the registration response
         let (response_tx, mut response_rx) = tokio::sync::mpsc::channel::<DeviceCapabilities>(1);
 
-        // Step 7: Spawn listener for incoming data
+        // Spawn listener for incoming data
         let bus = self.message_bus.clone();
         let periph = peripheral.clone();
         let addr_clone = address.clone();
         let rx_char_clone = rx_char.clone();
-
-        // Hybrid approach: Event-driven with keepalive
-        // Best of both worlds - no constant polling, but prevents timeout
+        let scheduler = self.command_scheduler.clone();
 
         tokio::spawn(async move {
-            log_info!("📷 BLE listener task started for {}", addr_clone);
+            log_info!("📻 BLE listener task started for {}", addr_clone);
 
             let mut registration_sent = false;
 
-            // Outer loop: handles reconnection if stream dies
             loop {
                 log_info!("📡 Acquiring notification stream for {}...", addr_clone);
 
@@ -357,24 +379,15 @@ impl DiscoveryManager {
 
                         let mut buffer = String::new();
                         let mut last_chunk_time = std::time::Instant::now();
-                        let mut chunk_count = 0;
 
-                        // Event-driven with occasional keepalive check
                         loop {
-                            // Wait up to 15 seconds for data (your Arduino sends every 3s)
-                            // This gives plenty of margin without constant polling
                             match tokio::time::timeout(
-                                Duration::from_secs(15),
+                                Duration::from_secs(5),
                                 stream.next()
                             ).await {
                                 Ok(Some(data)) => {
-                                    // Got data! Process it normally
-                                    chunk_count += 1;
                                     let chunk = String::from_utf8_lossy(&data.value).to_string();
 
-                                    log_info!("📦 Chunk #{}: {} bytes", chunk_count, chunk.len());
-
-                                    // If more than 500ms since last chunk, assume new message
                                     if last_chunk_time.elapsed().as_millis() > 500 {
                                         if !buffer.is_empty() {
                                             log_warn!("⚠️ Timeout - clearing incomplete buffer");
@@ -385,53 +398,49 @@ impl DiscoveryManager {
                                     buffer.push_str(&chunk);
                                     last_chunk_time = std::time::Instant::now();
 
-                                    // Check if complete JSON
                                     if buffer.starts_with('{') && buffer.ends_with('}') {
                                         log_info!("✅ COMPLETE MESSAGE ({} bytes)", buffer.len());
 
-                                        // Try compact format first
-                                        if buffer.contains("\"dt\"") && buffer.contains("\"fw\"") && !registration_sent {
-                                            log_info!("📷 Detected COMPACT registration format");
-
+                                        // Try registration formats first
+                                        if buffer.contains("\"dt\"") && !registration_sent {
                                             match serde_json::from_str::<CompactRegistrationResponse>(&buffer) {
                                                 Ok(compact_reg) => {
-                                                    log_info!("✅ Parsed compact registration");
                                                     let capabilities = compact_reg.to_capabilities();
-
                                                     if response_tx.send(capabilities).await.is_ok() {
-                                                        log_info!("✅ Sent registration response to handler");
                                                         registration_sent = true;
                                                     }
                                                 }
-                                                Err(e) => {
-                                                    log_error!("❌ Failed to parse compact registration: {}", e);
-                                                }
+                                                Err(e) => log_error!("Failed to parse compact registration: {}", e),
                                             }
-                                        }
-                                        // Try verbose format
-                                        else if buffer.contains("\"device_id\"") && !registration_sent {
-                                            log_info!("📋 Detected VERBOSE registration format");
-
+                                        } else if buffer.contains("\"device_id\"") && !registration_sent {
                                             match serde_json::from_str::<DeviceCapabilities>(&buffer) {
                                                 Ok(capabilities) => {
-                                                    log_info!("✅ Parsed verbose registration");
-
                                                     if response_tx.send(capabilities).await.is_ok() {
-                                                        log_info!("✅ Sent registration response to handler");
                                                         registration_sent = true;
                                                     }
                                                 }
-                                                Err(e) => {
-                                                    log_error!("❌ Failed to parse verbose registration: {}", e);
-                                                }
+                                                Err(e) => log_error!("Failed to parse verbose registration: {}", e),
                                             }
                                         }
                                         // Regular telemetry
                                         else {
-                                            log_info!("📊 Attempting SSP telemetry parse...");
                                             match SspMessage::parse_flexible(&buffer) {
                                                 Ok(ssp) => {
                                                     log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
+
+                                                    // NEW: Extract schedule metadata and update scheduler
+                                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&buffer) {
+                                                        if let Some(metadata) = extract_schedule_metadata(&json) {
+                                                            log_info!("📅 Updating schedule for {}", addr_clone);
+                                                            if let Err(e) = scheduler.update_schedule_from_telemetry(
+                                                                addr_clone.clone(),
+                                                                &metadata
+                                                            ).await {
+                                                                log_error!("Failed to update schedule: {}", e);
+                                                            }
+                                                        }
+                                                    }
+
                                                     let bus_msg = ssp.to_bus_message();
                                                     match bus.publish(bus_msg).await {
                                                         Ok(_) => log_info!("✅ Published to bus"),
@@ -440,7 +449,6 @@ impl DiscoveryManager {
                                                 }
                                                 Err(_) => {
                                                     log_warn!("⚠️ Not a recognized message format");
-                                                    log_warn!("Buffer content: {}", buffer);
                                                 }
                                             }
                                         }
@@ -449,71 +457,53 @@ impl DiscoveryManager {
                                     }
                                 }
                                 Ok(None) => {
-                                    // Stream ended naturally
-                                    log_warn!("📡 Notification stream ended for {} (disconnect)", addr_clone);
+                                    log_warn!("📡 Notification stream ended for {}", addr_clone);
                                     break;
                                 }
                                 Err(_) => {
-                                    // Timeout: No data for 15 seconds (should never happen with 3s telemetry!)
-                                    log_warn!("⚠️ No data from {} for 15 seconds - checking connection", addr_clone);
+                                    // 5 second gap - no data
+                                    log_info!("⏰ No data for 5 seconds");
 
-                                    // Check if still connected
                                     if !periph.is_connected().await.unwrap_or(false) {
                                         log_error!("❌ Device {} disconnected", addr_clone);
                                         break;
                                     }
-
-                                    // Still connected but no data - this is suspicious
-                                    // Could mean the Arduino stopped sending or BLE link is flaky
-                                    log_warn!("⚠️ Device {} still connected but silent - continuing to listen", addr_clone);
                                 }
                             }
                         }
-
-                        log_info!("🔄 Stream closed for {}, will attempt reconnection in 5s...", addr_clone);
                     }
                     Err(e) => {
-                        log_error!("❌ Failed to get notification stream for {}: {}", addr_clone, e);
+                        log_error!("❌ Failed to get notification stream: {}", e);
                     }
                 }
 
-                // Wait before attempting reconnection
                 tokio::time::sleep(Duration::from_secs(5)).await;
 
-                // Check if device is disconnected and try to reconnect
+                // Reconnection logic
                 if !periph.is_connected().await.unwrap_or(false) {
-                    log_info!("🔌 Device {} not connected, attempting to reconnect...", addr_clone);
-
+                    log_info!("🔌 Attempting to reconnect...");
                     match periph.connect().await {
                         Ok(_) => {
-                            log_info!("✅ Reconnected to {}", addr_clone);
-
-                            // Re-discover services
+                            log_info!("✅ Reconnected");
                             if let Err(e) = periph.discover_services().await {
                                 log_error!("❌ Failed to rediscover services: {}", e);
                                 continue;
                             }
-
-                            // Re-subscribe to notifications
                             if let Err(e) = periph.subscribe(&rx_char_clone).await {
                                 log_error!("❌ Failed to resubscribe: {}", e);
                                 continue;
                             }
-
-                            log_info!("✅ Resubscribed to notifications for {}", addr_clone);
                         }
                         Err(e) => {
-                            log_error!("❌ Failed to reconnect to {}: {}", addr_clone, e);
+                            log_error!("❌ Failed to reconnect: {}", e);
                         }
                     }
-                } else {
-                    log_info!("🔄 Device {} still connected, reacquiring stream...", addr_clone);
                 }
             }
         });
 
-        // Step 8: Send registration request
-        log_info!("Sending registration request to device...");
+        // Send initial registration request
+        log_info!("Sending registration request...");
 
         let registration_request = serde_json::json!({
             "hub_id": "survon_hub",
@@ -524,29 +514,92 @@ impl DiscoveryManager {
         let request_bytes = registration_request.to_string().into_bytes();
         peripheral.write(tx_char, &request_bytes, WriteType::WithoutResponse).await?;
 
-        log_info!("✓ Sent registration request");
-
-        // Step 9: Wait for registration response (with timeout)
-        log_info!("Waiting for device capabilities response...");
-
+        // Wait for registration response
         match timeout(Duration::from_secs(10), response_rx.recv()).await {
             Ok(Some(capabilities)) => {
                 log_info!("✓ Received device capabilities!");
 
-                // Step 10: Complete registration
+                // Register peripheral with scheduler
+                self.command_scheduler.register_peripheral(
+                    capabilities.device_id.clone(),
+                    peripheral.clone()
+                ).await;
+
                 self.handle_registration(capabilities).await?;
 
                 Ok(())
             }
             Ok(None) => {
-                log_error!("Registration channel closed unexpectedly");
                 Err(color_eyre::eyre::eyre!("Registration channel closed"))
             }
             Err(_) => {
-                log_error!("Timeout waiting for device registration response");
                 Err(color_eyre::eyre::eyre!("Device did not respond to registration request"))
             }
         }
+    }
+
+    /// Connect to all trusted devices from database
+    pub async fn connect_trusted_devices(&self) -> Result<()> {
+        log_info!("🔍 Connecting to trusted devices from database...");
+
+        let trusted = self.database.get_trusted_devices()?;
+
+        if trusted.is_empty() {
+            log_info!("No trusted devices in database");
+            return Ok(());
+        }
+
+        log_info!("Found {} trusted device(s) in database", trusted.len());
+
+        // Do a quick scan to find peripherals
+        log_info!("📡 Scanning for trusted devices...");
+        let found = self.scan_once(10).await?;
+        log_info!("Scan found {} total device(s)", found);
+
+        // Now try to connect to each trusted device
+        let discovered = self.discovered_devices.read().await;
+        let mut connected_count = 0;
+
+        for (mac, name) in trusted {
+            if let Some(device) = discovered.get(&mac) {
+                log_info!("✅ Found trusted device: {} ({})", name, mac);
+
+                let peripheral = device.peripheral.clone();
+                let mac_clone = mac.clone();
+                let self_clone = Arc::new(self.clone());
+
+                // Register in background
+                tokio::spawn(async move {
+                    match self_clone.register_device(peripheral, mac_clone.clone()).await {
+                        Ok(_) => log_info!("✅ Registered trusted device: {}", mac_clone),
+                        Err(e) => log_error!("❌ Failed to register {}: {}", mac_clone, e),
+                    }
+                });
+
+                connected_count += 1;
+            } else {
+                log_warn!("⚠️ Trusted device {} ({}) not found in scan", name, mac);
+            }
+        }
+
+        log_info!("🔌 Initiated connection to {} trusted device(s)", connected_count);
+
+        Ok(())
+    }
+
+    pub fn get_scheduler(&self) -> Arc<BleCommandScheduler> {
+        self.command_scheduler.clone()
+    }
+
+    pub async fn start_maintenance_task(self: Arc<Self>) {
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+
+                // Prune stale schedules
+                self.command_scheduler.prune_stale_schedules().await;
+            }
+        });
     }
 
     async fn get_fresh_peripheral_for_reconnect(
