@@ -1,39 +1,26 @@
-// src/ui/module_templates/monitoring/gauge_card.rs
+// src/ui/module_templates/monitoring/gauge_card.rs - ENHANCED VERSION
+// Add CMD window status indicator to existing gauge
+
 use crate::modules::Module;
 use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
-use ratatui::widgets::{Block, Borders, Gauge, Widget};
-use crate::log_debug;
+use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Widget};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 
 #[derive(Debug)]
 pub struct GaugeCard;
 
-// Compact SSP uses single-letter keys
-// "a" maps to primary sensor value (defined in config.yml)
-const GAUGE_VALUE_KEY: &str = "a";
-
 impl UiTemplate for GaugeCard {
     fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
-        // Get the primary sensor value from module bindings
-        let gauge_value = module
+        // Existing gauge value
+        let value = module
             .config
             .bindings
-            .get(GAUGE_VALUE_KEY)
+            .get("a")  // Primary sensor value
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
 
-        log_debug!("Gauge Value: {}", gauge_value);
-
-        // Get display label from config
-        let unit_of_measure_label = module
-            .config
-            .bindings
-            .get("unit_of_measure_label")
-            .and_then(|v| v.as_str())
-            .unwrap_or("units");
-
-        // Calculate percentage (assuming max 100)
         let max_value = module
             .config
             .bindings
@@ -41,15 +28,53 @@ impl UiTemplate for GaugeCard {
             .and_then(|v| v.as_f64())
             .unwrap_or(100.0);
 
-        let percentage = ((gauge_value / max_value) * 100.0).min(100.0) as u16;
+        let unit_label = module
+            .config
+            .bindings
+            .get("unit_of_measure_label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
-        // Color thresholds (can be configured in config.yml)
+        let display_name = module
+            .config
+            .bindings
+            .get("display_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&module.config.name);
+
+        // Connection status
+        let is_connected = module
+            .config
+            .bindings
+            .get("is_connected")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // NEW: CMD window status
+        let cmd_status = module
+            .config
+            .bindings
+            .get("cmd_window_status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("⚪ Unknown");
+
+        let device_mode = module
+            .config
+            .bindings
+            .get("device_mode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+
+        // Calculate gauge percentage
+        let percentage = ((value / max_value) * 100.0).clamp(0.0, 100.0) as u16;
+
+        // Color based on thresholds
         let warn_threshold = module
             .config
             .bindings
             .get("warn_threshold")
             .and_then(|v| v.as_f64())
-            .unwrap_or(60.0);
+            .unwrap_or(70.0);
 
         let danger_threshold = module
             .config
@@ -58,72 +83,89 @@ impl UiTemplate for GaugeCard {
             .and_then(|v| v.as_f64())
             .unwrap_or(85.0);
 
-        let healthy_color_fg = Color::Green;
-        let healthy_color_bg = Color::LightGreen;
-        let warn_color_fg = Color::Yellow;
-        let warn_color_bg = Color::LightYellow;
-        let danger_color_fg = Color::Red;
-        let danger_color_bg = Color::LightRed;
-        let danger_color_fg_blink = Color::Black;
-
-        let in_danger_zone = gauge_value > danger_threshold;
-        let in_warn_zone = gauge_value > warn_threshold;
-
-        if in_danger_zone && module.config.is_blinkable() {
-            module.render_state.start_blinking();
+        let gauge_color = if !is_connected {
+            Color::Gray
+        } else if value >= danger_threshold {
+            Color::Red
+        } else if value >= warn_threshold {
+            Color::Yellow
         } else {
-            module.render_state.stop_blinking();
-        }
-
-        let gauge_color_fg = if in_danger_zone {
-            if module.render_state.is_actively_blinking {
-                if module.render_state.blink_state {
-                    danger_color_fg_blink
-                } else {
-                    danger_color_fg
-                }
-            } else {
-                danger_color_fg
-            }
-        } else if in_warn_zone {
-            warn_color_fg
-        } else {
-            healthy_color_fg
+            Color::Green
         };
 
-        let gauge_color_bg = if in_danger_zone {
-            danger_color_bg
-        } else if in_warn_zone {
-            warn_color_bg
+        let border_color = if is_selected {
+            Color::White
         } else {
-            healthy_color_bg
+            Color::Cyan
         };
 
-        let border_color = if is_selected { Color::White } else { gauge_color_bg };
+        // NEW: Layout with CMD status
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Title
+                Constraint::Length(3),  // Gauge
+                Constraint::Length(3),  // CMD Status ← NEW
+                Constraint::Min(0),     // Spacer
+            ])
+            .split(area);
 
-        // Create gauge widget
-        let gauge = Gauge::default()
+        // Title with connection indicator
+        let title_text = if is_connected {
+            format!("📊 {} [LIVE]", display_name)
+        } else {
+            format!("📊 {} [OFFLINE]", display_name)
+        };
+
+        let title = Paragraph::new(title_text)
             .block(
                 Block::default()
-                    .title(format!(" {} ", module.config.name))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             )
-            .gauge_style(Style::default().fg(gauge_color_fg))
-            .percent(percentage)
-            .label(format!("{:.1} {}", gauge_value, unit_of_measure_label));
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center);
+        Widget::render(title, chunks[0], buf);
 
-        Widget::render(gauge, area, buf);
+        // Gauge with value display
+        let gauge_label = format!("{:.1} {}", value, unit_label);
+        let gauge = Gauge::default()
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color))
+            )
+            .gauge_style(Style::default().fg(gauge_color))
+            .percent(percentage)
+            .label(gauge_label);
+        Widget::render(gauge, chunks[1], buf);
+
+        // NEW: CMD Window Status Indicator
+        let cmd_color = match device_mode {
+            "cmd" => Color::Green,      // In CMD window
+            "data" => Color::Yellow,    // In DATA mode
+            _ => Color::Gray,           // Unknown
+        };
+
+        let cmd_widget = Paragraph::new(cmd_status)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(cmd_color))
+                    .title(" CMD Window ")
+            )
+            .style(Style::default().fg(cmd_color).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center);
+        Widget::render(cmd_widget, chunks[2], buf);
     }
 
     fn required_bindings(&self) -> &'static [&'static str] {
-        &["a"]  // Only "a" is required, others are optional
+        &["a", "max_value"]  // Minimum required bindings
     }
 
     fn docs(&self) -> &'static str {
-        "Real-time gauge using compact SSP format. Key 'a' = primary sensor value. \
-         Displays green (0-60), yellow (60-85), red (85+). \
-         Configure thresholds via warn_threshold/danger_threshold bindings."
+        "Displays a gauge with value, connection status, and CMD window schedule. \
+         Shows when the device will accept commands based on its scheduled windows."
     }
 }
 

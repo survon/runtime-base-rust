@@ -1,3 +1,4 @@
+// src/ui/screens/overview/messages.rs
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -52,7 +53,11 @@ impl MessagesPanel {
 
     /// Subscribe to ALL bus topics for maximum observability (useful for debugging)
     pub async fn subscribe_all(&mut self, message_bus: &MessageBus) {
-        let topics = get_all_event_message_topics();
+        let mut topics = get_all_event_message_topics();
+
+        // NEW: Add scheduler events
+        topics.push("scheduler_event".to_string());
+
         self.subscribe_topics(message_bus, topics).await;
     }
 
@@ -86,7 +91,7 @@ impl MessagesPanel {
         let was_at_bottom = self.is_at_bottom();
 
         log_debug!("📨 MessagesPanel received: topic={}, source={}, payload={}",
-        message.topic, message.source, message.payload);
+            message.topic, message.source, message.payload);
 
         self.recent_messages.push(message);
 
@@ -116,12 +121,17 @@ impl MessagesPanel {
             let lines: Vec<String> = self.recent_messages[start..end]
                 .iter()
                 .map(|msg| {
-                    format!(
-                        "[{}] {}: {}",
-                        msg.source,
-                        msg.topic,
-                        msg.payload
-                    )
+                    // Special formatting for scheduler events
+                    if msg.topic == "scheduler_event" {
+                        format_scheduler_event(msg)
+                    } else {
+                        format!(
+                            "[{}] {}: {}",
+                            msg.source,
+                            msg.topic,
+                            msg.payload
+                        )
+                    }
                 })
                 .collect();
 
@@ -162,6 +172,64 @@ impl MessagesPanel {
             .wrap(Wrap { trim: true });
 
         messages_widget.render(area, buf);
+    }
+}
+
+/// Format scheduler events with nice icons and structure
+fn format_scheduler_event(msg: &BusMessage) -> String {
+    if let Ok(data) = serde_json::from_str::<serde_json::Value>(&msg.payload) {
+        let event = data.get("event").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let device_id = data.get("device_id").and_then(|v| v.as_str()).unwrap_or("?");
+
+        match event {
+            "command_queued" => {
+                let priority = data.get("priority").and_then(|v| v.as_str()).unwrap_or("?");
+                let action = data.get("action").and_then(|v| v.as_str()).unwrap_or("?");
+                let queue_size = data.get("queue_size").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("📥 [{}] Queued {} {}: {} in queue", device_id, priority, action, queue_size)
+            }
+            "cmd_window_open" => {
+                let duration = data.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("🟢 [{}] CMD WINDOW OPEN ({}s)", device_id, duration)
+            }
+            "cmd_window_imminent" => {
+                let seconds = data.get("seconds").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("🟡 [{}] CMD window in {}s", device_id, seconds)
+            }
+            "cmd_window_scheduled" => {
+                let seconds = data.get("seconds").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("⏰ [{}] CMD window in {}s", device_id, seconds)
+            }
+            "batch_start" => {
+                let count = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("📤 [{}] Sending {} command(s)...", device_id, count)
+            }
+            "command_sent" => {
+                let action = data.get("action").and_then(|v| v.as_str()).unwrap_or("?");
+                format!("✅ [{}] Sent: {}", device_id, action)
+            }
+            "command_sent_critical" => {
+                let action = data.get("action").and_then(|v| v.as_str()).unwrap_or("?");
+                format!("⚡ [{}] CRITICAL sent: {}", device_id, action)
+            }
+            "commands_expired" => {
+                let count = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("⏳ [{}] {} expired", device_id, count)
+            }
+            "batch_complete" => {
+                let count = data.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+                format!("✅ [{}] Batch done: {} sent", device_id, count)
+            }
+            "error" => {
+                let error = data.get("error").and_then(|v| v.as_str()).unwrap_or("?");
+                format!("❌ [{}] {}", device_id, error)
+            }
+            _ => {
+                format!("🔔 [{}] {}", device_id, event)
+            }
+        }
+    } else {
+        format!("[scheduler] {}", msg.payload)
     }
 }
 

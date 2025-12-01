@@ -3,6 +3,7 @@ pub mod event;
 pub mod serial;
 pub mod transport;
 pub mod discovery;
+pub mod ble_scheduler;
 
 pub fn get_all_event_message_topics() -> Vec<String> {
     vec![
