@@ -387,7 +387,7 @@ impl DiscoveryManager {
 
                         loop {
                             match tokio::time::timeout(
-                                Duration::from_secs(5),  // Increased from 3 to 5
+                                Duration::from_secs(5),
                                 stream.next()
                             ).await {
                                 Ok(Some(data)) => {
@@ -408,100 +408,102 @@ impl DiscoveryManager {
 
                                     log_info!("📝 Buffer now {} bytes", buffer.len());
 
-                                    // 🔑 Process ALL complete messages in buffer
-                                    loop {
-                                        match Self::extract_one_json_message(&buffer) {
-                                            Ok((json_message, remaining)) => {
-                                                log_info!("✅ EXTRACTED MESSAGE ({} bytes)", json_message.len());
+                                    // 🔑 Process ALL complete messages (delimited by newlines)
+                                    while let Some(newline_pos) = buffer.find('\n') {
+                                        let message = buffer[..newline_pos].to_string();
+                                        buffer = buffer[newline_pos + 1..].to_string();
 
-                                                // 🔑 AUTO-REGISTRATION: First telemetry message triggers registration
-                                                if !device_registered {
-                                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_message) {
-                                                        // Extract device info from telemetry
-                                                        if let Some(device_id) = json.get("i").and_then(|v| v.as_str()) {
-                                                            log_info!("🆔 Discovered device ID: {}", device_id);
+                                        let message = message.trim();
 
-                                                            // Create minimal capabilities from telemetry
-                                                            let capabilities = DeviceCapabilities {
-                                                                device_id: device_id.to_string(),
-                                                                device_type: "field_unit".to_string(),
-                                                                firmware_version: "unknown".to_string(),
-                                                                sensors: vec![
-                                                                    SensorCapability {
-                                                                        name: "a".to_string(),
-                                                                        unit: "".to_string(),
-                                                                        min_value: None,
-                                                                        max_value: None,
-                                                                    },
-                                                                    SensorCapability {
-                                                                        name: "b".to_string(),
-                                                                        unit: "".to_string(),
-                                                                        min_value: None,
-                                                                        max_value: None,
-                                                                    },
-                                                                    SensorCapability {
-                                                                        name: "c".to_string(),
-                                                                        unit: "".to_string(),
-                                                                        min_value: None,
-                                                                        max_value: None,
-                                                                    },
-                                                                ],
-                                                                actuators: Vec::new(),
-                                                                commands: Vec::new(),
-                                                            };
+                                        if message.is_empty() {
+                                            continue;
+                                        }
 
-                                                            // Register the device
-                                                            if let Err(e) = self_clone.handle_registration(capabilities).await {
-                                                                log_error!("Failed to register device: {}", e);
-                                                            } else {
-                                                                log_info!("✅ Device {} auto-registered from telemetry", device_id);
-                                                                device_registered = true;
-                                                            }
-                                                        }
+                                        // Validate JSON structure
+                                        if !message.starts_with('{') {
+                                            log_warn!("⚠️ Skipping malformed message (doesn't start with '{{' ): {}", message);
+                                            continue;
+                                        }
+
+                                        log_info!("✅ COMPLETE MESSAGE ({} bytes): {}", message.len(), message);
+
+                                        // 🔑 AUTO-REGISTRATION: First telemetry message triggers registration
+                                        if !device_registered {
+                                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&message) {
+                                                if let Some(device_id) = json.get("i").and_then(|v| v.as_str()) {
+                                                    log_info!("🆔 Discovered device ID: {}", device_id);
+
+                                                    let capabilities = DeviceCapabilities {
+                                                        device_id: device_id.to_string(),
+                                                        device_type: "field_unit".to_string(),
+                                                        firmware_version: "unknown".to_string(),
+                                                        sensors: vec![
+                                                            SensorCapability {
+                                                                name: "a".to_string(),
+                                                                unit: "".to_string(),
+                                                                min_value: None,
+                                                                max_value: None,
+                                                            },
+                                                            SensorCapability {
+                                                                name: "b".to_string(),
+                                                                unit: "".to_string(),
+                                                                min_value: None,
+                                                                max_value: None,
+                                                            },
+                                                            SensorCapability {
+                                                                name: "c".to_string(),
+                                                                unit: "".to_string(),
+                                                                min_value: None,
+                                                                max_value: None,
+                                                            },
+                                                        ],
+                                                        actuators: Vec::new(),
+                                                        commands: Vec::new(),
+                                                    };
+
+                                                    if let Err(e) = self_clone.handle_registration(capabilities).await {
+                                                        log_error!("Failed to register device: {}", e);
+                                                    } else {
+                                                        log_info!("✅ Device {} auto-registered from telemetry", device_id);
+                                                        device_registered = true;
                                                     }
                                                 }
-
-                                                // Parse as telemetry
-                                                match SspMessage::parse_flexible(&json_message) {
-                                                    Ok(ssp) => {
-                                                        log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
-
-                                                        // Extract schedule metadata
-                                                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_message) {
-                                                            if let Some(metadata) = extract_schedule_metadata(&json) {
-                                                                if let Err(e) = scheduler.update_schedule_from_telemetry(
-                                                                    addr_clone.clone(),
-                                                                    &metadata
-                                                                ).await {
-                                                                    log_error!("Failed to update schedule: {}", e);
-                                                                }
-                                                            }
-                                                        }
-
-                                                        // Publish to bus
-                                                        let bus_msg = ssp.to_bus_message();
-                                                        match bus.publish(bus_msg).await {
-                                                            Ok(_) => log_info!("✅ Published to bus"),
-                                                            Err(e) => log_error!("❌ Publish failed: {}", e),
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        log_warn!("⚠️ Failed to parse as SSP: {}", e);
-                                                    }
-                                                }
-
-                                                buffer = remaining;
-
-                                                if buffer.is_empty() || !buffer.contains('{') {
-                                                    buffer.clear();
-                                                    break;
-                                                }
-                                            }
-                                            Err(_) => {
-                                                log_info!("⏳ Incomplete message, waiting for more data...");
-                                                break;
                                             }
                                         }
+
+                                        // Parse as telemetry
+                                        match SspMessage::parse_flexible(&message) {
+                                            Ok(ssp) => {
+                                                log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
+
+                                                // Extract schedule metadata
+                                                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&message) {
+                                                    if let Some(metadata) = extract_schedule_metadata(&json) {
+                                                        if let Err(e) = scheduler.update_schedule_from_telemetry(
+                                                            addr_clone.clone(),
+                                                            &metadata
+                                                        ).await {
+                                                            log_error!("Failed to update schedule: {}", e);
+                                                        }
+                                                    }
+                                                }
+
+                                                // Publish to bus
+                                                let bus_msg = ssp.to_bus_message();
+                                                match bus.publish(bus_msg).await {
+                                                    Ok(_) => log_info!("✅ Published to bus"),
+                                                    Err(e) => log_error!("❌ Publish failed: {}", e),
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log_warn!("⚠️ Failed to parse as SSP: {}", e);
+                                            }
+                                        }
+                                    }
+
+                                    // Log remaining buffer state
+                                    if !buffer.is_empty() {
+                                        log_info!("⏳ {} bytes remaining in buffer (incomplete message)", buffer.len());
                                     }
                                 }
                                 Ok(None) => {

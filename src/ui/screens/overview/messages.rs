@@ -107,7 +107,7 @@ impl MessagesPanel {
         }
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, is_focused: bool) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, is_focused: Option<bool>) {
         // Update visible lines based on available area (subtract borders)
         self.visible_lines = (area.height.saturating_sub(2)) as usize;
 
@@ -236,5 +236,5 @@ fn format_scheduler_event(msg: &BusMessage) -> String {
 // Standalone render function for backward compatibility
 pub fn render_recent_messages_panel(area: Rect, buf: &mut Buffer) {
     let mut panel = MessagesPanel::new();
-    panel.render(area, buf, false);
+    panel.render(area, buf, Some(false));
 }

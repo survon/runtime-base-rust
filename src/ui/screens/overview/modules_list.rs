@@ -20,7 +20,7 @@ pub fn render_modules_list(
     area: Rect,
     buf: &mut Buffer,
     use_template: bool,
-    is_focused: bool,
+    is_focused: Option<bool>,
     request_redraw: &mut bool
 ) {
     let selected_idx = module_manager.selected_module;
