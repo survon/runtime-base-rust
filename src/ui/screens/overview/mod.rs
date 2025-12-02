@@ -47,50 +47,81 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         .split(main_layout[1]);
 
     let should_use_template = true;
+    let is_none_focused = matches!(app.overview_focus, OverviewFocus::None);
     let is_wasteland_modules_list_focused = matches!(app.overview_focus, OverviewFocus::WastelandModules);
     let is_core_modules_list_focused = matches!(app.overview_focus, OverviewFocus::CoreModules);
+    let is_messages_focused = matches!(app.overview_focus, OverviewFocus::Messages);
 
     // Render wasteland modules
     let mut needs_redraw = false;
-    modules_list::render_modules_list(
-        &mut app.wasteland_module_manager,
-        content_layout[0],
-        buf,
-        should_use_template,
-        is_wasteland_modules_list_focused,
-        &mut needs_redraw
-    );
+
+    {
+        let is_focused: Option<bool> = if is_wasteland_modules_list_focused {
+            Some(true)
+        } else if is_none_focused{
+            None
+        } else {
+            Some(false)
+        };
+        modules_list::render_modules_list(
+            &mut app.wasteland_module_manager,
+            content_layout[0],
+            buf,
+            should_use_template,
+            is_focused,
+            &mut needs_redraw
+        );
+    }
+
 
     if needs_redraw {
         app.request_redraw();
     }
 
     // Render messages panel
-    let is_messages_focused = matches!(app.overview_focus, OverviewFocus::Messages);
-    app.messages_panel.render(content_layout[1], buf, is_messages_focused);
+    {
+        let is_focused: Option<bool> = if is_messages_focused {
+            Some(true)
+        } else if is_none_focused{
+            None
+        } else {
+            Some(false)
+        };
+        app.messages_panel.render(content_layout[1], buf, is_focused);
+    }
 
     // Render core modules
-    modules_list::render_modules_list(
-        &mut app.core_module_manager,
-        content_layout[2],
-        buf,
-        should_use_template,
-        is_core_modules_list_focused,
-        &mut needs_redraw
-    );
+    {
+        let is_focused: Option<bool> = if is_core_modules_list_focused {
+            Some(true)
+        } else if is_none_focused{
+            None
+        } else {
+            Some(false)
+        };
+        modules_list::render_modules_list(
+            &mut app.core_module_manager,
+            content_layout[2],
+            buf,
+            should_use_template,
+            is_focused,
+            &mut needs_redraw
+        );
+    }
 
     let wasteland_help_text: &str = {
         if app.wasteland_module_manager.get_modules().is_empty() {
             "No wasteland modules found."
         } else {
-            "SHIFT + ←/→: Navigate Wasteland Modules"
+            "←/→: Navigate Wasteland Modules"
         }
     };
 
     let focus_hint = match app.overview_focus {
+        OverviewFocus::None => "Tab: Focus Wasteland Modules".to_string(),
         OverviewFocus::WastelandModules => format!("{} • Tab: Focus Messages", wasteland_help_text),
-        OverviewFocus::Messages => "SHIFT + ↑/↓: Scroll Messages • Tab: Focus Core Modules".to_string(),
-        OverviewFocus::CoreModules => "SHIFT + ↑/↓: Navigate Core Modules • Tab: Focus Wasteland Modules".to_string(),
+        OverviewFocus::Messages => "↑/↓: Scroll Messages • Tab: Focus Core Modules".to_string(),
+        OverviewFocus::CoreModules => "←/➔: Navigate Core Modules • Tab: Remove Overview Focus".to_string(),
     };
 
     let help_text = format!("{} • Enter: Select • 'r': Refresh • 'q': Quit", focus_hint);

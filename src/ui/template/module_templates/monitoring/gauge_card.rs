@@ -99,40 +99,32 @@ impl UiTemplate for GaugeCard {
             Color::Cyan
         };
 
-        // NEW: Layout with CMD status
+        let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+
+        let block = Block::default()
+            .title(format!("{}{}", connected_icon, display_name))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(border_color));
+
+        let inner = block.inner(area);
+        Widget::render(block, area, buf);
+
+        // Split inner area into sections
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Length(3),  // Gauge
-                Constraint::Length(3),  // CMD Status ← NEW
-                Constraint::Min(0),     // Spacer
+                Constraint::Length(1),  // Label
+                Constraint::Length(1),  // Switch visual
+                Constraint::Length(3),  // Status text
             ])
-            .split(area);
-
-        // Title with connection indicator
-        let title_text = if is_connected {
-            format!("📊 {} [LIVE]", display_name)
-        } else {
-            format!("📊 {} [OFFLINE]", display_name)
-        };
-
-        let title = Paragraph::new(title_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-            )
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-            .alignment(Alignment::Center);
-        Widget::render(title, chunks[0], buf);
+            .split(inner);
 
         // Gauge with value display
         let gauge_label = format!("{:.1} {}", value, unit_label);
         let gauge = Gauge::default()
             .block(
                 Block::default()
-                    .borders(Borders::ALL)
+                    .borders(Borders::NONE)
                     .border_style(Style::default().fg(border_color))
             )
             .gauge_style(Style::default().fg(gauge_color))

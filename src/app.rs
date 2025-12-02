@@ -52,9 +52,10 @@ pub enum ModuleSource {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum OverviewFocus {
+    None,
     WastelandModules,
     Messages,
-    CoreModules
+    CoreModules,
 }
 
 #[derive(Debug, PartialEq)]
@@ -507,6 +508,7 @@ impl App {
 
     pub fn toggle_overview_focus(&mut self, step_direction: i32) {
         let screens = [
+            OverviewFocus::None,
             OverviewFocus::WastelandModules,
             OverviewFocus::Messages,
             OverviewFocus::CoreModules,
@@ -671,6 +673,7 @@ impl App {
             AppMode::Splash => {},
             AppMode::Overview => {
                 match self.overview_focus {
+                    OverviewFocus::None => {},
                     OverviewFocus::WastelandModules => {
                         match key_code {
                             KeyCode::Left => {

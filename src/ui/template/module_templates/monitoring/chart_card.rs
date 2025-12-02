@@ -79,15 +79,17 @@ impl ChartCard {
             ])
             .split(area);
 
+        let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+
         // Render using ASCII art since ratatui's Chart needs datasets
         let chart_area = Block::default()
-            .title(format!(" {}{} (Line) ", module.config.name, status_suffix))
+            .title(format!(" {}{}{}", connected_icon, module.config.name, status_suffix))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color))
             .inner(chunks[0]);
 
         Block::default()
-            .title(format!(" {}{} (Line) ", module.config.name, status_suffix))
+            .title(format!(" {}{}", module.config.name, status_suffix))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color))
             .render(chunks[0], buf);
@@ -168,10 +170,12 @@ impl ChartCard {
         let max_value = module.config.bindings.get("max_value")
             .and_then(|v| v.as_f64()).unwrap_or(100.0);
 
+        let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+
         let bar_chart = BarChart::default()
             .block(
                 Block::default()
-                    .title(format!(" {}{} (Bar) ", module.config.name, status_suffix))
+                    .title(format!(" {}{}{}", connected_icon, module.config.name, status_suffix))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             )
@@ -201,9 +205,7 @@ impl ChartCard {
         let unit = module.config.bindings.get("unit_of_measure_label")
             .and_then(|v| v.as_str()).unwrap_or("units");
 
-        let border_color = if !is_connected {
-            Color::Red
-        } else if is_selected {
+        let border_color = if is_selected {
             Color::White
         } else {
             Color::Yellow
@@ -223,10 +225,12 @@ impl ChartCard {
             ])
             .split(area);
 
+        let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+
         let sparkline = Sparkline::default()
             .block(
                 Block::default()
-                    .title(format!(" {}{} (Spark) ", module.config.name, status_suffix))
+                    .title(format!(" {}{}{}", connected_icon, module.config.name, status_suffix))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             )
