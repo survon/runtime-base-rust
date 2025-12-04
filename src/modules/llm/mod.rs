@@ -3,12 +3,15 @@
 //! Core LLM logic is now in util::llm
 
 pub mod handler;
-
+pub mod database;
+pub use database::{ChatMessage, KnowledgeChunk, LlmDatabase};
 pub use handler::{LlmHandler, ChatManager};
 
 use color_eyre::Result;
-use crate::util::database::Database;
-use crate::util::llm::{LlmService, LlmStrategyType};
+use crate::util::{
+    database::Database,
+    llm::{LlmService, LlmStrategyType}
+};
 use crate::modules::ModuleManager;
 
 /// Create LLM service if an LLM module is configured

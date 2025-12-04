@@ -3,10 +3,16 @@
 use std::any::Any;
 use color_eyre::Result;
 use ratatui::crossterm::event::KeyCode;
-use crate::util::io::event::AppEvent;
-use crate::util::llm::LlmService;
-use crate::util::database::ChatMessage;
-use crate::modules::{Module, module_handler::ModuleHandler};
+use crate::util::{
+    io::event::AppEvent,
+    llm::LlmService,
+    database
+};
+use crate::modules::{
+    Module,
+    module_handler::ModuleHandler,
+    llm::database::ChatMessage
+};
 
 /// Manages chat UI state
 #[derive(Debug)]

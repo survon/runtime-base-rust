@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use gag::Gag;
 use tokio::time::Duration;
 
-use crate::util::database::{Database, ChatMessage, KnowledgeChunk};
+use crate::util::database::{Database};
+use crate::modules::llm::database::{LlmDatabase, ChatMessage, KnowledgeChunk};
+
 use crate::{log_error, log_debug};
 
 /// Main LLM service that provides language model functionality

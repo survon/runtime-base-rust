@@ -3,3 +3,4 @@ pub mod com;
 pub mod control;
 pub mod knowledge;
 pub mod system;
+pub mod planning;

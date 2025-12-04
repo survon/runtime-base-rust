@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use ratatui::{layout::Rect, Frame};
 
 use crate::util::{
-    database::{ChatMessage, Database},
+    database::{Database},
     knowledge::KnowledgeIngester,
     io::{
         bus::{BusMessage, BusReceiver, MessageBus},
@@ -23,7 +23,10 @@ use crate::util::{
 };
 
 use crate::modules::{
-    llm::handler::LlmHandler,
+    llm::{
+        handler::LlmHandler,
+        database::ChatMessage
+    },
     Module,
     ModuleManager
 };
@@ -723,7 +726,7 @@ impl App {
             },
             AppMode::ModuleDetail(source, module_idx) => {
                 match key_code {
-                    KeyCode::Char('p') => {
+                    KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => {
                         // Ping current device - queue directly without spawn
                         if let Some(device_id) = self.get_current_device_id(source, *module_idx) {
                             if let Some(discovery) = &self.discovery_manager {
@@ -740,7 +743,7 @@ impl App {
                             }
                         }
                     }
-                    KeyCode::Char('b') => {
+                    KeyCode::Char('b') if key_event.modifiers == KeyModifiers::CONTROL => {
                         // Blink current device
                         if let Some(device_id) = self.get_current_device_id(source, *module_idx) {
                             if let Some(discovery) = &self.discovery_manager {
