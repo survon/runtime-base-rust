@@ -24,6 +24,7 @@ use crate::util::{
         ble_scheduler::{BleCommandScheduler, QueuedCommand, CommandPriority, extract_schedule_metadata},
     }
 };
+use crate::modules::wasteland_manager::database::WastelandDatabase;
 use crate::{log_info, log_warn, log_error};
 
 // Survon BLE Service UUID (custom UUID for field units)

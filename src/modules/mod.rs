@@ -3,6 +3,7 @@ pub mod module_handler;
 pub mod wasteland_manager;
 pub mod valve_control;
 pub mod monitoring;
+pub mod side_quest;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -256,6 +257,22 @@ impl ModuleManager {
                         self.register_handler(llm_handler);
 
                         log_info!("✅ LLM handler registered");
+                    }
+                }
+
+                "side_quest" => {
+                    if !self.handlers.contains_key("side_quest") {
+                        log_info!("🗺️  Registering Side Quest handler");
+
+                        let handler = Box::new(
+                            side_quest::handler::SideQuestHandler::new(
+                                database.clone(),
+                                message_bus.clone()
+                            )
+                        );
+                        self.register_handler(handler);
+
+                        log_info!("✅ Side Quest handler registered");
                     }
                 }
 

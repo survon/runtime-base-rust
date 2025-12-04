@@ -1,0 +1,58 @@
+# modules/core/side_quest/config.yml
+name: "Side Quest"
+module_type: "side_quest"
+bus_topic: "side_quest"
+template: "side_quest_card"
+
+bindings:
+  # View state: "QuestList", "CreateQuest", "QuestDetail"
+  current_view: "QuestList"
+
+  # Currently selected item index
+  selected_index: 0
+
+  # List of active quests (populated by handler)
+  # Format: ["☁️ Try rock climbing - outdoor [by 2025-01-15]", ...]
+  quests: []
+
+  # Total quest count
+  quest_count: 0
+
+  # Create form state
+  create_step: "Title"
+  form_title: ""
+  form_description: ""
+  form_topic: ""
+  form_urgency: "Casual"
+
+  # Available topics for selection
+  available_topics:
+    - "outdoor"
+    - "food"
+    - "learning"
+    - "fitness"
+    - "social"
+    - "creative"
+    - "adventure"
+    - "hobby"
+
+  # Urgency options for selection
+  urgency_options:
+    - "Chill"
+    - "Casual"
+    - "Moderate"
+    - "Pressing"
+    - "Critical"
+
+  # Selected quest details (for detail view)
+  selected_quest_title: ""
+  selected_quest_description: ""
+  selected_quest_topic: ""
+  selected_quest_urgency: ""
+  selected_quest_trigger: ""
+
+  # Optional status message for user feedback
+  status_message: ""
+
+  # Legacy compatibility
+  is_blinkable: false

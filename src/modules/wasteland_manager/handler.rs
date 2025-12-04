@@ -5,14 +5,24 @@ use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use crate::{log_debug,log_error, log_info};
-use crate::modules::{Module, module_handler::ModuleHandler};
+use crate::modules::{
+    Module,
+    module_handler::ModuleHandler,
+    wasteland_manager::database::{
+        KnownDevice,
+        WastelandDatabase
+    },
+};
 use crate::util::{
     io::{
         event::AppEvent,
         discovery::DiscoveryManager,
         bus::MessageBus,
     },
-    wasteland_manager::WastelandManager,
+    wasteland_manager::{
+        WastelandManager,
+        RegistryModule
+    },
     database::Database
 };
 
@@ -20,8 +30,8 @@ use crate::util::{
 enum HandlerMessage {
     DevicesRefreshed(Vec<(String, String, i16)>),
     TrustedDevicesRefreshed(Vec<(String, String)>),
-    KnownDevicesRefreshed(Vec<crate::util::database::KnownDevice>),
-    RegistryRefreshed(Vec<crate::util::wasteland_manager::RegistryModule>),
+    KnownDevicesRefreshed(Vec<KnownDevice>),
+    RegistryRefreshed(Vec<RegistryModule>),
     DeviceTrusted(String), // mac address
     DeviceDiscovered { mac: String, name: String, rssi: i16 },
     ModuleInstalled(String),
@@ -54,8 +64,8 @@ pub struct WastelandManagerHandler {
     message_rx: mpsc::UnboundedReceiver<HandlerMessage>,
     // Cached data
     pending_devices: Vec<(String, String, i16)>, // (mac, name, rssi)
-    known_devices: Vec<crate::util::database::KnownDevice>,
-    registry_modules: Vec<crate::util::wasteland_manager::RegistryModule>,
+    known_devices: Vec<KnownDevice>,
+    registry_modules: Vec<RegistryModule>,
     installed_modules: Vec<String>,
     archived_modules: Vec<String>,
     // Status message
