@@ -27,7 +27,6 @@ pub fn render_modules_list(
     let modules_count = module_manager.get_modules().len();
     let displayable_count = module_manager.get_displayable_modules().len();
 
-    let text_style = dim_unless_focused(is_focused, Style::default().fg(Color::White));
     let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Yellow));
 
     let title_namespace_prefix = match module_manager.namespace.as_str() {
@@ -138,7 +137,7 @@ pub fn render_modules_list(
 fn render_module_box(module: &mut Module, is_selected: bool, area: Rect, buf: &mut Buffer, use_template: bool) {
     // If use_template is true and module has a template, render it directly
     if use_template && ModuleManager::is_displayable_module(module) {
-        if let Err(e) = module.render(is_selected, area, buf) {
+        if let Err(e) = module.render_overview(is_selected, area, buf) {
             // If template fails, fall back to metadata view
             log_error!("Template render failed: {}", e);
             render_metadata_card(module, is_selected, area, buf);

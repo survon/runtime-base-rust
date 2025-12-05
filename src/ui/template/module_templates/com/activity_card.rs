@@ -9,8 +9,23 @@ use crate::ui::template::UiTemplate;
 #[derive(Debug)]
 pub struct ActivityCard;
 
-impl UiTemplate for ActivityCard {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+struct ViewData {
+    status: String,
+    border_color: Color,
+    items: Vec<(String, Style)>,
+    module_name: String,
+}
+
+impl ActivityCard {
+    fn get_view_data(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module
+    ) -> ViewData {
+        let module_name = module.config.name.clone();
+
         // Get the activity log from module bindings
         let activities = module
             .config
@@ -31,11 +46,12 @@ impl UiTemplate for ActivityCard {
             .bindings
             .get("status")
             .and_then(|v| v.as_str())
-            .unwrap_or("active");
+            .unwrap_or("active")
+            .to_string();
 
         // Determine border color based on status
         let border_color = if is_selected { Color::White } else {
-            match status {
+            match status.as_str() {
                 "error" => Color::Red,
                 "warning" => Color::Yellow,
                 "idle" => Color::Gray,
@@ -54,7 +70,7 @@ impl UiTemplate for ActivityCard {
             .collect();
 
         // Create list items with timestamps if available
-        let items: Vec<ListItem> = recent_activities
+        let items: Vec<(String, Style)> = recent_activities
             .iter()
             .map(|activity| {
                 // Color-code different message types
@@ -68,15 +84,61 @@ impl UiTemplate for ActivityCard {
                     Style::default().fg(Color::White)
                 };
 
-                ListItem::new(activity.as_str()).style(style)
+                (activity.clone(), style)
             })
             .collect();
 
-        // Create the list widget
-        let list = List::new(items)
+        ViewData {
+            status,
+            border_color,
+            items,
+            module_name,
+        }
+    }
+}
+
+impl UiTemplate for ActivityCard {
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            status,
+            border_color,
+            items,
+            module_name,
+        } = self.get_view_data(is_selected, area, buf, module);
+
+        let list_items: Vec<ListItem> = items
+            .iter()
+            .map(|(text, style)| ListItem::new(text.as_str()).style(*style))
+            .collect();
+
+        let list = List::new(list_items)
             .block(
                 Block::default()
-                    .title(format!(" {} [{}] ", module.config.name, status.to_uppercase()))
+                    .title(format!(" {} [{}] ", module_name, status.to_uppercase()))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color))
+            );
+
+        Widget::render(list, area, buf);
+    }
+
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            status,
+            border_color,
+            items,
+            module_name,
+        } = self.get_view_data(false, area, buf, module);
+
+        let list_items: Vec<ListItem> = items
+            .iter()
+            .map(|(text, style)| ListItem::new(text.as_str()).style(*style))
+            .collect();
+
+        let list = List::new(list_items)
+            .block(
+                Block::default()
+                    .title(format!(" {} [{}] ", module_name, status.to_uppercase()))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             );

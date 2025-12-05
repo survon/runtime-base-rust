@@ -10,8 +10,36 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 #[derive(Debug)]
 pub struct SideQuestCard;
 
-impl UiTemplate for SideQuestCard {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+struct ViewData<'a> {
+    current_view: &'a str,
+    border_color: Color,
+    selected_index: usize,
+    quests: Vec<String>,
+    quest_count: usize,
+    status_message: Option<&'a str>,
+    has_status: bool,
+    create_step: &'a str,
+    form_title: &'a str,
+    form_description: &'a str,
+    form_topic: &'a str,
+    form_urgency: &'a str,
+    available_topics: Vec<String>,
+    urgency_options: Vec<String>,
+    selected_quest_title: &'a str,
+    selected_quest_description: &'a str,
+    selected_quest_topic: &'a str,
+    selected_quest_urgency: &'a str,
+    selected_quest_trigger: &'a str,
+}
+
+impl SideQuestCard {
+    fn get_view_data<'a> (
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &'a mut Module
+    ) -> ViewData<'a> {
         let current_view = module
             .config
             .bindings
@@ -21,32 +49,6 @@ impl UiTemplate for SideQuestCard {
 
         let border_color = if is_selected { Color::White } else { Color::Magenta };
 
-        match current_view {
-            "QuestList" => self.render_quest_list(area, buf, border_color, module),
-            "CreateQuest" => self.render_create_quest(area, buf, border_color, module),
-            "QuestDetail" => self.render_quest_detail(area, buf, border_color, module),
-            _ => self.render_quest_list(area, buf, border_color, module),
-        }
-    }
-
-    fn required_bindings(&self) -> &'static [&'static str] {
-        &["current_view", "quests", "selected_index"]
-    }
-
-    fn docs(&self) -> &'static str {
-        "Side Quest manager - Track activities and experiences you want to do 'someday'. \
-         Create quests with urgency levels and optional deadlines."
-    }
-}
-
-impl SideQuestCard {
-    fn render_quest_list(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        border_color: Color,
-        module: &Module,
-    ) {
         let selected_index = module
             .config
             .bindings
@@ -77,6 +79,144 @@ impl SideQuestCard {
             .filter(|s| !s.is_empty());
 
         let has_status = status_message.is_some();
+
+        let create_step = module
+            .config
+            .bindings
+            .get("create_step")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Title");
+
+        let form_title = module
+            .config
+            .bindings
+            .get("form_title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let form_description = module
+            .config
+            .bindings
+            .get("form_description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("(none)");
+
+        let form_topic = module
+            .config
+            .bindings
+            .get("form_topic")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let form_urgency = module
+            .config
+            .bindings
+            .get("form_urgency")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let available_topics = module
+            .config
+            .bindings
+            .get("available_topics")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let urgency_options = module
+            .config
+            .bindings
+            .get("urgency_options")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let selected_quest_title = module
+            .config
+            .bindings
+            .get("selected_quest_title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Quest Details");
+
+        let selected_quest_description = module
+            .config
+            .bindings
+            .get("selected_quest_description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("No description");
+
+        let selected_quest_topic = module
+            .config
+            .bindings
+            .get("selected_quest_topic")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let selected_quest_urgency = module
+            .config
+            .bindings
+            .get("selected_quest_urgency")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let selected_quest_trigger = module
+            .config
+            .bindings
+            .get("selected_quest_trigger")
+            .and_then(|v| v.as_str())
+            .unwrap_or("No deadline");
+
+
+        ViewData {
+            current_view,
+            border_color,
+            selected_index,
+            quests,
+            quest_count,
+            status_message,
+            has_status,
+            create_step,
+            form_title,
+            form_description,
+            form_topic,
+            form_urgency,
+            available_topics,
+            urgency_options,
+            selected_quest_title,
+            selected_quest_description,
+            selected_quest_topic,
+            selected_quest_urgency,
+            selected_quest_trigger,
+        }
+    }
+
+    fn render_quest_list(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
+        let ViewData {
+            border_color,
+            selected_index,
+            quests,
+            quest_count,
+            status_message,
+            has_status,
+            ..
+        } = self.get_view_data(is_selected, area, buf, module);
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if has_status {
@@ -182,22 +322,20 @@ impl SideQuestCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        module: &Module,
+        module: &mut Module,
     ) {
-        let create_step = module
-            .config
-            .bindings
-            .get("create_step")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Title");
-
-        let selected_index = module
-            .config
-            .bindings
-            .get("selected_index")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let ViewData {
+            border_color,
+            selected_index,
+            create_step,
+            form_title,
+            form_description,
+            form_topic,
+            form_urgency,
+            available_topics,
+            urgency_options,
+            ..
+        } = self.get_view_data(false, area, buf, module);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -222,13 +360,6 @@ impl SideQuestCard {
         // Form content based on step
         match create_step {
             "Title" => {
-                let form_title = module
-                    .config
-                    .bindings
-                    .get("form_title")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-
                 let content = Paragraph::new(format!("\nQuest Title:\n\n{}_", form_title))
                     .block(
                         Block::default()
@@ -240,13 +371,6 @@ impl SideQuestCard {
                 Widget::render(content, chunks[1], buf);
             }
             "Description" => {
-                let form_description = module
-                    .config
-                    .bindings
-                    .get("form_description")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-
                 let content = Paragraph::new(format!("\nDescription (optional):\n\n{}_", form_description))
                     .block(
                         Block::default()
@@ -259,19 +383,6 @@ impl SideQuestCard {
                 Widget::render(content, chunks[1], buf);
             }
             "Topic" => {
-                let available_topics = module
-                    .config
-                    .bindings
-                    .get("available_topics")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-
                 let list_items: Vec<ListItem> = available_topics
                     .iter()
                     .enumerate()
@@ -300,19 +411,6 @@ impl SideQuestCard {
                 Widget::render(list, chunks[1], buf);
             }
             "Urgency" => {
-                let urgency_options = module
-                    .config
-                    .bindings
-                    .get("urgency_options")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-
                 let list_items: Vec<ListItem> = urgency_options
                     .iter()
                     .enumerate()
@@ -365,34 +463,6 @@ impl SideQuestCard {
                 Widget::render(content, chunks[1], buf);
             }
             "Confirm" => {
-                let title = module
-                    .config
-                    .bindings
-                    .get("form_title")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-
-                let description = module
-                    .config
-                    .bindings
-                    .get("form_description")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("(none)");
-
-                let topic = module
-                    .config
-                    .bindings
-                    .get("form_topic")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-
-                let urgency = module
-                    .config
-                    .bindings
-                    .get("form_urgency")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-
                 let summary = format!(
                     "\nReview your quest:\n\n\
                     Title: {}\n\
@@ -400,7 +470,7 @@ impl SideQuestCard {
                     Topic: {}\n\
                     Urgency: {}\n\n\
                     Create this quest? (y/n)",
-                    title, description, topic, urgency
+                    form_title, form_description, form_topic, form_urgency
                 );
 
                 let content = Paragraph::new(summary)
@@ -441,9 +511,18 @@ impl SideQuestCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        module: &Module,
+        module: &mut Module,
     ) {
+        let ViewData {
+            selected_quest_title,
+            selected_quest_description,
+            selected_quest_topic,
+            selected_quest_urgency,
+            selected_quest_trigger,
+            border_color,
+            ..
+        } = self.get_view_data(false, area, buf, module);
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -453,43 +532,8 @@ impl SideQuestCard {
             ])
             .split(area);
 
-        let title = module
-            .config
-            .bindings
-            .get("selected_quest_title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Quest Details");
-
-        let description = module
-            .config
-            .bindings
-            .get("selected_quest_description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("No description");
-
-        let topic = module
-            .config
-            .bindings
-            .get("selected_quest_topic")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        let urgency = module
-            .config
-            .bindings
-            .get("selected_quest_urgency")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-
-        let trigger = module
-            .config
-            .bindings
-            .get("selected_quest_trigger")
-            .and_then(|v| v.as_str())
-            .unwrap_or("No deadline");
-
         // Title
-        let title_widget = Paragraph::new(format!("📋 {}", title))
+        let title_widget = Paragraph::new(format!("📋 {}", selected_quest_title))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -502,7 +546,10 @@ impl SideQuestCard {
         // Details
         let details = format!(
             "\nTopic: {}\nUrgency: {}\nDeadline: {}\n\nDescription:\n{}",
-            topic, urgency, trigger, description
+            selected_quest_topic,
+            selected_quest_urgency,
+            selected_quest_trigger,
+            selected_quest_description
         );
 
         let details_widget = Paragraph::new(details)
@@ -525,6 +572,33 @@ impl SideQuestCard {
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center);
         Widget::render(help, chunks[2], buf);
+    }
+}
+
+impl UiTemplate for SideQuestCard {
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        self.render_quest_list(is_selected, area, buf, module);
+    }
+
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let is_selected = false;
+        let ViewData { current_view, .. } = self.get_view_data(false, area, buf, module);
+
+        match current_view {
+            "QuestList" => self.render_quest_list(is_selected, area, buf, module),
+            "CreateQuest" => self.render_create_quest(area, buf, module),
+            "QuestDetail" => self.render_quest_detail(area, buf, module),
+            _ => self.render_quest_list(is_selected, area, buf, module),
+        }
+    }
+
+    fn required_bindings(&self) -> &'static [&'static str] {
+        &["current_view", "quests", "selected_index"]
+    }
+
+    fn docs(&self) -> &'static str {
+        "Side Quest manager - Track activities and experiences you want to do 'someday'. \
+         Create quests with urgency levels and optional deadlines."
     }
 }
 

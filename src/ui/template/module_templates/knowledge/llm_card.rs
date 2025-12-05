@@ -11,8 +11,25 @@ use ratatui::text::{Line, Span};
 #[derive(Debug)]
 pub struct LlmCard;
 
-impl UiTemplate for LlmCard {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+struct ViewData<'a> {
+    module_name: &'a str,
+    model_info: &'a str,
+    chat_history: Vec<String>,
+    chat_input: &'a str,
+    scroll_offset: u16,
+    current_link_index: Option<usize>,
+}
+
+impl LlmCard {
+    fn get_view_data<'a>(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &'a mut Module
+    ) -> ViewData<'a> {
+        let module_name = &module.config.name;
+
         // Get LLM state from module bindings
         let model_info = module
             .config
@@ -49,12 +66,75 @@ impl UiTemplate for LlmCard {
             .unwrap_or(0) as u16;
 
         // Get current link index for highlighting
-        let current_link_index = module
+        let current_link_index: Option<usize> = module
             .config
             .bindings
             .get("current_link_index")
             .and_then(|v| v.as_i64())
             .map(|i| i as usize);
+
+        ViewData {
+            module_name,
+            model_info,
+            chat_history,
+            chat_input,
+            scroll_offset,
+            current_link_index,
+        }
+    }
+}
+
+impl UiTemplate for LlmCard {
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            module_name,
+            model_info,
+            ..
+        } = self.get_view_data(is_selected, area, buf, module);
+
+        // Layout: title, chat history, input, help
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Title
+                Constraint::Min(1),     // CTA
+            ])
+            .split(area);
+
+        // Title
+        let title_color = if is_selected { Color::White } else { Color::Green };
+        let title = Paragraph::new(format!("🤖 {} - Interactive Chat", module_name))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(title_color))
+                    .title(format!(" {} ", model_info))
+            )
+            .style(Style::default().fg(Color::Green))
+            .alignment(Alignment::Center);
+        Widget::render(title, chunks[0], buf);
+
+        let cta = Paragraph::new(format!("🤖 {} - Interactive Chat", module_name))
+            .block(
+                Block::default()
+                    .borders(Borders::NONE)
+                    .title("Let's go!")
+            )
+            .style(Style::default().fg(Color::Green))
+            .alignment(Alignment::Center);
+
+        Widget::render(cta, chunks[1], buf);
+    }
+
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            module_name,
+            model_info,
+            chat_history,
+            chat_input,
+            scroll_offset,
+            current_link_index,
+        } = self.get_view_data(false, area, buf, module);
 
         // Layout: title, chat history, input, help
         let chunks = Layout::default()
@@ -68,8 +148,8 @@ impl UiTemplate for LlmCard {
             .split(area);
 
         // Title
-        let title_color = if is_selected { Color::White } else { Color::Green };
-        let title = Paragraph::new(format!("🤖 {} - Interactive Chat", module.config.name))
+        let title_color = Color::White;
+        let title = Paragraph::new(format!("🤖 {} - Interactive Chat", module_name))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -84,7 +164,7 @@ impl UiTemplate for LlmCard {
         self.render_chat_history(&chat_history, scroll_offset, current_link_index, chunks[1], buf);
 
         // Input box
-        let input_color = if is_selected { Color::Yellow } else { Color::DarkGray };
+        let input_color = Color::Yellow;
         let input_text = format!("> {}", chat_input);
         let input_widget = Paragraph::new(input_text)
             .block(
@@ -97,7 +177,7 @@ impl UiTemplate for LlmCard {
         Widget::render(input_widget, chunks[2], buf);
 
         // Help
-        let help_color = if is_selected { Color::Cyan } else { Color::DarkGray };
+        let help_color = Color::Cyan;
         let help = Paragraph::new("Enter: send • ↑↓: scroll • Tab: cycle links • Esc: back")
             .block(
                 Block::default()
