@@ -6,7 +6,7 @@ description: "Interactive LLM chat interface with knowledge search"
 bus_topic: "llm_response"
 template: "llm_card"
 is_blinkable: false
-model: "knowledge"
+model: "search"  # Default to search-only, installer will change to "summarizer" if model downloaded
 bindings:
   model_info: "Knowledge Search (FTS5)"
   chat_history: []
