@@ -1,59 +1,59 @@
 // src/util/llm.rs
-//! LLM Utility - Provides language model processing as a core utility
+//! Hybrid approach: Smart search + tiny LLM for humanizing output
 
 use color_eyre::Result;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
 use llama_cpp::standard_sampler::StandardSampler;
-use std::path::PathBuf;
 use gag::Gag;
 use tokio::time::Duration;
 
-use crate::util::database::{Database};
+use crate::util::database::Database;
 use crate::modules::llm::database::{LlmDatabase, ChatMessage, KnowledgeChunk};
-
 use crate::{log_error, log_debug};
 
-/// Main LLM service that provides language model functionality
+/// LLM service with optional lightweight summarizer
 #[derive(Clone)]
 pub struct LlmService {
     database: Database,
-    strategy: LlmStrategyType,
-}
-
-#[derive(Clone, Debug)]
-pub enum LlmStrategyType {
-    Embedded,
-    Knowledge,
-    Mock,
+    use_summarizer: bool,
+    model_path: Option<PathBuf>,
 }
 
 impl LlmService {
-    /// Create a new LLM service with the specified strategy
-    pub fn new(database: Database, strategy: LlmStrategyType) -> Self {
-        Self { database, strategy }
+    pub fn new(database: Database) -> Self {
+        Self {
+            database,
+            use_summarizer: false,
+            model_path: None,
+        }
     }
 
-    /// Create from model name string
     pub async fn from_model_name(database: Database, model_name: &str) -> Result<Self> {
-        let strategy = match model_name {
-            "embedded" => {
-                // Check if model file exists
-                let model_path = PathBuf::from("bundled/models/phi3-mini.gguf");
-                if model_path.exists() {
-                    LlmStrategyType::Embedded
+        let (use_summarizer, model_path) = match model_name {
+            "search" => (false, None),
+            "summarizer" | "hybrid" => {
+                // Look for a tiny model (Q3_K_S or smaller)
+                let path = PathBuf::from("bundled/models/phi3-mini.gguf");
+                if path.exists() {
+                    (true, Some(path))
                 } else {
-                    log_error!("Embedded model not found, falling back to knowledge search");
-                    LlmStrategyType::Knowledge
+                    log_error!("Summarizer model not found, falling back to search-only");
+                    (false, None)
                 }
             }
-            "knowledge" => LlmStrategyType::Knowledge,
-            _ => LlmStrategyType::Mock,
+            _ => (false, None),
         };
 
-        Ok(Self::new(database, strategy))
+        Ok(Self {
+            database,
+            use_summarizer,
+            model_path,
+        })
     }
 
-    /// Process a user query and return a response
+    /// Process a user query
     pub async fn process_query(
         &self,
         session_id: &str,
@@ -69,22 +69,21 @@ impl LlmService {
         );
         self.database.insert_chat_message(user_message)?;
 
-        // Build context by searching knowledge base
-        let knowledge_context = self.search_knowledge(query, knowledge_module_names)?;
+        // Extract search terms and search
+        let search_terms = self.extract_search_terms(query);
+        log_debug!("Search terms: {:?}", search_terms);
 
-        // Process query based on strategy
-        let response = match self.strategy {
-            LlmStrategyType::Embedded => {
-                // Embedded model can synthesize/summarize the knowledge
-                self.process_with_embedded(query, &knowledge_context).await?
-            }
-            LlmStrategyType::Knowledge => {
-                // Knowledge-only mode: provide detailed extracts
-                self.process_with_knowledge_synthesis(query, &knowledge_context)?
-            }
-            LlmStrategyType::Mock => {
-                self.process_with_mock(query, &knowledge_context)?
-            }
+        let knowledge_context = self.search_knowledge_smart(&search_terms, knowledge_module_names)?;
+
+        // Generate response
+        let response = if knowledge_context.is_empty() {
+            self.generate_no_results_response(query)
+        } else if self.use_summarizer && self.model_path.is_some() {
+            // Use tiny LLM to humanize the search results
+            self.summarize_with_tiny_llm(query, &knowledge_context).await?
+        } else {
+            // Direct search results
+            self.generate_answer_from_chunks(query, &knowledge_context)
         };
 
         // Store assistant response
@@ -93,85 +92,52 @@ impl LlmService {
             response.clone(),
             module_name.to_string(),
         );
-
-        // Use unwrap_or for error handling to continue even if insert fails
         let _ = self.database.insert_chat_message(assistant_message);
 
         Ok(response)
     }
 
-    /// Search knowledge base for relevant information
-    fn search_knowledge(
+    /// Summarize search results using a tiny LLM
+    async fn summarize_with_tiny_llm(
         &self,
         query: &str,
-        knowledge_module_names: &[String],
-    ) -> Result<Vec<KnowledgeChunk>> {
-        // Extract domains from knowledge module names if available
-        let domains: Vec<String> = knowledge_module_names
-            .iter()
-            .filter_map(|name| {
-                // Try to extract domain from module name
-                // e.g., "survival_knowledge" -> "survival"
-                if name.contains("_knowledge") {
-                    Some(name.replace("_knowledge", ""))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Search with more results for better synthesis
-        let results = self.database.search_knowledge(query, &domains, 10)?;
-
-        log_debug!("Knowledge search for '{}' found {} results", query, results.len());
-
-        // Debug: print what we found
-        if !results.is_empty() {
-            log_debug!("Top results:");
-            for (i, chunk) in results.iter().take(3).enumerate() {
-                log_debug!("  {}. {} ({})", i+1, chunk.title, chunk.source_file);
-                log_debug!("     First 100 chars: {}", &chunk.body[..chunk.body.len().min(100)]);
-            }
-        }
-
-        Ok(results)
-    }
-
-    /// Process query using embedded LLM model
-    async fn process_with_embedded(
-        &self,
-        query: &str,
-        knowledge_context: &[KnowledgeChunk],
+        chunks: &[KnowledgeChunk],
     ) -> Result<String> {
-        let model_path = PathBuf::from("bundled/models/phi3-mini.gguf");
+        let model_path = match &self.model_path {
+            Some(p) => p,
+            None => return Ok(self.generate_answer_from_chunks(query, chunks)),
+        };
 
+        // Suppress llama.cpp output
         let print_gag = Gag::stdout()
             .map_err(|e| color_eyre::eyre::eyre!("Gag error: {}", e))?;
 
+        // Load model with minimal settings for fast inference
         let params = LlamaParams::default();
-        let model = LlamaModel::load_from_file(&model_path, params)
+        let model = LlamaModel::load_from_file(model_path, params)
             .map_err(|e| color_eyre::eyre::eyre!("Failed to load model: {}", e))?;
 
-        // Increase context size for better synthesis
+        // Tiny context window - we only need to summarize short excerpts
         let session_params = SessionParams {
-            n_ctx: 2048,  // Increased from 512 for more context
-            n_batch: 64,   // Increased batch size
-            n_threads: 4,
-            n_threads_batch: 2,
+            n_ctx: 1024,      // Small context = faster
+            n_batch: 32,      // Small batch = less memory
+            n_threads: 2,     // Only 2 threads
+            n_threads_batch: 1,
             ..Default::default()
         };
 
         let mut session = model.create_session(session_params)
             .map_err(|e| color_eyre::eyre::eyre!("Failed to create session: {}", e))?;
 
-        // Build prompt with knowledge context
-        let prompt = self.build_embedded_prompt(query, knowledge_context);
+        // Build a MINIMAL prompt
+        let prompt = self.build_summarizer_prompt(query, chunks);
+        log_debug!("Prompt length: {} chars", prompt.len());
 
         session.advance_context(&prompt)
             .map_err(|e| color_eyre::eyre::eyre!("Failed to advance context: {}", e))?;
 
         let sampler = StandardSampler::default();
-        let max_tokens = 512;  // Increased from 256 for longer responses
+        let max_tokens = 200;  // Short summary only!
 
         let mut response = String::new();
         let completion_result = session.start_completing_with(sampler, max_tokens);
@@ -180,18 +146,14 @@ impl LlmService {
             Err(e) => return Err(color_eyre::eyre::eyre!("Failed to start completion: {}", e)),
         };
 
-        let mut token_count = 0;
         let start_time = std::time::Instant::now();
-
         while let Some(token) = completion_handle.next() {
-            if start_time.elapsed() > Duration::from_secs(60) {  // Increased timeout
+            if start_time.elapsed() > Duration::from_secs(15) {  // Quick timeout
                 break;
             }
             response.push_str(&token);
-            token_count += 1;
 
-            // Allow longer responses for synthesis
-            if token_count >= max_tokens {
+            if response.len() > 1000 {  // Cap response length
                 break;
             }
 
@@ -205,580 +167,44 @@ impl LlmService {
 
         let cleaned = self.clean_llm_response(&response);
 
-        // If we got a good response and have knowledge context, append source citations
-        if !knowledge_context.is_empty() && cleaned.len() > 50 {
-            let mut with_sources = cleaned;
-            with_sources.push_str("\n\n---\n📚 **Sources**: ");
+        // Add source citations
+        let mut final_response = cleaned;
+        final_response.push_str("\n\n---\n📚 **Sources**: ");
 
-            // Collect unique sources with page info
-            let mut sources = Vec::new();
-            let mut seen_sources = std::collections::HashSet::new();
-
-            for chunk in knowledge_context {
-                let filename = std::path::Path::new(&chunk.source_file)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or(&chunk.source_file);
-
-                // Parse metadata for page number
-                let page_info = if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&chunk.metadata) {
-                    if let Some(page_num) = metadata.get("page_number").and_then(|v| v.as_u64()) {
-                        format!("{}#page={}", chunk.source_file, page_num)
-                    } else {
-                        chunk.source_file.clone()
-                    }
-                } else {
-                    chunk.source_file.clone()
-                };
-
-                if !seen_sources.contains(filename) {
-                    sources.push(page_info);
-                    seen_sources.insert(filename.to_string());
-                }
-            }
-
-            // Format sources as clickable links
-            for (i, path) in sources.iter().enumerate() {
-                if i > 0 {
-                    with_sources.push_str(", ");
-                }
-                with_sources.push_str(&format!("(from {})", path));
-            }
-
-            with_sources.push_str("\n\n💡 *Press Tab to cycle through source links, Enter to open. Ask follow-up questions anytime!*");
-
-            Ok(with_sources)
-        } else {
-            Ok(cleaned)
-        }
-    }
-
-    /// Process query using knowledge search only - with better synthesis
-    fn process_with_knowledge_synthesis(
-        &self,
-        query: &str,
-        knowledge_context: &[KnowledgeChunk],
-    ) -> Result<String> {
-        if knowledge_context.is_empty() {
-            return Ok(self.generate_no_knowledge_response(query));
-        }
-
-        // Synthesize knowledge into a natural conversational response
-        let synthesis = self.synthesize_knowledge_into_answer(query, knowledge_context);
-
-        // Add source citations at the end
-        let mut response = synthesis;
-        response.push_str("\n\n---\n");
-        response.push_str("📚 **Sources**: ");
-
-        // Collect unique sources with page info
-        let mut sources = Vec::new();
-        let mut seen_sources = std::collections::HashSet::new();
-
-        for chunk in knowledge_context {
-            let filename = std::path::Path::new(&chunk.source_file)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(&chunk.source_file);
-
-            // Parse metadata for page number
-            let page_info = if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&chunk.metadata) {
-                if let Some(page_num) = metadata.get("page_number").and_then(|v| v.as_u64()) {
-                    format!("{}#page={}", chunk.source_file, page_num)
-                } else {
-                    chunk.source_file.clone()
-                }
-            } else {
-                chunk.source_file.clone()
-            };
-
-            if !seen_sources.contains(filename) {
-                sources.push((filename.to_string(), page_info));
-                seen_sources.insert(filename.to_string());
-            }
-        }
-
-        // Format sources as links
-        for (i, (_name, path)) in sources.iter().enumerate() {
+        let sources = self.extract_unique_sources(chunks);
+        for (i, source) in sources.iter().enumerate() {
             if i > 0 {
-                response.push_str(", ");
+                final_response.push_str(", ");
             }
-            response.push_str(&format!("(from {})", path));
+            final_response.push_str(&format!("(from {})", source));
         }
 
-        response.push_str("\n\n💡 *Press Tab to cycle through source links, Enter to open. Ask follow-up questions to learn more!*");
+        final_response.push_str("\n\n💡 *Press Tab to cycle source links, Enter to open.*");
 
-        Ok(response)
+        Ok(final_response)
     }
 
-    /// Synthesize knowledge chunks into a natural, conversational answer
-    fn synthesize_knowledge_into_answer(&self, query: &str, chunks: &[KnowledgeChunk]) -> String {
-        // Combine all relevant content with better filtering
-        let mut all_content = String::new();
-        let query_keywords = self.extract_keywords(query);
-
-        log_debug!("Query keywords: {:?}", query_keywords);
-
-        // Score and filter chunks by relevance to query
-        let mut scored_chunks: Vec<(f32, &KnowledgeChunk)> = chunks.iter()
-            .map(|chunk| {
-                let score = self.score_chunk_relevance(chunk, &query_keywords);
-                (score, chunk)
-            })
-            .collect();
-
-        // Sort by relevance score
-        scored_chunks.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-
-        log_debug!("Chunk relevance scores:");
-        for (score, chunk) in scored_chunks.iter().take(5) {
-            log_debug!("  {:.2}: {} - {}", score, chunk.title, &chunk.body[..chunk.body.len().min(80)]);
-        }
-
-        // Take top 5 most relevant chunks
-        for (_, chunk) in scored_chunks.iter().take(5) {
-            all_content.push_str(&chunk.body);
-            all_content.push_str("\n\n");
-        }
-
-        if all_content.trim().is_empty() {
-            return self.generate_no_knowledge_response(query);
-        }
-
-        // Identify key topics from the query
-        let query_lower = query.to_lowercase();
-        let is_how_to = query_lower.contains("how") || query_lower.contains("build")
-            || query_lower.contains("make") || query_lower.contains("create");
-        let is_what = query_lower.contains("what") || query_lower.contains("explain");
-        let is_why = query_lower.contains("why");
-
-        // Extract key information based on query type
-        let response = if is_how_to {
-            self.generate_how_to_response(&all_content, query)
-        } else if is_what {
-            self.generate_what_response(&all_content, query)
-        } else if is_why {
-            self.generate_why_response(&all_content, query)
-        } else {
-            self.generate_general_response(&all_content, query)
-        };
-
-        response
-    }
-
-    /// Extract keywords from query for relevance scoring
-    fn extract_keywords(&self, query: &str) -> Vec<String> {
-        query.to_lowercase()
-            .split_whitespace()
-            .filter(|word| {
-                // Filter out common question words
-                !matches!(*word, "how" | "do" | "i" | "a" | "the" | "is" | "to" | "can" | "you" | "what" | "when" | "where" | "why")
-            })
-            .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
-            .filter(|s| s.len() > 2)
-            .collect()
-    }
-
-    /// Score a chunk's relevance to query keywords
-    fn score_chunk_relevance(&self, chunk: &KnowledgeChunk, keywords: &[String]) -> f32 {
-        let content_lower = format!("{} {}", chunk.title, chunk.body).to_lowercase();
-        let mut score = 0.0;
-
-        for keyword in keywords {
-            let keyword_count = content_lower.matches(keyword.as_str()).count() as f32;
-
-            // Title matches worth more
-            if chunk.title.to_lowercase().contains(keyword) {
-                score += 5.0;
-            }
-
-            // Body matches
-            score += keyword_count;
-
-            // Bonus for keyword in first 200 chars (likely more relevant)
-            if content_lower[..content_lower.len().min(200)].contains(keyword) {
-                score += 2.0;
-            }
-        }
-
-        // Penalize very short chunks (likely not useful)
-        if chunk.body.len() < 100 {
-            score *= 0.5;
-        }
-
-        score
-    }
-
-    fn generate_how_to_response(&self, content: &str, query: &str) -> String {
-        let mut response = String::new();
-
-        // Try to identify the main topic
-        let topic = self.extract_topic(query);
-
-        // Opening statement
-        response.push_str(&format!("Here's how to {}:\n\n", topic.to_lowercase()));
-
-        // Look for numbered steps, bullet points, or sequential information
-        let steps = self.extract_steps_from_content(content);
-
-        if !steps.is_empty() {
-            log_debug!("Found {} steps", steps.len());
-            for (i, step) in steps.iter().enumerate() {
-                response.push_str(&format!("**{}. {}**\n\n", i + 1, step));
-            }
-        } else {
-            log_debug!("No clear steps found, using paragraph format");
-            // If no clear steps, provide informative paragraphs
-            let paragraphs = self.extract_relevant_paragraphs(content, 4);
-
-            if paragraphs.is_empty() {
-                // Fallback: split content into chunks
-                let words: Vec<&str> = content.split_whitespace().collect();
-                let chunk_size = 50;
-                for (i, chunk) in words.chunks(chunk_size).take(4).enumerate() {
-                    let para = chunk.join(" ");
-                    if para.len() > 50 {
-                        response.push_str(&format!("**Step {}**: {}\n\n", i + 1, para));
-                    }
-                }
-            } else {
-                for (i, para) in paragraphs.iter().enumerate() {
-                    response.push_str(&format!("**{}**: {}\n\n", i + 1, para));
-                }
-            }
-        }
-
-        // Add a practical tip if available
-        if let Some(tip) = self.extract_tip_from_content(content) {
-            response.push_str(&format!("💡 **Tip**: {}\n", tip));
-        }
-
-        response
-    }
-
-    fn generate_what_response(&self, content: &str, query: &str) -> String {
-        let mut response = String::new();
-        let topic = self.extract_topic(query);
-
-        // Definition/explanation style
-        response.push_str(&format!("**About {}:**\n\n", topic));
-
-        // Extract relevant explanatory content
-        let paragraphs = self.extract_relevant_paragraphs(content, 4);
-        for para in paragraphs {
-            response.push_str(&para);
-            response.push_str("\n\n");
-        }
-
-        response
-    }
-
-    fn generate_why_response(&self, content: &str, query: &str) -> String {
-        let mut response = String::new();
-        let topic = self.extract_topic(query);
-
-        response.push_str(&format!("**Why {}:**\n\n", topic.to_lowercase()));
-
-        // Look for explanatory content
-        let paragraphs = self.extract_relevant_paragraphs(content, 3);
-        for para in paragraphs {
-            response.push_str(&para);
-            response.push_str("\n\n");
-        }
-
-        response
-    }
-
-    fn generate_general_response(&self, content: &str, query: &str) -> String {
-        let mut response = String::new();
-        let topic = self.extract_topic(query);
-
-        response.push_str(&format!("**Regarding {}:**\n\n", topic));
-
-        let paragraphs = self.extract_relevant_paragraphs(content, 4);
-        for para in paragraphs {
-            response.push_str(&para);
-            response.push_str("\n\n");
-        }
-
-        response
-    }
-
-    fn extract_topic(&self, query: &str) -> String {
-        // Remove common question words to get the core topic
-        let topic = query
-            .to_lowercase()
-            .replace("how do i ", "")
-            .replace("how to ", "")
-            .replace("what is ", "")
-            .replace("what are ", "")
-            .replace("why do ", "")
-            .replace("why does ", "")
-            .replace("tell me about ", "")
-            .replace("explain ", "")
-            .replace("?", "")
-            .trim()
-            .to_string();
-
-        // Capitalize first letter
-        let mut chars = topic.chars();
-        match chars.next() {
-            None => String::new(),
-            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        }
-    }
-
-    fn extract_steps_from_content(&self, content: &str) -> Vec<String> {
-        let mut steps = Vec::new();
-        let lines: Vec<&str> = content.lines().collect();
-        let mut current_step = String::new();
-        let mut in_step_section = false;
-
-        for (i, line) in lines.iter().enumerate() {
-            let trimmed = line.trim();
-
-            // Skip empty lines
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            // Detect if we're entering a procedural section
-            if trimmed.to_uppercase().contains("STEP")
-                || trimmed.to_uppercase().contains("METHOD")
-                || (trimmed.to_uppercase() == trimmed && trimmed.len() < 50 && trimmed.contains("BUILD"))
-            {
-                in_step_section = true;
-                continue;
-            }
-
-            // Detect step indicators
-            let is_step_start =
-                // Numbered: "1.", "2)", etc
-                (trimmed.chars().next().map(|c| c.is_numeric()).unwrap_or(false)
-                    && trimmed.chars().nth(1).map(|c| c == '.' || c == ')').unwrap_or(false))
-                    // Keywords
-                    || trimmed.starts_with("First")
-                    || trimmed.starts_with("Second")
-                    || trimmed.starts_with("Third")
-                    || trimmed.starts_with("Next")
-                    || trimmed.starts_with("Then")
-                    || trimmed.starts_with("Finally")
-                    // Bullets
-                    || trimmed.starts_with("•")
-                    || trimmed.starts_with("-")
-                    || trimmed.starts_with("*");
-
-            if is_step_start || in_step_section {
-                // Save previous step
-                if !current_step.is_empty() && current_step.len() > 20 {
-                    steps.push(self.clean_step_text(&current_step));
-                    current_step = String::new();
-                }
-
-                // Start new step
-                if is_step_start {
-                    current_step = trimmed.to_string();
-                    in_step_section = true;
-                } else if in_step_section {
-                    current_step.push(' ');
-                    current_step.push_str(trimmed);
-                }
-            } else if in_step_section && !current_step.is_empty() {
-                // Continue current step
-                current_step.push(' ');
-                current_step.push_str(trimmed);
-            }
-
-            // Limit step length
-            if current_step.len() > 400 {
-                steps.push(self.clean_step_text(&current_step));
-                current_step = String::new();
-            }
-
-            // Stop if we've collected enough or hit a new section
-            if steps.len() >= 8 || (trimmed.to_uppercase() == trimmed && trimmed.len() > 10 && trimmed.len() < 50) {
-                if !current_step.is_empty() {
-                    steps.push(self.clean_step_text(&current_step));
-                }
-                break;
-            }
-        }
-
-        // Save last step
-        if !current_step.is_empty() && current_step.len() > 20 {
-            steps.push(self.clean_step_text(&current_step));
-        }
-
-        // Filter and return
-        steps.into_iter()
-            .filter(|s| s.len() > 30 && s.split_whitespace().count() > 5)
-            .take(7)
-            .collect()
-    }
-
-    fn clean_step_text(&self, text: &str) -> String {
-        text.trim()
-            .trim_start_matches(|c: char| c.is_numeric() || c == '.' || c == ')' || c == '•' || c == '-')
-            .trim()
-            .to_string()
-    }
-
-    fn extract_relevant_paragraphs(&self, content: &str, max_paragraphs: usize) -> Vec<String> {
-        let paragraphs: Vec<String> = content
-            .split("\n\n")
-            .map(|p| p.trim().to_string())
-            .filter(|p| {
-                // More strict filtering
-                let len = p.len();
-                let has_substance = p.split_whitespace().count() > 10;
-                let not_header = !p.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c.is_ascii_punctuation());
-
-                len > 100 && len < 1000 && has_substance && not_header
-            })
-            .take(max_paragraphs)
-            .collect();
-
-        // If we didn't find good paragraphs, try splitting by sentences
-        if paragraphs.is_empty() {
-            content
-                .split('.')
-                .map(|s| s.trim().to_string())
-                .filter(|s| s.len() > 50 && s.len() < 500)
-                .take(max_paragraphs)
-                .map(|s| format!("{}.", s))
-                .collect()
-        } else {
-            paragraphs
-        }
-    }
-
-    fn extract_tip_from_content(&self, content: &str) -> Option<String> {
-        let lines: Vec<&str> = content.lines().collect();
-
-        for line in lines {
-            let lower = line.to_lowercase();
-            if lower.contains("tip:")
-                || lower.contains("note:")
-                || lower.contains("important:")
-                || lower.contains("remember")
-            {
-                return Some(line.trim().to_string());
-            }
-        }
-
-        None
-    }
-
-    fn generate_no_knowledge_response(&self, query: &str) -> String {
-        let topic = self.extract_topic(query);
-        let query_lower = query.to_lowercase();
-
-        // Try to identify the domain
-        let suggested_domain = if query_lower.contains("fire") || query_lower.contains("shelter")
-            || query_lower.contains("water") || query_lower.contains("food") {
-            "survival"
-        } else if query_lower.contains("plant") || query_lower.contains("garden")
-            || query_lower.contains("crop") {
-            "agriculture"
-        } else if query_lower.contains("build") || query_lower.contains("construct") {
-            "construction"
-        } else if query_lower.contains("cook") || query_lower.contains("recipe") {
-            "cooking"
-        } else {
-            "general homesteading"
-        };
-
-        format!(
-            "I don't have enough information in my knowledge base to answer your question about {}.\n\n\
-            **What I need:**\n\
-            I could better answer this question if you added more knowledge documents about {}. \
-            Try adding PDF guides, manuals, or books covering this topic to your knowledge modules.\n\n\
-            **To add knowledge:**\n\
-            1. Place PDF/text files in `modules/wasteland/knowledge_*/knowledge/`\n\
-            2. Restart the app to re-ingest the knowledge base\n\
-            3. Ask your question again!\n\n\
-            I learn from survival manuals, homesteading guides, technical documentation, and reference books. \
-            The more comprehensive the sources, the better I can help!",
-            topic.to_lowercase(),
-            suggested_domain
-        )
-    }
-
-    /// Process query using mock responses
-    fn process_with_mock(
-        &self,
-        query: &str,
-        knowledge_context: &[KnowledgeChunk],
-    ) -> Result<String> {
-        let query_lower = query.to_lowercase();
-
-        // If we have knowledge context, use the synthesis method
-        if !knowledge_context.is_empty() {
-            return self.process_with_knowledge_synthesis(query, knowledge_context);
-        }
-
-        // Pattern-based responses for when no knowledge is found
-        let response = if query_lower.contains("help") || query_lower.contains("what can you do") {
-            "I'm Survon's assistant! I can help with:\n\
-            • Searching your knowledge modules\n\
-            • Answering questions about homesteading and survival\n\
-            • System information and monitoring\n\n\
-            Try asking specific questions, and I'll search the knowledge base for answers!"
-        } else if query_lower.contains("survival") {
-            "For survival information, I can search through your survival knowledge modules. \
-            Try asking about specific topics like 'shelter building' or 'water purification'."
-        } else if query_lower.contains("gate") {
-            "Gate systems respond to 'open_gate' and 'close_gate' commands via the message bus. \
-            Check power supply and sensor alignment for troubleshooting."
-        } else {
-            &format!(
-                "I understand you're asking about '{}'. I'll search the knowledge base for relevant information. \
-                If no results are found, try rephrasing your question or ask about specific topics.",
-                query
-            )
-        };
-
-        Ok(response.to_string())
-    }
-
-    /// Build prompt for embedded LLM with knowledge context
-    fn build_embedded_prompt(&self, query: &str, knowledge_context: &[KnowledgeChunk]) -> String {
+    /// Build minimal prompt for summarization
+    fn build_summarizer_prompt(&self, query: &str, chunks: &[KnowledgeChunk]) -> String {
         let mut prompt = String::new();
 
-        prompt.push_str("<|system|>\n");
-        prompt.push_str("You are Survon, a knowledgeable and helpful homestead assistant. ");
-        prompt.push_str("Your role is to answer questions conversationally, like a friend sharing expertise.\n\n");
+        prompt.push_str("<|system|>\nYou are a helpful assistant that answers questions concisely based on provided excerpts.\n");
+        prompt.push_str("Rules:\n");
+        prompt.push_str("- Answer in 2-4 sentences maximum\n");
+        prompt.push_str("- Use natural, conversational language\n");
+        prompt.push_str("- Only use information from the excerpts\n");
+        prompt.push_str("- If excerpts don't fully answer the question, say so\n\n");
 
-        if !knowledge_context.is_empty() {
-            prompt.push_str("INSTRUCTIONS:\n");
-            prompt.push_str("- Read the provided knowledge excerpts carefully\n");
-            prompt.push_str("- Synthesize the information into a natural, conversational answer\n");
-            prompt.push_str("- Write as if you're explaining to a friend, not listing facts\n");
-            prompt.push_str("- If it's a 'how-to' question, provide clear steps\n");
-            prompt.push_str("- If it's a 'what is' question, explain clearly\n");
-            prompt.push_str("- Be practical and actionable\n");
-            prompt.push_str("- Don't mention the sources in your answer (they'll be cited separately)\n\n");
-
-            prompt.push_str("KNOWLEDGE BASE:\n");
-            prompt.push_str("---\n");
-
-            for (i, chunk) in knowledge_context.iter().enumerate().take(5) {
-                // Include substantial context per chunk
-                let content = if chunk.body.len() > 600 {
-                    &chunk.body[..600]
-                } else {
-                    &chunk.body
-                };
-
-                prompt.push_str(&format!("[Excerpt {}]:\n{}\n\n", i + 1, content));
-            }
-
-            prompt.push_str("---\n\n");
-        } else {
-            prompt.push_str("INSTRUCTIONS:\n");
-            prompt.push_str("- Answer based on general homesteading and survival knowledge\n");
-            prompt.push_str("- Be conversational and practical\n");
-            prompt.push_str("- If you don't have enough information, say so honestly\n\n");
+        // Add ONLY the most relevant snippets (keep it tiny)
+        prompt.push_str("EXCERPTS:\n");
+        for (i, chunk) in chunks.iter().take(3).enumerate() {
+            // Take only first 300 chars of each chunk
+            let snippet = if chunk.body.len() > 300 {
+                &chunk.body[..300]
+            } else {
+                &chunk.body
+            };
+            prompt.push_str(&format!("[{}] {}\n\n", i+1, snippet));
         }
 
         prompt.push_str("<|user|>\n");
@@ -788,45 +214,263 @@ impl LlmService {
         prompt
     }
 
-    /// Clean up LLM response
+    /// Clean LLM response
     fn clean_llm_response(&self, response: &str) -> String {
-        let cleaned = response
+        response
             .replace("<|end|>", "")
             .replace("<|assistant|>", "")
             .replace("<|user|>", "")
             .replace("<|system|>", "")
             .trim()
-            .to_string();
+            .to_string()
+    }
 
-        // Split into lines and clean each
-        let lines: Vec<String> = cleaned
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| line.trim().to_string())
-            .take(30)  // Allow more lines for synthesis
+    /// Extract search terms from query
+    fn extract_search_terms(&self, query: &str) -> Vec<String> {
+        let stopwords = [
+            "how", "do", "i", "a", "the", "is", "to", "can", "you", "what", "when",
+            "where", "why", "does", "will", "would", "could", "should", "make",
+            "build", "create", "get", "find", "tell", "me", "about", "my", "your",
+            "explain", "show", "help", "with", "from"
+        ];
+
+        query.to_lowercase()
+            .split_whitespace()
+            .filter(|word| {
+                let clean = word.trim_matches(|c: char| !c.is_alphanumeric());
+                clean.len() > 2 && !stopwords.contains(&clean)
+            })
+            .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+            .collect()
+    }
+
+    /// Smart multi-strategy search
+    fn search_knowledge_smart(
+        &self,
+        search_terms: &[String],
+        knowledge_module_names: &[String],
+    ) -> Result<Vec<KnowledgeChunk>> {
+        if search_terms.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let domains: Vec<String> = knowledge_module_names
+            .iter()
+            .filter_map(|name| {
+                if name.contains("_knowledge") {
+                    Some(name.replace("_knowledge", ""))
+                } else {
+                    None
+                }
+            })
             .collect();
 
-        let result = lines.join("\n");
+        // Strategy 1: Phrase search
+        let phrase_query = search_terms.join(" ");
+        let mut results = self.database.search_knowledge(&phrase_query, &domains, 15)?;
+        log_debug!("Phrase search: {} results", results.len());
 
-        if result.is_empty() || result.len() < 20 {
-            "I understand your question, but I'm having trouble generating a response. \
-            Could you try rephrasing?".to_string()
-        } else {
-            result
+        // Strategy 2: OR search if needed
+        if results.len() < 5 && search_terms.len() > 1 {
+            let or_query = search_terms.join(" OR ");
+            let or_results = self.database.search_knowledge(&or_query, &domains, 20)?;
+            log_debug!("OR search: {} results", or_results.len());
+
+            for chunk in or_results {
+                if !results.iter().any(|r| r.id == chunk.id) {
+                    results.push(chunk);
+                }
+            }
+        }
+
+        // Strategy 3: Individual terms
+        if results.len() < 5 {
+            for term in search_terms.iter().take(2) {
+                let term_results = self.database.search_knowledge(term, &domains, 10)?;
+                for chunk in term_results {
+                    if !results.iter().any(|r| r.id == chunk.id) {
+                        results.push(chunk);
+                    }
+                }
+            }
+        }
+
+        // Score and rank
+        let scored_results = self.score_and_rank_chunks(&results, search_terms);
+        Ok(scored_results.into_iter().take(6).collect())
+    }
+
+    /// Score and rank chunks by relevance
+    fn score_and_rank_chunks(
+        &self,
+        chunks: &[KnowledgeChunk],
+        search_terms: &[String],
+    ) -> Vec<KnowledgeChunk> {
+        let mut scored: Vec<(f32, KnowledgeChunk)> = chunks
+            .iter()
+            .map(|chunk| {
+                let score = self.calculate_relevance_score(chunk, search_terms);
+                (score, chunk.clone())
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.into_iter().map(|(_, chunk)| chunk).collect()
+    }
+
+    /// Calculate relevance score
+    fn calculate_relevance_score(&self, chunk: &KnowledgeChunk, search_terms: &[String]) -> f32 {
+        let title_lower = chunk.title.to_lowercase();
+        let body_lower = chunk.body.to_lowercase();
+        let mut score = 0.0;
+
+        for term in search_terms {
+            let term_lower = term.to_lowercase();
+            score += title_lower.matches(&term_lower).count() as f32 * 10.0;
+            score += body_lower.matches(&term_lower).count() as f32;
+
+            let intro = body_lower[..body_lower.len().min(200)].to_string();
+            score += intro.matches(&term_lower).count() as f32 * 3.0;
+        }
+
+        if chunk.body.len() < 100 {
+            score *= 0.3;
+        }
+
+        score
+    }
+
+    /// Generate answer from chunks (fallback for non-summarizer mode)
+    fn generate_answer_from_chunks(
+        &self,
+        query: &str,
+        chunks: &[KnowledgeChunk],
+    ) -> String {
+        let topic = self.extract_topic(query);
+        let mut response = format!("**Regarding {}:**\n\n", topic);
+
+        let snippets = self.extract_relevant_snippets(chunks, 4);
+        for snippet in snippets {
+            response.push_str(&snippet);
+            response.push_str("\n\n");
+        }
+
+        // Add sources
+        response.push_str("\n---\n📚 **Sources**: ");
+        let sources = self.extract_unique_sources(chunks);
+        for (i, source) in sources.iter().enumerate() {
+            if i > 0 {
+                response.push_str(", ");
+            }
+            response.push_str(&format!("(from {})", source));
+        }
+
+        response.push_str("\n\n💡 *Press Tab to cycle source links, Enter to open.*");
+        response
+    }
+
+    /// Extract relevant snippets
+    fn extract_relevant_snippets(&self, chunks: &[KnowledgeChunk], max: usize) -> Vec<String> {
+        let mut snippets = Vec::new();
+
+        for chunk in chunks.iter().take(max * 2) {
+            let sentences: Vec<&str> = chunk.body
+                .split('.')
+                .map(|s| s.trim())
+                .filter(|s| s.len() > 30 && s.len() < 300)
+                .collect();
+
+            for sentence in sentences.iter().take(2) {
+                if !sentence.is_empty() {
+                    snippets.push(format!("{}.", sentence));
+                }
+            }
+
+            if snippets.len() >= max {
+                break;
+            }
+        }
+
+        snippets.into_iter().take(max).collect()
+    }
+
+    /// Extract unique sources
+    fn extract_unique_sources(&self, chunks: &[KnowledgeChunk]) -> Vec<String> {
+        let mut sources = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for chunk in chunks {
+            let source_path = if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&chunk.metadata) {
+                if let Some(page_num) = metadata.get("page_number").and_then(|v| v.as_u64()) {
+                    format!("{}#page={}", chunk.source_file, page_num)
+                } else {
+                    chunk.source_file.clone()
+                }
+            } else {
+                chunk.source_file.clone()
+            };
+
+            let filename = std::path::Path::new(&chunk.source_file)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&chunk.source_file);
+
+            if !seen.contains(filename) {
+                sources.push(source_path);
+                seen.insert(filename.to_string());
+            }
+
+            if sources.len() >= 5 {
+                break;
+            }
+        }
+
+        sources
+    }
+
+    /// Extract topic from query
+    fn extract_topic(&self, query: &str) -> String {
+        let topic = query
+            .to_lowercase()
+            .replace("how do i ", "")
+            .replace("how to ", "")
+            .replace("what is ", "")
+            .replace("why ", "")
+            .replace("?", "")
+            .trim()
+            .to_string();
+
+        let mut chars = topic.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
         }
     }
 
-    /// Get chat history for a session
+    /// Generate no results response
+    fn generate_no_results_response(&self, query: &str) -> String {
+        let topic = self.extract_topic(query);
+
+        format!(
+            "**No information found about '{}'**\n\n\
+            I couldn't find relevant information in the knowledge base.\n\n\
+            **Try:**\n\
+            • Rephrasing with different keywords\n\
+            • Adding PDFs/guides to `modules/wasteland/knowledge_*/knowledge/`\n\
+            • Restarting to re-ingest knowledge base",
+            topic.to_lowercase()
+        )
+    }
+
     pub fn get_chat_history(&self, session_id: &str, limit: usize) -> Result<Vec<ChatMessage>> {
         Ok(self.database.get_chat_history(session_id, limit)?)
     }
 
-    /// Get model info string
     pub fn get_model_info(&self) -> String {
-        match self.strategy {
-            LlmStrategyType::Embedded => "Phi-3 Mini (Embedded)".to_string(),
-            LlmStrategyType::Knowledge => "Knowledge Search (FTS5)".to_string(),
-            LlmStrategyType::Mock => "Mock LLM (Pattern-based)".to_string(),
+        if self.use_summarizer {
+            "Smart Search + Lightweight Summarizer".to_string()
+        } else {
+            "Smart Search (FTS5)".to_string()
         }
     }
 }
@@ -834,8 +478,7 @@ impl LlmService {
 impl std::fmt::Debug for LlmService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlmService")
-            .field("strategy", &self.strategy)
-            .field("database", &"<Database>")
+            .field("mode", &if self.use_summarizer { "hybrid" } else { "search" })
             .finish()
     }
 }
