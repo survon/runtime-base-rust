@@ -1,7 +1,7 @@
 name: "API Gateway"
 module_type: "monitoring"
 bus_topic: "api_status"
-template: "status_badge"
+template: "status_badge_card"
 bindings:
   status: "online"
   message: "All systems nominal"

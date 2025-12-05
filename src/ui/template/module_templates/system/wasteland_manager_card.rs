@@ -9,8 +9,33 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 #[derive(Debug)]
 pub struct WastelandManagerCard;
 
-impl UiTemplate for WastelandManagerCard {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+struct ViewData<'a> {
+    current_view: &'a str,
+    selected_index: usize,
+    status_message: Option<&'a str>,
+    border_color: Color,
+    module_list: Vec<String>,
+    installed_modules: Vec<String>,
+    known_devices: Vec<String>,
+    pending_devices: Vec<String>,
+    pending_count: usize,
+    known_count: usize,
+    registry_count: usize,
+    installed_count: usize,
+    archived_count: usize,
+    is_scanning: bool,
+    scan_countdown: u8,
+    has_status: bool,
+}
+
+impl WastelandManagerCard {
+    fn get_view_data<'a>(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &'a mut Module
+    ) -> ViewData<'a> {
         let current_view = module
             .config
             .bindings
@@ -32,62 +57,6 @@ impl UiTemplate for WastelandManagerCard {
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty());
 
-        let border_color = if is_selected { Color::White } else { Color::Cyan };
-
-        match current_view {
-            "Main" => {
-                self.render_main_menu(area, buf, border_color, selected_index, status_message, module)
-            }
-            "PendingTrust" => {
-                self.render_pending_trust(area, buf, border_color, selected_index, status_message, module)
-            }
-            "AllDevices" => {
-                self.render_all_devices(area, buf, border_color, selected_index, status_message, module)
-            }
-            "InstallRegistry" => {
-                self.render_install_registry(area, buf, border_color, selected_index, status_message, module)
-            }
-            "ManageModules" => {
-                self.render_manage_modules(area, buf, border_color, selected_index, status_message, module)
-            }
-            "ArchivedModules" => {
-                self.render_archived_modules(area, buf, border_color, selected_index, status_message, module)
-            }
-            _ => {
-                self.render_main_menu(area, buf, border_color, selected_index, status_message, module)
-            }
-        }
-    }
-
-    fn required_bindings(&self) -> &'static [&'static str] {
-        &["current_view", "selected_index"]
-    }
-
-    fn docs(&self) -> &'static str {
-        "Wasteland Manager interface for managing modules, trusting BLE devices, and installing from registry. \
-         Integrates device trust management with pending and known devices."
-    }
-}
-
-impl WastelandManagerCard {
-    fn render_main_menu(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        border_color: Color,
-        selected_index: usize,
-        status_message: Option<&str>,
-        module: &Module,
-    ) {
-        // Get counts for menu items
-        let pending_count = module
-            .config
-            .bindings
-            .get("pending_devices")
-            .and_then(|v| v.as_array())
-            .map(|arr| arr.len())
-            .unwrap_or(0);
-
         let known_count = module
             .config
             .bindings
@@ -103,6 +72,19 @@ impl WastelandManagerCard {
             .and_then(|v| v.as_array())
             .map(|arr| arr.len())
             .unwrap_or(0);
+
+        let known_devices = module
+            .config
+            .bindings
+            .get("known_devices")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
         let installed_count = module
             .config
@@ -134,6 +116,98 @@ impl WastelandManagerCard {
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u8;
 
+        let _pending_devices_arr = module
+            .config
+            .bindings
+            .get("pending_devices")
+            .and_then(|v| v.as_array());
+
+        let pending_count = _pending_devices_arr
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+
+        let pending_devices = _pending_devices_arr
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let module_list = module
+            .config
+            .bindings
+            .get("module_list")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let installed_modules = module
+            .config
+            .bindings
+            .get("installed_modules")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let has_status = status_message.is_some();
+
+        let border_color = if is_selected { Color::White } else { Color::Cyan };
+
+        ViewData {
+            current_view,
+            selected_index,
+            status_message,
+            border_color,
+            module_list,
+            installed_modules,
+            known_devices,
+            pending_devices,
+            pending_count,
+            known_count,
+            registry_count,
+            installed_count,
+            archived_count,
+            is_scanning,
+            scan_countdown,
+            has_status,
+        }
+    }
+
+    fn render_main_menu(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
+        let ViewData {
+            border_color,
+            selected_index,
+            status_message,
+            pending_count,
+            known_count,
+            registry_count,
+            installed_count,
+            archived_count,
+            is_scanning,
+            scan_countdown,
+            has_status,
+            ..
+        } = self.get_view_data(is_selected, area, buf, module);
+
+
         let menu_items = vec![
             format!("⚠️  Trust Pending Devices ({})", pending_count),
             format!("📡 Manage All Devices ({})", known_count),
@@ -143,7 +217,6 @@ impl WastelandManagerCard {
             "← Back".to_string(),
         ];
 
-        let has_status = status_message.is_some();
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if has_status {
@@ -256,37 +329,18 @@ impl WastelandManagerCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        selected_index: usize,
-        status_message: Option<&str>,
-        module: &Module,
+        module: &mut Module,
     ) {
-        let pending_devices = module
-            .config
-            .bindings
-            .get("pending_devices")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let ViewData {
+            border_color,
+            selected_index,
+            status_message,
+            is_scanning,
+            pending_devices,
+            scan_countdown,
+            ..
+        } = self.get_view_data(false, area, buf, module);
 
-        let is_scanning = module
-            .config
-            .bindings
-            .get("is_scanning")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        let scan_countdown = module
-            .config
-            .bindings
-            .get("scan_countdown")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u8;
 
         let has_status = status_message.is_some() || is_scanning;
         let chunks = Layout::default()
@@ -406,39 +460,19 @@ impl WastelandManagerCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        selected_index: usize,
-        status_message: Option<&str>,
-        module: &Module,
+        module: &mut Module,
     ) {
-        let known_devices = module
-            .config
-            .bindings
-            .get("known_devices")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let ViewData {
+            border_color,
+            selected_index,
+            status_message,
+            has_status,
+            is_scanning,
+            scan_countdown,
+            known_devices,
+            ..
+        } = self.get_view_data(false, area, buf, module);
 
-        let is_scanning = module
-            .config
-            .bindings
-            .get("is_scanning")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
-        let scan_countdown = module
-            .config
-            .bindings
-            .get("scan_countdown")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u8;
-
-        let has_status = status_message.is_some() || is_scanning;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if has_status {
@@ -564,23 +598,14 @@ impl WastelandManagerCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        selected_index: usize,
-        status_message: Option<&str>,
-        module: &Module,
+        module: &mut Module,
     ) {
-        let module_list = module
-            .config
-            .bindings
-            .get("module_list")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let ViewData {
+            border_color,
+            selected_index,
+            module_list,
+            ..
+        } = self.get_view_data(false, area, buf, module);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -646,23 +671,14 @@ impl WastelandManagerCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        selected_index: usize,
-        status_message: Option<&str>,
-        module: &Module,
+        module: &mut Module,
     ) {
-        let installed_modules = module
-            .config
-            .bindings
-            .get("installed_modules")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+        let ViewData {
+            border_color,
+            selected_index,
+            installed_modules,
+            ..
+        } = self.get_view_data(false, area, buf, module);
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -728,11 +744,14 @@ impl WastelandManagerCard {
         &self,
         area: Rect,
         buf: &mut Buffer,
-        border_color: Color,
-        selected_index: usize,
-        status_message: Option<&str>,
-        module: &Module,
+        module: &mut Module,
     ) {
+        let ViewData {
+            border_color,
+            selected_index,
+            ..
+        } = self.get_view_data(false, area, buf, module);
+
         let archived_modules = module
             .config
             .bindings
@@ -816,6 +835,50 @@ impl WastelandManagerCard {
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center);
         Widget::render(help, chunks[2], buf);
+    }
+}
+
+impl UiTemplate for WastelandManagerCard {
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        self.render_main_menu(is_selected, area, buf, module)
+    }
+
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let is_selected = false;
+        let ViewData { current_view, .. } = self.get_view_data(false, area, buf, module);
+
+        match current_view {
+            "Main" => {
+                self.render_main_menu(is_selected, area, buf, module)
+            }
+            "PendingTrust" => {
+                self.render_pending_trust(area, buf, module)
+            }
+            "AllDevices" => {
+                self.render_all_devices(area, buf, module)
+            }
+            "InstallRegistry" => {
+                self.render_install_registry(area, buf, module)
+            }
+            "ManageModules" => {
+                self.render_manage_modules(area, buf, module)
+            }
+            "ArchivedModules" => {
+                self.render_archived_modules(area, buf, module)
+            }
+            _ => {
+                self.render_main_menu(is_selected, area, buf, module)
+            }
+        }
+    }
+
+    fn required_bindings(&self) -> &'static [&'static str] {
+        &["current_view", "selected_index"]
+    }
+
+    fn docs(&self) -> &'static str {
+        "Wasteland Manager interface for managing modules, trusting BLE devices, and installing from registry. \
+         Integrates device trust management with pending and known devices."
     }
 }
 

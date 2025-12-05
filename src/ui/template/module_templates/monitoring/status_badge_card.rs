@@ -10,8 +10,28 @@ use ratatui::text::{Line, Span};
 #[derive(Debug)]
 pub struct StatusBadge;
 
-impl UiTemplate for StatusBadge {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+struct ViewData<'a> {
+    status: &'a str,
+    module_name: &'a str,
+    message: &'a str,
+    timestamp: &'a str,
+    count: Option<String>,
+    icon: &'a str,
+    color: Color,
+    status_display: &'a str,
+    border_color: Color,
+}
+
+impl StatusBadge {
+    fn get_view_data<'a>(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &'a mut Module
+    ) -> ViewData<'a> {
+        let module_name = &module.config.name;
+
         // Get the status from module bindings
         let status = module
             .config
@@ -74,9 +94,113 @@ impl UiTemplate for StatusBadge {
 
         let border_color = if is_selected { Color::White } else { color };
 
+        ViewData {
+            status,
+            message,
+            module_name,
+            timestamp,
+            count,
+            icon,
+            color,
+            status_display,
+            border_color,
+        }
+    }
+}
+
+impl UiTemplate for StatusBadge {
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            status,
+            module_name,
+            message,
+            timestamp,
+            count,
+            icon,
+            color,
+            status_display,
+            border_color,
+        } = self.get_view_data(is_selected, area, buf, module);
+
         // Create main container
         let block = Block::default()
-            .title(format!(" {} ", module.config.name))
+            .title(format!(" {} ", module_name))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(border_color));
+
+        let inner = block.inner(area);
+        Widget::render(block, area, buf);
+
+        // Split inner area into sections
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),  // Icon and status
+                Constraint::Length(2),  // Count/value if present
+                Constraint::Min(2),     // Message
+                Constraint::Length(1),  // Timestamp
+            ])
+            .split(inner);
+
+        // Render icon and status
+        let status_line = Line::from(vec![
+            Span::styled(
+                format!("{} ", icon),
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            ),
+            Span::styled(
+                status_display,
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            ),
+        ]);
+        let status_widget = Paragraph::new(status_line)
+            .alignment(Alignment::Center);
+        Widget::render(status_widget, chunks[0], buf);
+
+        // Render count/value if present
+        if let Some(count_str) = count {
+            let count_widget = Paragraph::new(count_str)
+                .style(Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD))
+                .alignment(Alignment::Center);
+            Widget::render(count_widget, chunks[1], buf);
+        }
+
+        // Render message if provided
+        if !message.is_empty() {
+            let message_widget = Paragraph::new(message)
+                .style(Style::default().fg(Color::White))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            Widget::render(message_widget, chunks[2], buf);
+        }
+
+        // Render timestamp if provided
+        if !timestamp.is_empty() {
+            let timestamp_widget = Paragraph::new(timestamp)
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            Widget::render(timestamp_widget, chunks[3], buf);
+        }
+    }
+
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            status,
+            module_name,
+            message,
+            timestamp,
+            count,
+            icon,
+            color,
+            status_display,
+            border_color,
+        } = self.get_view_data(false, area, buf, module);
+
+        // Create main container
+        let block = Block::default()
+            .title(format!(" {} ", module_name))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color));
 

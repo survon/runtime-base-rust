@@ -11,8 +11,30 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 #[derive(Debug)]
 pub struct GaugeCard;
 
-impl UiTemplate for GaugeCard {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+struct ViewData<'a> {
+    value: f64,
+    max_value: f64,
+    unit_label: &'a str,
+    display_name: &'a str,
+    is_connected: bool,
+    cmd_status: &'a str,
+    device_mode: &'a str,
+    percentage: u16,
+    warn_threshold: f64,
+    danger_threshold: f64,
+    gauge_color: Color,
+    border_color: Color,
+    connected_icon: &'a str,
+}
+
+impl GaugeCard {
+    fn get_view_data<'a>(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &'a mut Module
+    ) -> ViewData<'a> {
         // Existing gauge value
         let value = module
             .config
@@ -100,6 +122,103 @@ impl UiTemplate for GaugeCard {
         };
 
         let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+
+        ViewData {
+            value,
+            max_value,
+            unit_label,
+            display_name,
+            is_connected,
+            cmd_status,
+            device_mode,
+            percentage,
+            warn_threshold,
+            danger_threshold,
+            gauge_color,
+            border_color,
+            connected_icon,
+        }
+    }
+}
+
+impl UiTemplate for GaugeCard {
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            value,
+            unit_label,
+            display_name,
+            cmd_status,
+            device_mode,
+            percentage,
+            gauge_color,
+            border_color,
+            connected_icon,
+            ..
+        } = self.get_view_data(is_selected, area, buf, module);
+
+        let block = Block::default()
+            .title(format!("{}{}", connected_icon, display_name))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(border_color));
+
+        let inner = block.inner(area);
+        Widget::render(block, area, buf);
+
+        // Split inner area into sections
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),  // Label
+                Constraint::Length(1),  // Switch visual
+                Constraint::Length(3),  // Status text
+            ])
+            .split(inner);
+
+        // Gauge with value display
+        let gauge_label = format!("{:.1} {}", value, unit_label);
+        let gauge = Gauge::default()
+            .block(
+                Block::default()
+                    .borders(Borders::NONE)
+                    .border_style(Style::default().fg(border_color))
+            )
+            .gauge_style(Style::default().fg(gauge_color))
+            .percent(percentage)
+            .label(gauge_label);
+        Widget::render(gauge, chunks[1], buf);
+
+        // NEW: CMD Window Status Indicator
+        let cmd_color = match device_mode {
+            "cmd" => Color::Green,      // In CMD window
+            "data" => Color::Yellow,    // In DATA mode
+            _ => Color::Gray,           // Unknown
+        };
+
+        let cmd_widget = Paragraph::new(cmd_status)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(cmd_color))
+                    .title(" CMD Window ")
+            )
+            .style(Style::default().fg(cmd_color).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center);
+        Widget::render(cmd_widget, chunks[2], buf);
+    }
+
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let ViewData {
+            value,
+            unit_label,
+            display_name,
+            cmd_status,
+            device_mode,
+            percentage,
+            gauge_color,
+            border_color,
+            connected_icon,
+            ..
+        } = self.get_view_data(false, area, buf, module);
 
         let block = Block::default()
             .title(format!("{}{}", connected_icon, display_name))

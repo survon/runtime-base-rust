@@ -592,8 +592,7 @@ impl App {
         module_manager.update_module_bindings(module_idx);
 
         if let Some(module) = module_manager.get_modules_mut().get_mut(module_idx) {
-            let is_selected = false;
-            if let Err(e) = module.render(is_selected, content_area, buf) {
+            if let Err(e) = module.render_detail(content_area, buf) {
                 self.render_template_error(frame, content_area, e);
             }
         }

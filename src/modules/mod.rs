@@ -146,7 +146,7 @@ impl Module {
         Ok(self.cached_template.as_ref().unwrap())
     }
 
-    pub fn render(&mut self, is_selected: bool, area: Rect, buf: &mut Buffer) -> std::result::Result<(), String> {
+    pub fn render_overview(&mut self, is_selected: bool, area: Rect, buf: &mut Buffer) -> std::result::Result<(), String> {
         self.get_template()?;
 
         if self.config.is_blinkable() {
@@ -168,10 +168,21 @@ impl Module {
         let mut template = self.cached_template.take()
             .ok_or_else(|| "Template not loaded".to_string())?;
 
-        // Now we can call render with &mut self since cached_template is None
-        template.render(is_selected, area, buf, self);
+        template.render_overview(is_selected, area, buf, self);
 
-        // Put the template back
+        self.cached_template = Some(template);
+
+        Ok(())
+    }
+
+    pub fn render_detail(&mut self, area: Rect, buf: &mut Buffer) -> std::result::Result<(), String> {
+        self.get_template()?;
+
+        let mut template = self.cached_template.take()
+            .ok_or_else(|| "Template not loaded".to_string())?;
+
+        template.render_detail(area, buf, self);
+
         self.cached_template = Some(template);
 
         Ok(())

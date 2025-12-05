@@ -9,7 +9,8 @@ pub mod module_templates;
 
 /// Every UI widget implements this
 pub trait UiTemplate: Any + Send + Sync + Debug {
-    fn render(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module);
+    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module);
+    fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module);
     fn required_bindings(&self) -> &'static [&'static str];
     fn docs(&self) -> &'static str;
 }
@@ -25,7 +26,7 @@ lazy_static::lazy_static! {
         // Monitoring templates
         map.insert("gauge_card", gauge_card_factory as TemplateFactory);
         map.insert("history_chart", history_chart_factory as TemplateFactory);
-        map.insert("status_badge", status_badge_factory as TemplateFactory);
+        map.insert("status_badge_card", status_badge_factory as TemplateFactory);
         map.insert("chart_card", chart_card_factory as TemplateFactory);
 
         // Control templates
