@@ -3,6 +3,7 @@
 use std::any::Any;
 use color_eyre::Result;
 use ratatui::crossterm::event::KeyCode;
+use crate::log_warn;
 use crate::util::{
     io::event::AppEvent,
     llm::LlmService,
@@ -184,7 +185,7 @@ impl LlmHandler {
         let service = match &self.llm_service {
             Some(s) => s,
             None => {
-                println!("No LLM service available");
+                log_warn!("No LLM service available");
                 return Ok(());
             }
         };

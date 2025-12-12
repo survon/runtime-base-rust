@@ -3,7 +3,7 @@
 
 use rusqlite::{params, Result};
 use serde::{Deserialize, Serialize};
-
+use crate::log_debug;
 use crate::util::database::Database;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,9 +207,9 @@ impl LlmDatabase for Database {
             return Ok(Vec::new());
         }
 
-        println!("Searching knowledge with query: '{}' (sanitized from '{}')", clean_query, query);
+        log_debug!("Searching knowledge with query: '{}' (sanitized from '{}')", clean_query, query);
         if !domains.is_empty() {
-            println!("Filtering by domains: {:?}", domains);
+            log_debug!("Filtering by domains: {:?}", domains);
         }
 
         // Try different search strategies
@@ -217,23 +217,23 @@ impl LlmDatabase for Database {
 
         // Strategy 1: Try exact phrase match with AND
         results = execute_search(self, &clean_query, domains, limit * 2)?;
-        println!("Strategy 1 (AND search): found {} results", results.len());
+        log_debug!("Strategy 1 (AND search): found {} results", results.len());
 
         // Strategy 2: If no results, try OR search
         if results.is_empty() && clean_query.contains(' ') {
             let or_query = clean_query.split_whitespace().collect::<Vec<_>>().join(" OR ");
-            println!("Strategy 2 (OR search): trying '{}'", or_query);
+            log_debug!("Strategy 2 (OR search): trying '{}'", or_query);
             results = execute_search(self, &or_query, domains, limit * 2)?;
-            println!("Strategy 2 (OR search): found {} results", results.len());
+            log_debug!("Strategy 2 (OR search): found {} results", results.len());
         }
 
         // Strategy 3: If still no results, try each word individually
         if results.is_empty() {
             let words: Vec<&str> = clean_query.split_whitespace().collect();
-            println!("Strategy 3 (individual words): trying {} words", words.len());
+            log_debug!("Strategy 3 (individual words): trying {} words", words.len());
             for word in &words {
                 let word_results = execute_search(self, word, domains, limit)?;
-                println!("  Word '{}': found {} results", word, word_results.len());
+                log_debug!("  Word '{}': found {} results", word, word_results.len());
                 if !word_results.is_empty() {
                     results.extend(word_results);
                     break; // Use first successful word
@@ -254,7 +254,7 @@ impl LlmDatabase for Database {
                 .collect();
         }
 
-        println!("Final results: {} chunks", results.len());
+        log_debug!("Final results: {} chunks", results.len());
         Ok(results.into_iter().take(limit).collect())
     }
 

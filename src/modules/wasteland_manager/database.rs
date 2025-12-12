@@ -3,7 +3,7 @@
 
 use rusqlite::{params, Result};
 use serde::{Deserialize, Serialize};
-
+use crate::log_info;
 use crate::util::database::Database;
 
 /// Device record from database
@@ -73,7 +73,7 @@ impl WastelandDatabase for Database {
         ).unwrap_or(0);
 
         if old_table_exists > 0 {
-            println!("Migrating data from trusted_devices to known_devices...");
+            log_info!("Migrating data from trusted_devices to known_devices...");
 
             // Copy trusted devices to new table
             conn.execute(
@@ -86,7 +86,7 @@ impl WastelandDatabase for Database {
             // Drop old table
             conn.execute("DROP TABLE IF EXISTS trusted_devices", [])?;
 
-            println!("Migration complete!");
+            log_info!("Migration complete!");
         }
 
         Ok(())

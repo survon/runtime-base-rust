@@ -2,7 +2,7 @@ pub mod document;
 pub mod template;
 pub mod screens;
 pub mod style;
-
+pub mod generated;
 
 use ratatui::{
     buffer::Buffer,

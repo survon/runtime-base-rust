@@ -8,6 +8,7 @@ use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
 use llama_cpp::standard_sampler::StandardSampler;
 use gag::Gag;
 use tokio::time::Duration;
+use serde::{Deserialize, Serialize};
 
 use crate::util::database::Database;
 use crate::modules::llm::database::{LlmDatabase, ChatMessage, KnowledgeChunk};
@@ -19,6 +20,8 @@ pub struct LlmService {
     database: Database,
     use_summarizer: bool,
     model_path: Option<PathBuf>,
+    remote_endpoint: Option<String>,
+    remote_model: Option<String>,
 }
 
 impl LlmService {
@@ -27,6 +30,18 @@ impl LlmService {
             database,
             use_summarizer: false,
             model_path: None,
+            remote_model: None,
+            remote_endpoint: None,
+        }
+    }
+
+    pub fn new_remote(database: Database, endpoint: String, model: String) -> Self {
+        Self {
+            database,
+            use_summarizer: false,
+            model_path: None,
+            remote_endpoint: Some(endpoint),
+            remote_model: Some(model),
         }
     }
 
@@ -50,6 +65,8 @@ impl LlmService {
             database,
             use_summarizer,
             model_path,
+            remote_model: None,
+            remote_endpoint: None,
         })
     }
 
@@ -61,6 +78,11 @@ impl LlmService {
         query: &str,
         knowledge_module_names: &[String],
     ) -> Result<String> {
+        // Check if using remote endpoint
+        if let (Some(endpoint), Some(model)) = (&self.remote_endpoint, &self.remote_model) {
+            return self.query_remote_llm(session_id, module_name, query, endpoint, model).await;
+        }
+
         // Store user message
         let user_message = ChatMessage::new_user(
             session_id.to_string(),
@@ -95,6 +117,66 @@ impl LlmService {
         let _ = self.database.insert_chat_message(assistant_message);
 
         Ok(response)
+    }
+
+    async fn query_remote_llm(
+        &self,
+        session_id: &str,
+        module_name: &str,
+        query: &str,
+        endpoint: &str,
+        model: &str,
+    ) -> Result<String> {
+        // Store user message
+        let user_message = ChatMessage::new_user(
+            session_id.to_string(),
+            query.to_string(),
+            module_name.to_string(),
+        );
+        self.database.insert_chat_message(user_message)?;
+
+        // Build request
+        let payload = serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "user", "content": query}
+            ],
+            "stream": false
+        });
+
+        let url = format!("{}/api/chat", endpoint);
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()?;
+
+        let response = client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await?;
+
+        #[derive(Deserialize)]
+        struct OllamaResponse {
+            message: OllamaMessage,
+        }
+
+        #[derive(Deserialize)]
+        struct OllamaMessage {
+            content: String,
+        }
+
+        let ollama_response: OllamaResponse = response.json().await?;
+        let assistant_content = ollama_response.message.content;
+
+        // Store assistant response
+        let assistant_message = ChatMessage::new_assistant(
+            session_id.to_string(),
+            assistant_content.clone(),
+            module_name.to_string(),
+        );
+        self.database.insert_chat_message(assistant_message)?;
+
+        Ok(assistant_content)
     }
 
     /// Summarize search results using a tiny LLM

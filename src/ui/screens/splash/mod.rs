@@ -1,4 +1,3 @@
-// src/ui/splash.rs
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
@@ -8,7 +7,11 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 use crate::log_error;
-use crate::util::audio::{SurvonAudioPlayer};
+use crate::util::{
+    audio::SurvonAudioPlayer,
+    ascii::{render_cover_ascii, paragraph_from_grid}
+};
+use crate::ui::style::AdaptiveColors;
 
 #[derive(Debug)]
 pub struct SplashScreen {
@@ -17,11 +20,11 @@ pub struct SplashScreen {
     pub is_running: bool,
     pub user_dismissed: bool,
     pub player: SurvonAudioPlayer,
+    pub palette: AdaptiveColors,
 }
 
 impl SplashScreen {
     pub fn new() -> Self {
-        // Play audio on creation - the audio player now handles threading internally
         let mut player = SurvonAudioPlayer::new_with_audio_jack(
             "assets/audio/theme_compressed.wav",
             0.1
@@ -37,36 +40,33 @@ impl SplashScreen {
             is_running: true,
             user_dismissed: false,
             player,
+            palette: AdaptiveColors::detect(),
         }
     }
 
     pub fn bypass_theme(&mut self) -> bool {
-        // Only allow dismissal after 2 seconds
         if self.start_time.elapsed() >= Duration::from_millis(2000) {
             self.is_running = false;
             self.user_dismissed = true;
             self.player.stop().ok();
-            true  // Return true if we actually dismissed
+            true
         } else {
-            false  // Return false if still in mandatory display period
+            false
         }
     }
 
     pub fn is_complete(&self) -> bool {
-        // Complete if user dismissed after the minimum time
         self.user_dismissed
     }
 
     pub fn update(&mut self) {
         let elapsed = self.start_time.elapsed().as_millis() as f64;
-        self.animation_frame = elapsed / 100.0; // Slower animation
+        self.animation_frame = elapsed / 20.0;
     }
 
     fn get_rainbow_color(&self, offset: f64) -> Color {
-        // Create rainbow effect that cycles
         let hue = ((self.animation_frame + offset) % 360.0) / 360.0;
 
-        // Convert HSV to RGB (simplified)
         let rainbow_colors = [
             Color::Red,
             Color::Rgb(255, 127, 0), // Orange
@@ -84,6 +84,19 @@ impl SplashScreen {
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         self.update();
 
+        // Render true-color ASCII art background with gentle animation
+        let shift = (self.animation_frame / 100.0) as f32;
+        let bg_grid = render_cover_ascii(
+            area.width,
+            area.height,
+            &self.palette,        // Use stored palette
+            Some(shift * 0.02),   // Even more subtle hue shift
+            0.35,                 // Dim to 35% so logo pops
+        );
+
+        let bg_paragraph = paragraph_from_grid(&bg_grid);
+        bg_paragraph.render(area, buf);
+
         let logo = vec![
             "███████╗██╗   ██╗██████╗ ██╗   ██╗ ██████╗ ███╗   ██╗",
             "██╔════╝██║   ██║██╔══██╗██║   ██║██╔═══██╗████╗  ██║",
@@ -96,7 +109,7 @@ impl SplashScreen {
         let tagline = "Smart Homestead Operating System";
 
         // Calculate vertical center
-        let logo_height = logo.len() + 4; // +4 for tagline and spacing
+        let logo_height = logo.len() + 4;
         let start_y = (area.height.saturating_sub(logo_height as u16)) / 2;
 
         // Render each line with rainbow colors

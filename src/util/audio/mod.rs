@@ -5,11 +5,13 @@ use std::fs::File;
 use std::io::BufReader;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use crate::log_error;
 
 pub trait AudioPlayer {
     fn play(&mut self, path: &str, repeat: bool) -> Result<(), String>;
     fn stop(&mut self, path: &str) -> Result<(), String>;
     fn set_volume(&mut self, volume: f32);
+    fn is_finished(&self, path: &str) -> bool; // NEW
 }
 
 struct AudioJackPlayer {
@@ -39,11 +41,10 @@ impl AudioPlayer for AudioJackPlayer {
 
         let sinks_clone = Arc::clone(&sinks);
         thread::spawn(move || {
-            // Create OutputStream inside the thread to avoid Send issues on macOS
             let (_stream, handle) = match OutputStream::try_default() {
                 Ok(v) => v,
                 Err(e) => {
-                    eprintln!("Failed to create audio stream: {}", e);
+                    log_error!("Failed to create audio stream: {}", e);
                     return;
                 }
             };
@@ -51,7 +52,7 @@ impl AudioPlayer for AudioJackPlayer {
             let sink = match Sink::try_new(&handle) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to create sink: {}", e);
+                    log_error!("Failed to create sink: {}", e);
                     return;
                 }
             };
@@ -61,7 +62,7 @@ impl AudioPlayer for AudioJackPlayer {
             let file = match File::open(&path) {
                 Ok(f) => f,
                 Err(e) => {
-                    eprintln!("Failed to open audio file {}: {}", path, e);
+                    log_error!("Failed to open audio file {}: {}", path, e);
                     return;
                 }
             };
@@ -69,7 +70,7 @@ impl AudioPlayer for AudioJackPlayer {
             let source = match Decoder::new(BufReader::new(file)) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to decode audio file {}: {}", path, e);
+                    log_error!("Failed to decode audio file {}: {}", path, e);
                     return;
                 }
             };
@@ -106,6 +107,15 @@ impl AudioPlayer for AudioJackPlayer {
             sink.set_volume(v);
         }
     }
+
+    fn is_finished(&self, path: &str) -> bool {
+        // Check if sink exists and if it's empty
+        if let Some(sink) = self.active_sinks.lock().unwrap().get(path) {
+            sink.empty()
+        } else {
+            true // No sink = finished
+        }
+    }
 }
 
 struct GpioPwmPlayer;
@@ -113,6 +123,7 @@ impl AudioPlayer for GpioPwmPlayer {
     fn play(&mut self, _: &str, _: bool) -> Result<(), String> { Err("GPIO not ready".into()) }
     fn stop(&mut self, _: &str) -> Result<(), String> { Err("GPIO not ready".into()) }
     fn set_volume(&mut self, _: f32) {}
+    fn is_finished(&self, _: &str) -> bool { true }
 }
 
 #[derive(Clone)]
@@ -158,5 +169,10 @@ impl SurvonAudioPlayer {
 
     pub fn set_volume(&mut self, volume: f32) {
         self.inner.lock().unwrap().set_volume(volume);
+    }
+
+    // NEW: Check if playback has finished
+    pub fn is_finished(&self) -> bool {
+        self.inner.lock().unwrap().is_finished(&self.path)
     }
 }

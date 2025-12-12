@@ -1,0 +1,52 @@
+# modules/core/council_chat/config.yml
+# Council chat module - talks to remote Survon AI services
+
+name: "Council Chamber"
+namespace: "core"
+module_type: "llm"
+version: "1.0.0"
+description: "Consult with homestead council advisors"
+bus_topic: "council_chat"
+template: "llm_card"
+is_blinkable: false
+
+# Special model value tells runtime to use remote endpoints
+model: "council"
+
+bindings:
+  # Model info shown in UI
+  model_info: "Select an advisor to consult"
+
+  # Standard llm_card bindings
+  chat_history: []
+  chat_input: ""
+  scroll_offset: 0
+
+  # Council-specific: available advisors
+  # Runtime populates this via service discovery
+  # Format: [{name, title, endpoint, status}, ...]
+  available_advisors: []
+
+  # Currently selected advisor (null = show roster)
+  active_advisor: null
+
+  # Current link index (for document links in responses)
+  current_link_index: null
+
+# Service discovery config for runtime
+service_discovery:
+  enabled: true
+  method: "mdns"
+  scan_pattern: "survon-*.local"
+  metadata_path: "/.survon/service.json"
+  api_port: 11434
+  web_port: 3000
+  scan_interval_seconds: 60
+  required_contract: "survon-llm-service-v1"
+
+# When runtime sees model: "council", it should:
+# 1. Scan network for survon-*.local services
+# 2. Populate available_advisors binding
+# 3. When user selects advisor, set active_advisor
+# 4. Route chat requests to that advisor's endpoint
+# 5. If advisor unavailable, show "Out of Office" in model_info

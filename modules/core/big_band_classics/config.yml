@@ -1,0 +1,196 @@
+# modules/core/big_band_mix/config.yml
+# Big Band Mix compilation from Internet Archive
+# Source: https://archive.org/details/BigBandMixRecordings1935-1945
+
+name: "Big Band Mix (Recordings 1935-1945)"
+module_type: "album"
+bus_topic: ""  # Albums don't need bus topics
+template: ""   # Albums don't have UI templates (hidden like knowledge modules)
+
+bindings:
+  # Album metadata
+  title: "Big Band Mix (Recordings 1935-1945)"
+  artist: "Various Artists"
+  year: 1935
+  genre: "Big Band / Swing / Jazz"
+
+  # Credits from Internet Archive
+  credits: |
+    Big Band Mix - Recordings 1935-1945
+    
+    Featuring legendary orchestras:
+    • Glenn Miller and his Orchestra
+    • Benny Goodman and his Orchestra
+    • Art Shaw and his Orchestra
+    • Jimmy Dorsey and his Orchestra
+    • Harry James and his Orchestra
+    • Woody Herman and his Orchestra
+    • Jimmy Lunceford and his Orchestra
+    • Bunny Berigan and his Orchestra
+    
+    Original 78rpm recordings remastered
+    Public Domain / CC BY-NC-SA 3.0
+    
+    Source: Internet Archive
+    https://archive.org/details/BigBandMixRecordings1935-1945
+    
+    All recordings from original 78rpm shellac discs
+    recorded between 1935-1945 on various labels including
+    Bluebird, Columbia, Decca, Victor, and Okeh.
+
+  # Tracklist - files should be in audio/ folder
+  tracklist:
+    - title: "Moonlight Serenade"
+      file: "01.MoonlightSerenade.mp3"
+      duration_seconds: 201
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Begin the Beguine"
+      file: "02.BeginTheBeguine.mp3"
+      duration_seconds: 198
+      artist: "Art Shaw and his Orchestra"
+
+    - title: "Tain't No Use"
+      file: "03.TaintNoUse.mp3"
+      duration_seconds: 191
+      artist: "Jimmy Dorsey and his Orchestra"
+
+    - title: "A String of Pearls"
+      file: "04.AStringOfPearls.mp3"
+      duration_seconds: 179
+      artist: "Benny Goodman and his Orchestra"
+
+    - title: "My Blue Heaven"
+      file: "05.MyBlueHeaven.mp3"
+      duration_seconds: 186
+      artist: "Jimmy Lunceford and his Orchestra"
+
+    - title: "Flatbush Flanagan"
+      file: "06.FlatbushFlanagan.mp3"
+      duration_seconds: 195
+      artist: "Harry James and his Orchestra"
+
+    - title: "Skylark"
+      file: "07.Skylark.mp3"
+      duration_seconds: 164
+      artist: "Bunny Berigan and his Orchestra"
+
+    - title: "Northwest Passage"
+      file: "08.NorthwestPassage.mp3"
+      duration_seconds: 194
+      artist: "Woody Herman and his Orchestra"
+
+    - title: "Indian Love Call"
+      file: "09.IndianLoveCall.mp3"
+      duration_seconds: 190
+      artist: "Art Shaw and his Orchestra"
+
+    - title: "I've Got a Gal in Kalamazoo"
+      file: "10.IveGotAGalInKalamazoo.mp3"
+      duration_seconds: 198
+      artist: "Benny Goodman and his Orchestra"
+
+    - title: "Tuxedo Junction"
+      file: "11.TuxedoJunction.mp3"
+      duration_seconds: 206
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "The World Is Waiting for the Sunrise"
+      file: "12.TheWorldIsWaitingForTheSunrise.mp3"
+      duration_seconds: 159
+      artist: "Benny Goodman Quartet"
+
+    - title: "It Must Be Jelly"
+      file: "13.ItMustBeJelly.mp3"
+      duration_seconds: 179
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Serenade in Blue"
+      file: "14.SerenadeInBlue.mp3"
+      duration_seconds: 190
+      artist: "Benny Goodman and his Orchestra"
+
+    - title: "Woodchopper's Ball"
+      file: "15.WoodchoppersBall.mp3"
+      duration_seconds: 194
+      artist: "Woody Herman and his Orchestra"
+
+    - title: "Pavanne"
+      file: "16.Pavanne.mp3"
+      duration_seconds: 191
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Murder, He Says"
+      file: "17.MurderHeSays.mp3"
+      duration_seconds: 167
+      artist: "Jimmy Dorsey and his Orchestra"
+
+    - title: "Tain't No Use"
+      file: "18.taintNoUse.mp3"
+      duration_seconds: 159
+      artist: "Benny Goodman and his Orchestra"
+
+    - title: "Big-Wig in the Wigwam"
+      file: "19.Big-wigInTheWigwam.mp3"
+      duration_seconds: 159
+      artist: "Woody Herman and his Orchestra"
+
+    - title: "Slow Freight"
+      file: "20.SlowFreight.mp3"
+      duration_seconds: 183
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Bugle Call Rag"
+      file: "21.BugleCallRag.mp3"
+      duration_seconds: 171
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Song of the Volga Boatman"
+      file: "22.SongOfTheVolgaBoatman.mp3"
+      duration_seconds: 206
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Put That Ring on My Finger"
+      file: "23.PutThatRingOnMyFinger.mp3"
+      duration_seconds: 187
+      artist: "Woody Herman and his Orchestra"
+
+    - title: "Little Brown Jug"
+      file: "24.LittleBrownJug.mp3"
+      duration_seconds: 167
+      artist: "Glenn Miller and his Orchestra"
+
+    - title: "Danny Boy"
+      file: "25.DannyBoy.mp3"
+      duration_seconds: 132
+      artist: "Glenn Miller and his Orchestra"
+
+# Folder structure:
+# modules/core/big_band_mix/
+#   ├── config.yml
+#   └── audio/
+#       ├── 01.MoonlightSerenade.mp3
+#       ├── 02.BeginTheBeguine.mp3
+#       ├── 03.TaintNoUse.mp3
+#       ├── 04.AStringOfPearls.mp3
+#       ├── 05.MyBlueHeaven.mp3
+#       ├── 06.FlatbushFlanagan.mp3
+#       ├── 07.Skylark.mp3
+#       ├── 08.NorthwestPassage.mp3
+#       ├── 09.IndianLoveCall.mp3
+#       ├── 10.IveGotAGalInKalamazoo.mp3
+#       ├── 11.TuxedoJunction.mp3
+#       ├── 12.TheWorldIsWaitingForTheSunrise.mp3
+#       ├── 13.ItMustBeJelly.mp3
+#       ├── 14.SerenadeInBlue.mp3
+#       ├── 15.WoodchoppersBall.mp3
+#       ├── 16.Pavanne.mp3
+#       ├── 17.MurderHeSays.mp3
+#       ├── 18.taintNoUse.mp3
+#       ├── 19.Big-wigInTheWigwam.mp3
+#       ├── 20.SlowFreight.mp3
+#       ├── 21.BugleCallRag.mp3
+#       ├── 22.SongOfTheVolgaBoatman.mp3
+#       ├── 23.PutThatRingOnMyFinger.mp3
+#       ├── 24.LittleBrownJug.mp3
+#       └── 25.DannyBoy.mp3

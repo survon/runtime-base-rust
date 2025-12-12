@@ -4,7 +4,7 @@ use ratatui::{
 };
 use color_eyre::Result;
 use std::path::{Path, PathBuf};
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant};
 use std::sync::Arc;
 use gag::Gag;
 use std::collections::HashMap;
@@ -31,6 +31,12 @@ use crate::modules::{
     ModuleManager
 };
 
+use crate::widgets::jukebox::{
+    actor::JukeboxActor,
+    widget::JukeboxWidget,
+    ingester::JukeboxIngester,
+};
+
 use crate::ui::{
     document::{
         external_viewer::ExternalViewer,
@@ -42,7 +48,8 @@ use crate::ui::{
         module_detail::{get_content_area, render_module_detail_chrome},
         overview::messages::MessagesPanel,
         splash::SplashScreen
-    }
+    },
+    style::{AdaptiveColors}
 };
 
 use crate::{log_debug, log_error, log_info};
@@ -59,6 +66,7 @@ pub enum OverviewFocus {
     WastelandModules,
     Messages,
     CoreModules,
+    Jukebox,
 }
 
 #[derive(Debug, PartialEq)]
@@ -71,7 +79,7 @@ pub enum AppMode {
     // this is no longer used, just keeping commented for reference for the todo...
     // InitialScan {
     //     countdown: u8,
-    //     start_time: std::time::Instant,
+    //     start_time: std::time::Instant},
     // },
 }
 
@@ -85,6 +93,10 @@ pub struct App {
 
     pub needs_redraw: bool,
     pub splash_screen: Option<SplashScreen>,
+    pub start_time: Instant,
+    pub palette: AdaptiveColors,
+
+    pub jukebox_widget: Option<JukeboxWidget>,
 
     /// Module managers
     pub wasteland_module_manager: ModuleManager,
@@ -236,12 +248,36 @@ impl App {
         let mut messages_panel = MessagesPanel::new();
         messages_panel.subscribe_all(&message_bus).await;
 
+        let jukebox_ingester = JukeboxIngester::new(&database);
+        if jukebox_ingester.should_reingest()? {
+            log_info!("🎵 Ingesting album library...");
+            jukebox_ingester.ingest_albums(&core_module_manager)?;
+        }
+
+        let (
+            jukebox_actor,
+            jukebox_intent_tx
+        ) = JukeboxActor::new(message_bus.clone());
+
+        tokio::spawn(async move {
+            jukebox_actor.run().await;
+        });
+
+        // Create widget (async because it subscribes to bus)
+        let jukebox_widget = JukeboxWidget::new(
+            database.clone(),
+            &message_bus,
+            jukebox_intent_tx,
+        ).await?;
 
         Ok(Self {
             running: true,
             mode: AppMode::Splash,
             needs_redraw: false,
             splash_screen: Some(SplashScreen::new()),
+            start_time: Instant::now(),
+            palette: AdaptiveColors::detect(),
+            jukebox_widget: Some(jukebox_widget),
             wasteland_module_manager,
             core_module_manager,
             message_bus,
@@ -345,9 +381,16 @@ impl App {
         let _ = self.message_bus.publish(msg).await;
     }
 
-    pub fn has_active_blinks(&self) -> bool {
-        self.wasteland_module_manager.has_active_blinks() ||
-            self.core_module_manager.has_active_blinks()
+    pub fn has_animating_child(&self) -> bool {
+        self.wasteland_module_manager.has_active_blinks()
+          || self.core_module_manager.has_active_blinks()
+          || {
+            if let Some(jukebox) = &self.jukebox_widget {
+                jukebox.is_playing()
+            } else {
+                false
+            }
+        }
     }
 
     pub fn request_redraw(&mut self) {
@@ -363,9 +406,15 @@ impl App {
     }
 
     fn handle_tick(&mut self) -> bool {
-        // During splash, we need continuous redraws for animation
-        let should_animate = matches!(self.mode, AppMode::Splash)
-            || (matches!(self.mode, AppMode::Overview) && self.has_active_blinks());
+        let should_animate: bool = {
+            match self.mode {
+                AppMode::Splash => true,
+                AppMode::Overview => {
+                    self.has_animating_child()
+                },
+                _ => false,
+            }
+        };
 
         self.needs_redraw = self.needs_redraw || should_animate;
 
@@ -515,6 +564,7 @@ impl App {
             OverviewFocus::WastelandModules,
             OverviewFocus::Messages,
             OverviewFocus::CoreModules,
+            OverviewFocus::Jukebox,
         ];
 
         // Find current index
@@ -676,6 +726,22 @@ impl App {
             AppMode::Overview => {
                 match self.overview_focus {
                     OverviewFocus::None => {},
+                    OverviewFocus::Jukebox => {
+                        if let Some(jukebox) = &mut self.jukebox_widget {
+                            match key_code {
+                                KeyCode::Char(' ') => jukebox.play_pause(),
+                                KeyCode::Char('m') => jukebox.toggle_mode(),
+                                KeyCode::Right => jukebox.next_track(),
+                                KeyCode::Left => jukebox.previous_track(),
+                                KeyCode::Up => jukebox.prev_item(),
+                                KeyCode::Down => jukebox.next_item(),
+                                KeyCode::Enter => jukebox.handle_enter(),
+                                KeyCode::Char('+') => jukebox.volume_up(),
+                                KeyCode::Char('-') => jukebox.volume_down(),
+                                _ => {}
+                            }
+                        }
+                    },
                     OverviewFocus::WastelandModules => {
                         match key_code {
                             KeyCode::Left => {
@@ -851,7 +917,7 @@ impl App {
                     module_name,
                     knowledge_module_names
                 ).await {
-                    eprintln!("Failed to submit chat message: {}", e);
+                    log_error!("Failed to submit chat message: {}", e);
                 }
             }
         }
