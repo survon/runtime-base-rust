@@ -38,7 +38,7 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 
 # Knowledge files
-pdf-extract = "0.7"
+pdf-extract = "0.10"
 
 # LLM - working llama_cpp bindings
 llama_cpp = { version = "0.3", default-features = false }
