@@ -34,13 +34,9 @@ pub struct ValveControlHandler {
     device_id: String,
     message_tx: mpsc::UnboundedSender<HandlerMessage>,
     message_rx: mpsc::UnboundedReceiver<HandlerMessage>,
-
-    // NEW: Schedule tracking
     current_mode: Option<String>,
     cmd_window_opens_in: Option<u64>,
     cmd_window_duration: Option<u64>,
-
-    // NEW: Command queueing support
     discovery_manager: Option<std::sync::Arc<crate::util::io::discovery::DiscoveryManager>>,
 }
 
@@ -318,9 +314,6 @@ impl ModuleHandler for ValveControlHandler {
             serde_json::json!(description),
         );
 
-        // ========================================
-        // NEW: Export schedule information
-        // ========================================
         if let Some(mode) = &self.current_mode {
             module.config.bindings.insert(
                 "device_mode".to_string(),

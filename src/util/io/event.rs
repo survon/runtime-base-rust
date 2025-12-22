@@ -29,6 +29,7 @@ pub enum AppEvent {
     Quit,
     RefreshModules,
     ShowOverview,
+    NoOp,
 
     // Documents
     OpenDocument(String),

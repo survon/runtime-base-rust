@@ -4,6 +4,8 @@ pub mod wasteland_manager;
 pub mod valve_control;
 pub mod monitoring;
 pub mod side_quest;
+pub mod config_schema;
+pub mod config_validator;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -30,7 +32,11 @@ use crate::util::{
         discovery::{DiscoveryManager}
     }
 };
+pub use config_schema::*;
+pub use config_validator::ConfigValidator;
+
 use crate::{log_info, log_error, log_debug, log_warn};
+use crate::app::ModuleSource;
 
 /// Runtime rendering state for modules (not serialized)
 #[derive(Debug, Clone)]
@@ -208,12 +214,19 @@ impl Clone for Module {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ModuleManagerView {
+    ModuleListView,
+    ModuleDetail(ModuleSource, usize),
+}
+
 #[derive(Debug)]
 pub struct ModuleManager {
     modules: Vec<Module>,
     pub modules_path: PathBuf,
     pub namespace: String,
     pub selected_module: usize,
+    pub current_view: ModuleManagerView,
     event_receivers: Vec<BusReceiver>,
     handlers: HashMap<String, Box<dyn ModuleHandler>>,
 }
@@ -225,6 +238,7 @@ impl ModuleManager {
             modules_path,
             namespace,
             selected_module: 0,
+            current_view: ModuleManagerView::ModuleListView,
             event_receivers: Vec::new(),
             handlers: HashMap::new(),
         }
@@ -324,7 +338,6 @@ impl ModuleManager {
                         log_info!("✅ Valve control handler registered");
                     }
                 }
-
                 "monitoring" => {
                     let handler_key = format!("monitoring_{}", device_id);
 
@@ -354,7 +367,7 @@ impl ModuleManager {
                 }
 
                 "system" => {
-                    // System modules don't need handlers
+                    // System modules don't need handlers yet
                 }
 
                 _ => {
@@ -486,10 +499,13 @@ impl ModuleManager {
     }
 
     fn handle_event_message(&mut self, message: &BusMessage) {
+
+        // todo refactor this to be module domain not app domain..
+        // todo the app handler for event messages is in app.rs.. that's where we handle RefreshModules
         match message.topic.strip_prefix("app.event.") {
-            Some("refresh_modules") => {
-                // Modules could reload their config, etc.
-            }
+            // Some("refresh_modules") => {
+            //     self.refresh_modules(); // async...
+            // }
             _ => {}
         }
     }

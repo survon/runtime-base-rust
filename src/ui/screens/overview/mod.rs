@@ -1,14 +1,13 @@
+// src/ui/screens/overview/mod.rs
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Stylize},
-    widgets::{Block, BorderType, Paragraph, Widget},
+    style::{Color, Stylize, Style},
+    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
+    text::Line,
 };
 use crate::app::{App, OverviewFocus};
-use crate::util::ascii::{render_cover_ascii, paragraph_from_grid};
-
-pub mod messages;
-pub mod modules_list;
+use crate::modules::ModuleManagerView;
 
 pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let header_constraints = Constraint::Length(10);
@@ -48,29 +47,15 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         ])
         .split(main_layout[1]);
 
-    let should_use_template = true;
     let is_none_focused = matches!(app.overview_focus, OverviewFocus::None);
     let is_jukebox_focused = matches!(app.overview_focus, OverviewFocus::Jukebox);
     let is_wasteland_modules_list_focused = matches!(app.overview_focus, OverviewFocus::WastelandModules);
+    let is_wasteland_modules_list_view = matches!(app.wasteland_module_manager.current_view, ModuleManagerView::ModuleListView);
     let is_core_modules_list_focused = matches!(app.overview_focus, OverviewFocus::CoreModules);
+    let is_core_modules_list_view = matches!(app.core_module_manager.current_view, ModuleManagerView::ModuleListView);
     let is_messages_focused = matches!(app.overview_focus, OverviewFocus::Messages);
 
-    // Render true-color ASCII background in title area with gentle animation
-    let elapsed = app.start_time.elapsed().as_secs_f32();
-    let shift = elapsed * 0.03; // Very slow shift
-
-    let title_bg_grid = render_cover_ascii(
-        header_layout[0].width,
-        header_layout[0].height,
-        &app.palette,
-        Some(shift),
-        0.3, // Very dim so text is crystal clear
-    );
-
-    let title_bg_paragraph = paragraph_from_grid(&title_bg_grid);
-    title_bg_paragraph.render(header_layout[0], buf);
-
-    // Render title on top of background
+    // Render title
     let title = Paragraph::new("🏡 Survon - Smart Homestead OS")
         .block(
             Block::bordered()
@@ -78,10 +63,11 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
                 .title_alignment(Alignment::Center)
                 .border_type(BorderType::Rounded)
         )
-        .fg(Color::Green)
+        .style(Style::default().fg(Color::Green))
         .alignment(Alignment::Center);
     title.render(header_layout[0], buf);
 
+    // Render jukebox
     if let Some(jukebox) = &mut app.jukebox_widget {
         let is_focused: Option<bool> = if is_jukebox_focused {
             Some(true)
@@ -100,7 +86,6 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
 
     // Render wasteland modules
     let mut needs_redraw = false;
-
     {
         let is_focused: Option<bool> = if is_wasteland_modules_list_focused {
             Some(true)
@@ -109,14 +94,42 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         } else {
             Some(false)
         };
-        modules_list::render_modules_list(
-            &mut app.wasteland_module_manager,
-            content_layout[0],
-            buf,
-            should_use_template,
-            is_focused,
-            &mut needs_redraw
-        );
+
+        if is_wasteland_modules_list_view {
+            app.modules_list_widget.render(
+                &mut app.wasteland_module_manager,
+                content_layout[0],
+                buf,
+                is_focused,
+                &mut needs_redraw
+            );
+        } else {
+            let selected_module_index = app.wasteland_module_manager.selected_module;
+
+            // Render chrome (header/footer)
+            let container = app.module_detail_widget.render_chrome(
+                &app.wasteland_module_manager,
+                selected_module_index,
+                content_layout[0],
+                buf
+            );
+
+            // this might be stupid..
+            let inner_area = container.inner(area);
+
+            // Get content area and render template
+            let content_area = app.module_detail_widget.get_content_area(inner_area);
+
+            // Update bindings for this module
+            app.wasteland_module_manager.update_module_bindings(selected_module_index);
+
+            // Render the module's template content
+            if let Some(module) = app.wasteland_module_manager.get_modules_mut().get_mut(selected_module_index) {
+                if let Err(e) = module.render_detail(content_area, buf) {
+                    render_template_error(content_area, buf, e);
+                }
+            }
+        }
     }
 
     if needs_redraw {
@@ -132,7 +145,9 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         } else {
             Some(false)
         };
-        app.messages_panel.render(content_layout[1], buf, is_focused);
+        if let Some(messages) = &mut app.messages_widget {
+            messages.render(content_layout[1], buf, is_focused);
+        }
     }
 
     // Render core modules
@@ -144,21 +159,56 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         } else {
             Some(false)
         };
-        modules_list::render_modules_list(
-            &mut app.core_module_manager,
-            content_layout[2],
-            buf,
-            should_use_template,
-            is_focused,
-            &mut needs_redraw
-        );
+
+        if is_core_modules_list_view {
+            app.modules_list_widget.render(
+                &mut app.core_module_manager,
+                content_layout[2],
+                buf,
+                is_focused,
+                &mut needs_redraw
+            );
+        } else {
+            let selected_module_index = app.core_module_manager.selected_module;
+
+            // Render chrome (header/footer)
+            app.module_detail_widget.render_chrome(
+                &app.core_module_manager,
+                selected_module_index,
+                content_layout[2],
+                buf
+            );
+
+            // Get content area and render template
+            let content_area = app.module_detail_widget.get_content_area(content_layout[2]);
+
+            // Update bindings for this module
+            app.core_module_manager.update_module_bindings(selected_module_index);
+
+            // Render the module's template content
+            if let Some(module) = app.core_module_manager.get_modules_mut().get_mut(selected_module_index) {
+                if let Err(e) = module.render_detail(content_area, buf) {
+                    render_template_error(content_area, buf, e);
+                }
+            }
+        }
     }
 
     let wasteland_help_text: &str = {
         if app.wasteland_module_manager.get_modules().is_empty() {
             "No wasteland modules found."
-        } else {
+        } else if is_wasteland_modules_list_view {
             "←/→: Navigate Wasteland Modules"
+        } else {
+            "Esc: Back to List"
+        }
+    };
+
+    let core_help_text: &str = {
+        if is_core_modules_list_view {
+            "←/→: Navigate Core Modules"
+        } else {
+            "Esc: Back to List"
         }
     };
 
@@ -166,8 +216,8 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         OverviewFocus::None => "Tab: Focus Wasteland Modules".to_string(),
         OverviewFocus::WastelandModules => format!("{} • Tab: Focus Messages", wasteland_help_text),
         OverviewFocus::Messages => "↑/↓: Scroll Messages • Tab: Focus Core Modules".to_string(),
-        OverviewFocus::CoreModules => "←/→: Navigate Core Modules • Tab: Remove Overview Focus".to_string(),
-        _ => "".to_string(),
+        OverviewFocus::CoreModules => format!("{} • Tab: Remove Overview Focus", core_help_text),
+        OverviewFocus::Jukebox => "Space: Play/Pause • ←/→: Skip • +/-: Volume • m: Library • Tab: Focus Next".to_string(),
     };
 
     let help_text = format!("{} • Enter: Select • 'r': Refresh • 'q': Quit", focus_hint);
@@ -181,4 +231,30 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         .fg(Color::Yellow)
         .alignment(Alignment::Center);
     help.render(main_layout[2], buf);
+}
+
+/// Helper function to render template errors inline
+fn render_template_error(area: Rect, buf: &mut Buffer, error: String) {
+    let error_lines = vec![
+        Line::from(""),
+        Line::from("⚠️ Template Rendering Error").style(Style::default().fg(Color::Red)),
+        Line::from(""),
+        Line::from(error.clone()).style(Style::default().fg(Color::Yellow)),
+        Line::from(""),
+        Line::from("Check your module's config.yml:").style(Style::default().fg(Color::Gray)),
+        Line::from("  - Is the 'template' field correct?").style(Style::default().fg(Color::Gray)),
+        Line::from("  - Are all required bindings present?").style(Style::default().fg(Color::Gray)),
+    ];
+
+    let error_widget = Paragraph::new(error_lines)
+        .block(
+            Block::bordered()
+                .title("Error")
+                .border_type(BorderType::Rounded)
+                .style(Style::default().fg(Color::Red))
+        )
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+
+    error_widget.render(area, buf);
 }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use std::collections::HashMap;
 use color_eyre::Result;
+use crate::log_debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusMessage {
@@ -79,6 +80,8 @@ impl MessageBus {
     /// Publish an app event to the bus with a standardized topic format
     pub async fn publish_app_event(&self, event_name: &str, payload: &str) -> Result<()> {
         let topic = format!("app.event.{}", event_name);
+        log_debug!("topic: {}", &topic);
+        log_debug!("payload: {}", &payload);
         let message = BusMessage::new(topic, payload.to_string(), "survon_tui".to_string());
         self.publish(message).await
     }

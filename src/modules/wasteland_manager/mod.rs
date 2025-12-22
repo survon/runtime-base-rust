@@ -1,3 +1,5 @@
-pub mod handler;
+pub mod config_editor;
 pub mod database;
-pub use database::{KnownDevice, WastelandDatabase};
+pub mod handler;
+
+pub use database::WastelandDatabase;

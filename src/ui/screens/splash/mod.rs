@@ -2,16 +2,15 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Paragraph, Widget},
+    widgets::{Block, BorderType, Paragraph, Widget},
     text::Line,
 };
 use std::time::{Duration, Instant};
 use crate::log_error;
 use crate::util::{
     audio::SurvonAudioPlayer,
-    ascii::{render_cover_ascii, paragraph_from_grid}
+    image::ImageRenderer,
 };
-use crate::ui::style::AdaptiveColors;
 
 #[derive(Debug)]
 pub struct SplashScreen {
@@ -20,7 +19,7 @@ pub struct SplashScreen {
     pub is_running: bool,
     pub user_dismissed: bool,
     pub player: SurvonAudioPlayer,
-    pub palette: AdaptiveColors,
+    pub background_image: Option<ImageRenderer>,
 }
 
 impl SplashScreen {
@@ -34,13 +33,21 @@ impl SplashScreen {
             log_error!("Failed to play theme: {}", e);
         }
 
+        // Load background image
+        let background_image = ImageRenderer::from_path("assets/images/homestead-scene-3-wide.png")
+            .ok();
+
+        if background_image.is_none() {
+            log_error!("Failed to load splash background image");
+        }
+
         Self {
             start_time: Instant::now(),
             animation_frame: 0.0,
             is_running: true,
             user_dismissed: false,
             player,
-            palette: AdaptiveColors::detect(),
+            background_image,
         }
     }
 
@@ -84,18 +91,14 @@ impl SplashScreen {
     pub fn render(&mut self, area: Rect, buf: &mut Buffer) {
         self.update();
 
-        // Render true-color ASCII art background with gentle animation
-        let shift = (self.animation_frame / 100.0) as f32;
-        let bg_grid = render_cover_ascii(
-            area.width,
-            area.height,
-            &self.palette,        // Use stored palette
-            Some(shift * 0.02),   // Even more subtle hue shift
-            0.35,                 // Dim to 35% so logo pops
-        );
+        // Render background image if available
+        if let Some(ref mut bg_image) = self.background_image {
+            bg_image.render_splash(area, buf)
+        }
 
-        let bg_paragraph = paragraph_from_grid(&bg_grid);
-        bg_paragraph.render(area, buf);
+        // Create a semi-transparent overlay for better text visibility
+        let overlay = Block::default()
+            .style(Style::default().bg(Color::Rgb(0, 0, 0))); // We'll layer text on top
 
         let logo = vec![
             "███████╗██╗   ██╗██████╗ ██╗   ██╗ ██████╗ ███╗   ██╗",
@@ -112,7 +115,7 @@ impl SplashScreen {
         let logo_height = logo.len() + 4;
         let start_y = (area.height.saturating_sub(logo_height as u16)) / 2;
 
-        // Render each line with rainbow colors
+        // Render each line with rainbow colors and shadow effect for visibility
         for (i, line) in logo.iter().enumerate() {
             let y = start_y + i as u16;
             if y >= area.height {
@@ -146,7 +149,8 @@ impl SplashScreen {
             let tagline_line = Line::from(tagline).style(
                 Style::default()
                     .fg(tagline_color)
-                    .add_modifier(Modifier::ITALIC)
+                    .add_modifier(Modifier::ITALIC | Modifier::BOLD)
+                    .bg(Color::Rgb(0, 0, 0)) // Dark background for readability
             );
 
             let tagline_paragraph = Paragraph::new(tagline_line)
@@ -178,6 +182,7 @@ impl SplashScreen {
             let loading_line = Line::from(message).style(
                 Style::default()
                     .fg(loading_color)
+                    .bg(Color::Rgb(0, 0, 0)) // Dark background for readability
             );
 
             let loading_paragraph = Paragraph::new(loading_line)

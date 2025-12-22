@@ -4,6 +4,5 @@ pub mod io;
 pub mod audio;
 pub mod llm;
 pub mod log;
-pub mod wasteland_manager;
 pub mod service;
-pub mod ascii;
+pub mod image;
