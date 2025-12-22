@@ -6,3 +6,4 @@ pub mod llm;
 pub mod log;
 pub mod service;
 pub mod image;
+pub mod string;

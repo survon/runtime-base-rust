@@ -297,7 +297,7 @@ impl JukeboxWidget {
         Paragraph::new(track_text)
             .block(
                 Block::bordered()
-                    .title("🎵 Jukebox")
+                    .title(" 🎵 Jukebox ")
                     .border_type(BorderType::Rounded)
                     .style(border_style)
             )
@@ -381,7 +381,7 @@ impl JukeboxWidget {
         let list = List::new(items)
             .block(
                 Block::bordered()
-                    .title("🎵 Album Library (Enter: View Tracks | Esc: Back)")
+                    .title(" 🎵 Album Library (Enter: View Tracks | Esc: Back) ")
                     .border_type(BorderType::Rounded)
                     .style(border_style)
             )

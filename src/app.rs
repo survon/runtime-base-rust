@@ -658,7 +658,8 @@ impl App {
 
             // Support full-screen module mode
             AppMode::ModuleDetail(source, module_idx) => {
-                self.render_module_detail(frame, source.clone(), *module_idx)
+                let is_focused = Some(true);
+                self.render_module_detail(frame, source.clone(), *module_idx, is_focused)
             },
         }
     }
@@ -675,7 +676,13 @@ impl App {
         frame.render_widget(self, frame.area());
     }
 
-    fn render_module_detail(&mut self, frame: &mut ratatui::Frame, source: ModuleSource, module_idx: usize) {
+    fn render_module_detail(
+        &mut self,
+        frame: &mut Frame,
+        source: ModuleSource,
+        module_idx: usize,
+        is_focused: Option<bool>,
+    ) {
         let area = frame.area();
         let buf = frame.buffer_mut();
 
@@ -684,7 +691,7 @@ impl App {
             ModuleSource::Wasteland => &self.wasteland_module_manager,
             ModuleSource::Core => &self.core_module_manager,
         };
-        self.module_detail_widget.render_chrome(module_manager_ref, module_idx, area, buf);
+        self.module_detail_widget.render_chrome(module_manager_ref, module_idx, is_focused, area, buf);
 
         // Get content area and render template
         let content_area = self.module_detail_widget.get_content_area(area);
@@ -723,7 +730,7 @@ impl App {
         let error_widget = Paragraph::new(error_lines)
             .block(
                 Block::bordered()
-                    .title("Error")
+                    .title(" Error ")
                     .border_type(BorderType::Rounded)
                     .style(Style::default().fg(Color::Red))
             )

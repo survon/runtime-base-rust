@@ -59,7 +59,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let title = Paragraph::new("🏡 Survon - Smart Homestead OS")
         .block(
             Block::bordered()
-                .title("Survon")
+                .title(" Survon ")
                 .title_alignment(Alignment::Center)
                 .border_type(BorderType::Rounded)
         )
@@ -110,23 +110,20 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
             let container = app.module_detail_widget.render_chrome(
                 &app.wasteland_module_manager,
                 selected_module_index,
+                is_focused,
                 content_layout[0],
                 buf
             );
 
-            // this might be stupid..
-            let inner_area = container.inner(area);
-
-            // Get content area and render template
-            let content_area = app.module_detail_widget.get_content_area(inner_area);
+            let inner_area = container.inner(content_layout[0]);
 
             // Update bindings for this module
             app.wasteland_module_manager.update_module_bindings(selected_module_index);
 
             // Render the module's template content
             if let Some(module) = app.wasteland_module_manager.get_modules_mut().get_mut(selected_module_index) {
-                if let Err(e) = module.render_detail(content_area, buf) {
-                    render_template_error(content_area, buf, e);
+                if let Err(e) = module.render_detail(inner_area, buf) {
+                    render_template_error(inner_area, buf, e);
                 }
             }
         }
@@ -171,24 +168,23 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         } else {
             let selected_module_index = app.core_module_manager.selected_module;
 
-            // Render chrome (header/footer)
-            app.module_detail_widget.render_chrome(
+            let container = app.module_detail_widget.render_chrome(
                 &app.core_module_manager,
                 selected_module_index,
+                is_focused,
                 content_layout[2],
                 buf
             );
 
-            // Get content area and render template
-            let content_area = app.module_detail_widget.get_content_area(content_layout[2]);
+            let inner_area = container.inner(content_layout[2]);
 
             // Update bindings for this module
             app.core_module_manager.update_module_bindings(selected_module_index);
 
             // Render the module's template content
             if let Some(module) = app.core_module_manager.get_modules_mut().get_mut(selected_module_index) {
-                if let Err(e) = module.render_detail(content_area, buf) {
-                    render_template_error(content_area, buf, e);
+                if let Err(e) = module.render_detail(inner_area, buf) {
+                    render_template_error(inner_area, buf, e);
                 }
             }
         }
@@ -225,7 +221,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let help = Paragraph::new(help_text)
         .block(
             Block::bordered()
-                .title("Controls")
+                .title(" Controls ")
                 .border_type(BorderType::Rounded)
         )
         .fg(Color::Yellow)
@@ -249,7 +245,7 @@ fn render_template_error(area: Rect, buf: &mut Buffer, error: String) {
     let error_widget = Paragraph::new(error_lines)
         .block(
             Block::bordered()
-                .title("Error")
+                .title(" Error ")
                 .border_type(BorderType::Rounded)
                 .style(Style::default().fg(Color::Red))
         )

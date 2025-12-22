@@ -183,14 +183,14 @@ pub struct SideQuestBindings {
 
 /// Wasteland Manager module
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WastelandManagerConfig {
+pub struct OverseerConfig {
     #[serde(flatten)]
     pub base: BaseModuleConfig,
-    pub bindings: WastelandManagerBindings,
+    pub bindings: OverseerBindings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WastelandManagerBindings {
+pub struct OverseerBindings {
     pub current_view: String,
     pub selected_index: i32,
     pub pending_devices: Vec<String>,
@@ -306,8 +306,8 @@ pub enum TypedModuleConfig {
     #[serde(rename = "side_quest")]
     SideQuest(SideQuestConfig),
 
-    #[serde(rename = "wasteland_manager")]
-    WastelandManager(WastelandManagerConfig),
+    #[serde(rename = "overseer")]
+    Overseer(OverseerConfig),
 
     #[serde(rename = "album")]
     Album(AlbumConfig),
@@ -333,7 +333,7 @@ impl TypedModuleConfig {
             Self::ValveControl(c) => Some(&c.base),
             Self::Llm(c) => Some(&c.base),
             Self::SideQuest(c) => Some(&c.base),
-            Self::WastelandManager(c) => Some(&c.base),
+            Self::Overseer(c) => Some(&c.base),
             Self::Album(c) => Some(&c.base),
             Self::Knowledge(c) => Some(&c.base),
             Self::Com(c) => Some(&c.base),
@@ -354,7 +354,7 @@ impl TypedModuleConfig {
             Self::ValveControl(_) => "valve_control",
             Self::Llm(_) => "llm",
             Self::SideQuest(_) => "side_quest",
-            Self::WastelandManager(_) => "wasteland_manager",
+            Self::Overseer(_) => "overseer",
             Self::Album(_) => "album",
             Self::Knowledge(_) => "knowledge",
             Self::Com(_) => "com",
@@ -374,7 +374,7 @@ pub fn get_supported_templates() -> Vec<&'static str> {
         "activity_card",
         "llm_card",
         "side_quest_card",
-        "wasteland_manager_card",
+        "overseer_card",
         "",  // Empty template for hidden modules
     ]
 }
@@ -386,7 +386,7 @@ pub fn get_supported_module_types() -> Vec<&'static str> {
         "valve_control",
         "llm",
         "side_quest",
-        "wasteland_manager",
+        "overseer",
         "album",
         "knowledge",
         "com",

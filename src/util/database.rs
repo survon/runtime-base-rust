@@ -65,7 +65,7 @@ impl Database {
 
         // Module-specific initialization
         use crate::modules::llm::database::LlmDatabase;
-        use crate::modules::wasteland_manager::database::WastelandDatabase;
+        use crate::modules::overseer::database::WastelandDatabase;
         use crate::modules::side_quest::database::SideQuestDatabase;
 
         self.init_llm_schema()?;

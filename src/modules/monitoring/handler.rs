@@ -214,7 +214,6 @@ impl ModuleHandler for MonitoringHandler {
                 log_info!("Manual refresh requested for {}", self.device_id);
                 None
             }
-            KeyCode::Esc => Some(AppEvent::Back),
             _ => None,
         }
     }

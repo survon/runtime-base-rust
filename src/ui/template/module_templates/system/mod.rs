@@ -1,1 +1,1 @@
-pub mod wasteland_manager_card;
+pub mod overseer_card;

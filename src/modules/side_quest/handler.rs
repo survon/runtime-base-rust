@@ -159,7 +159,6 @@ impl SideQuestHandler {
                 }
                 None
             }
-            KeyCode::Esc => Some(AppEvent::Back),
             _ => None,
         }
     }
@@ -183,7 +182,7 @@ impl SideQuestHandler {
                     }
                     KeyCode::Esc => {
                         self.current_view = SideQuestView::QuestList;
-                        None
+                        Some(AppEvent::NoOp)
                     }
                     _ => None,
                 }
@@ -205,7 +204,7 @@ impl SideQuestHandler {
                     }
                     KeyCode::Esc => {
                         self.current_view = SideQuestView::QuestList;
-                        None
+                        Some(AppEvent::NoOp)
                     }
                     _ => None,
                 }
@@ -235,7 +234,7 @@ impl SideQuestHandler {
                     }
                     KeyCode::Esc => {
                         self.current_view = SideQuestView::QuestList;
-                        None
+                        Some(AppEvent::NoOp)
                     }
                     _ => None,
                 }
@@ -265,7 +264,7 @@ impl SideQuestHandler {
                     }
                     KeyCode::Esc => {
                         self.current_view = SideQuestView::QuestList;
-                        None
+                        Some(AppEvent::NoOp)
                     }
                     _ => None,
                 }
@@ -298,7 +297,7 @@ impl SideQuestHandler {
                     }
                     KeyCode::Esc => {
                         self.current_view = SideQuestView::QuestList;
-                        None
+                        Some(AppEvent::NoOp)
                     }
                     _ => None,
                 }
@@ -311,7 +310,7 @@ impl SideQuestHandler {
                     }
                     KeyCode::Char('n') | KeyCode::Esc => {
                         self.current_view = SideQuestView::QuestList;
-                        None
+                        Some(AppEvent::NoOp)
                     }
                     _ => None,
                 }
@@ -323,7 +322,7 @@ impl SideQuestHandler {
         match key_code {
             KeyCode::Esc => {
                 self.current_view = SideQuestView::QuestList;
-                None
+                Some(AppEvent::NoOp)
             }
             KeyCode::Char('c') => {
                 // Complete quest from detail view

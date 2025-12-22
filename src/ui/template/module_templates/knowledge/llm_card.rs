@@ -118,7 +118,7 @@ impl UiTemplate for LlmCard {
             .block(
                 Block::default()
                     .borders(Borders::NONE)
-                    .title("Let's go!")
+                    .title(" Let's go! ")
             )
             .style(Style::default().fg(Color::Green))
             .alignment(Alignment::Center);

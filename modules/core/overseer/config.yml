@@ -1,0 +1,36 @@
+# modules/core/overseer/config.yml
+name: "Overseer"
+module_type: "overseer"
+bus_topic: "overseer"
+template: "overseer_card"
+
+bindings:
+  # View state: "Main", "PendingTrust", "AllDevices", "InstallRegistry", "ManageModules", "ArchivedModules"
+  current_view: "Main"
+  
+  # Currently selected item index
+  selected_index: 0
+  
+  # Pending devices requiring trust decision (populated by discovery events)
+  # Format: ["Device Name (MAC:ADDR) RSSI: -65 dBm", ...]
+  pending_devices: []
+  
+  # All known devices with trust status (populated from database)
+  # Format: ["✓ Trusted Device (MAC) RSSI: -65 dBm", "✗ Untrusted Device (MAC) RSSI: -70 dBm", ...]
+  known_devices: []
+  
+  # Registry modules available for installation
+  # Format: ["Module Name - Description", ...]
+  module_list: []
+  
+  # Locally installed modules
+  installed_modules: []
+  
+  # Archived modules
+  archived_modules: []
+  
+  # Optional status message for user feedback
+  status_message: ""
+  
+  # Legacy compatibility
+  is_blinkable: false

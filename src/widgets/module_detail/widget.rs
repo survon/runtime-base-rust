@@ -24,11 +24,10 @@ impl ModuleDetailWidget {
         &self,
         module_manager: &ModuleManager,
         module_idx: usize,
+        is_focused: Option<bool>,
         area: Rect,
         buf: &mut Buffer
     ) -> Block {
-        let is_focused = Some(true); // TODO inject as param
-
         let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Yellow));
 
         let module = match module_manager.get_modules().get(module_idx) {
@@ -48,7 +47,7 @@ impl ModuleDetailWidget {
             _ => "🤷🏻‍♂️️",
         };
 
-        let title = format!("{} {} - Press [Esc] To Close Module Window", icon, module.config.name);
+        let title = format!(" {} {} - Press [Esc] To Close Module Window ", icon, module.config.name);
 
         let container = Block::bordered()
             .title(title)

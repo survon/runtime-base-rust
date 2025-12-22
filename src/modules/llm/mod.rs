@@ -4,8 +4,9 @@
 
 pub mod handler;
 pub mod database;
-pub use database::{ChatMessage, KnowledgeChunk, LlmDatabase};
-pub use handler::{LlmHandler, ChatManager};
+
+pub use database::{LlmDatabase};
+pub use handler::{LlmHandler};
 
 use color_eyre::Result;
 use crate::log_debug;
@@ -23,7 +24,6 @@ pub async fn create_llm_service_if_available(
     let llm_modules = module_manager.get_modules_by_type("llm");
 
     if let Some(llm_module) = llm_modules.first() {
-        // Check model type
         let model = llm_module.config.bindings
             .get("model")
             .and_then(|v| v.as_str())

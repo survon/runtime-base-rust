@@ -279,7 +279,6 @@ impl ModuleHandler for ValveControlHandler {
                 }
                 None
             }
-            KeyCode::Esc => Some(AppEvent::Back),
             _ => None,
         }
     }

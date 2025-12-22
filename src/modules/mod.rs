@@ -1,6 +1,6 @@
 pub mod llm;
 pub mod module_handler;
-pub mod wasteland_manager;
+pub mod overseer;
 pub mod valve_control;
 pub mod monitoring;
 pub mod side_quest;
@@ -301,12 +301,12 @@ impl ModuleManager {
                     }
                 }
 
-                "wasteland_manager" => {
-                    if !self.handlers.contains_key("wasteland_manager") {
+                "overseer" => {
+                    if !self.handlers.contains_key("overseer") {
                         log_info!("🗂️ Registering Wasteland Manager handler");
 
                         self.register_handler(Box::new(
-                            wasteland_manager::handler::WastelandManagerHandler::new(
+                            overseer::handler::OverseerHandler::new(
                                 wasteland_path.clone(),
                                 discovery_manager.clone(),
                                 database.clone(),

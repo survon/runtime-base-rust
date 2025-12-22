@@ -149,13 +149,13 @@ impl ChartCard {
 
         // Render block
         let chart_area = Block::default()
-            .title(format!(" {}{}{}", connected_icon, chart_title, status_suffix))
+            .title(format!(" {}{}{} ", connected_icon, chart_title, status_suffix))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color))
             .inner(chunks[0]);
 
         Block::default()
-            .title(format!(" {}{}{}", connected_icon, chart_title, status_suffix))
+            .title(format!(" {}{}{} ", connected_icon, chart_title, status_suffix))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color))
             .render(chunks[0], buf);
@@ -243,7 +243,7 @@ impl ChartCard {
         let bar_chart = BarChart::default()
             .block(
                 Block::default()
-                    .title(format!(" {}{}{} (Showing {} of {})",
+                    .title(format!(" {}{}{} (Showing {} of {}) ",
                                    connected_icon, module_name, status_suffix,
                                    recent_data.len(), history.len()))
                     .borders(Borders::ALL)
@@ -299,7 +299,7 @@ impl ChartCard {
         let sparkline = Sparkline::default()
             .block(
                 Block::default()
-                    .title(format!(" {}{}{}", connected_icon, module_name, status_suffix))
+                    .title(format!(" {}{}{} ", connected_icon, module_name, status_suffix))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color))
             )

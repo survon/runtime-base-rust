@@ -63,7 +63,7 @@ impl ModulesListWidget {
 
         // Create main container
         let container = Block::bordered()
-            .title(format!("{}Modules ({}/{} 👁️)", title_namespace_prefix, displayable_count, modules_count))
+            .title(format!(" {}Modules ({}/{} 👁️) ", title_namespace_prefix, displayable_count, modules_count))
             .style(border_style)
             .border_type(BorderType::Rounded);
         let inner_area = container.inner(area);

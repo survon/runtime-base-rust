@@ -37,7 +37,7 @@ lazy_static::lazy_static! {
         map.insert("llm_card", llm_card_factory as TemplateFactory);
 
         // System templates
-        map.insert("wasteland_manager_card", wasteland_manager_card_factory as TemplateFactory);
+        map.insert("overseer_card", overseer_card_factory as TemplateFactory);
 
         // Planning templates
         map.insert("side_quest_card", side_quest_card_factory as TemplateFactory);
@@ -75,8 +75,8 @@ fn llm_card_factory() -> Box<dyn UiTemplate> {
     Box::new(module_templates::knowledge::llm_card::LlmCard)
 }
 
-fn wasteland_manager_card_factory() -> Box<dyn UiTemplate> {
-    Box::new(module_templates::system::wasteland_manager_card::WastelandManagerCard)
+fn overseer_card_factory() -> Box<dyn UiTemplate> {
+    Box::new(module_templates::system::overseer_card::OverseerCard)
 }
 
 fn side_quest_card_factory() -> Box<dyn UiTemplate> {

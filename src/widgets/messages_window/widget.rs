@@ -139,17 +139,17 @@ impl MessagesWidget {
         };
 
         let title = if self.current_state.messages.is_empty() {
-            "Message Bus".to_string()
+            " Message Bus ".to_string()
         } else {
             let total = self.current_state.messages.len();
             let end = total.saturating_sub(clamped_offset);
             let start = end.saturating_sub(self.visible_lines);
 
             if clamped_offset == 0 {
-                format!("Message Bus ({}/{}) [LIVE]", total.min(self.visible_lines), total)
+                format!(" Message Bus ({}/{}) [LIVE] ", total.min(self.visible_lines), total)
             } else {
                 format!(
-                    "Message Bus ({}-{}/{}) → {}",
+                    " Message Bus ({}-{}/{}) → {} ",
                     start + 1,
                     end,
                     total,

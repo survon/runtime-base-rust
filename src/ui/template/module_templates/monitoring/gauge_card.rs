@@ -157,7 +157,7 @@ impl UiTemplate for GaugeCard {
         } = self.get_view_data(is_selected, area, buf, module);
 
         let block = Block::default()
-            .title(format!("{}{}", connected_icon, display_name))
+            .title(format!(" {}{} ", connected_icon, display_name))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color));
 
@@ -221,7 +221,7 @@ impl UiTemplate for GaugeCard {
         } = self.get_view_data(false, area, buf, module);
 
         let block = Block::default()
-            .title(format!("{}{}", connected_icon, display_name))
+            .title(format!(" {}{} ", connected_icon, display_name))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color));
 

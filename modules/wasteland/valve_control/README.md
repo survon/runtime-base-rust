@@ -185,7 +185,7 @@
    ```rust
    pub mod llm;
    pub mod module_handler;
-   pub mod wasteland_manager;
+   pub mod overseer;
    pub mod valve_control;  // <-- ADD THIS
    ```
 
