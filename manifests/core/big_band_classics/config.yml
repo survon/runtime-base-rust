@@ -1,4 +1,4 @@
-# modules/core/big_band_mix/config.yml
+# manifests/core/big_band_mix/config.yml
 # Big Band Mix compilation from Internet Archive
 # Source: https://archive.org/details/BigBandMixRecordings1935-1945
 
@@ -166,7 +166,7 @@ bindings:
       artist: "Glenn Miller and his Orchestra"
 
 # Folder structure:
-# modules/core/big_band_mix/
+# manifests/core/big_band_mix/
 #   ├── config.yml
 #   └── audio/
 #       ├── 01.MoonlightSerenade.mp3

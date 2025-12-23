@@ -9,7 +9,7 @@ pub mod module_templates;
 
 /// Every UI widget implements this
 pub trait UiTemplate: Any + Send + Sync + Debug {
-    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module);
+    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module);
     fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module);
     fn required_bindings(&self) -> &'static [&'static str];
     fn docs(&self) -> &'static str;

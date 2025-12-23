@@ -5,7 +5,7 @@ db
 .cache
 logs
 
-modules/core/big_band_classics/audio/*.mp3
+manifests/core/big_band_classics/audio/*.mp3
 
 # We only keep the README in VCS. survon-os will install and pull
 # models into this space.

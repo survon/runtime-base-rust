@@ -1,4 +1,6 @@
-# Core Modules Vs Wasteland Modules
+# Manifests
+
+## Understanding Core Modules Vs Wasteland Modules
 
 **Simply put**, core modules help you interact with the Survon OS, and wasteland modules help you interact with your homestead.
 

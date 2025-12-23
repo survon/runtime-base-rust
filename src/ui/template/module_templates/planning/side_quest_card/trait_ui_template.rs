@@ -8,7 +8,7 @@ use crate::ui::template::UiTemplate;
 use super::{SideQuestCard, ViewData};
 
 impl UiTemplate for SideQuestCard {
-    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
         self.render_overview_cta(is_selected, area, buf, module);
     }
 

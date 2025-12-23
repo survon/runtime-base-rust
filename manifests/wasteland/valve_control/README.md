@@ -124,12 +124,12 @@
 
 1. **Create module directory:**
    ```bash
-   mkdir -p modules/wasteland/valve_control
+   mkdir -p manifests/wasteland/valve_control
    ```
 
 2. **Create config.yml:**
    ```yaml
-   # modules/wasteland/valve_control/config.yml
+   # manifests/wasteland/valve_control/config.yml
    name: "Valve Control"
    module_type: "valve_control"
    bus_topic: "v01"
@@ -154,9 +154,9 @@
 
 3. **Verify file structure:**
    ```bash
-   tree modules/wasteland/
+   tree manifests/wasteland/
    
-   modules/wasteland/
+   manifests/wasteland/
    └── valve_control
        └── config.yml
    ```

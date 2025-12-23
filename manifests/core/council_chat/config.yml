@@ -1,4 +1,4 @@
-# modules/core/council_chat/config.yml
+# manifests/core/council_chat/config.yml
 # Council chat module - talks to remote Survon AI services
 
 name: "Council Chamber"

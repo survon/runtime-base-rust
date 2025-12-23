@@ -7,8 +7,8 @@ use super::{
 
 impl OverseerHandler {
     pub(super) fn handle_install_module(&mut self) {
-        if self.selected_index < self.registry_modules.len() {
-            let module = &self.registry_modules[self.selected_index];
+        if self.selected_index < self.registry_manifests.len() {
+            let module = &self.registry_manifests[self.selected_index];
             let module_id = module.id.clone();
             let module_name = module.name.clone();
 

@@ -142,7 +142,7 @@ impl GaugeCard {
 }
 
 impl UiTemplate for GaugeCard {
-    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let ViewData {
             value,
             unit_label,

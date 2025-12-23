@@ -363,7 +363,7 @@ impl ChartCard {
 }
 
 impl UiTemplate for ChartCard {
-    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let is_contained = false;
 
         let ViewData { chart_type, .. } = self.get_view_data(is_selected, area, buf, module);

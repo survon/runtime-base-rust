@@ -56,7 +56,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let is_messages_focused = matches!(app.overview_focus, OverviewFocus::Messages);
 
     // Render title
-    let title = Paragraph::new("🏡 Survon - Smart Homestead OS")
+    let title = Paragraph::new(" 🏡 Survon - Smart Homestead OS ")
         .block(
             Block::bordered()
                 .title(" Survon ")
@@ -78,7 +78,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         };
         jukebox.render(header_layout[1], buf, is_focused);
     } else {
-        let no_jukebox = Paragraph::new("Broken Jukebox")
+        let no_jukebox = Paragraph::new(" Broken Jukebox ")
             .fg(Color::Green)
             .alignment(Alignment::Center);
         no_jukebox.render(header_layout[1], buf);
@@ -213,10 +213,10 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         OverviewFocus::WastelandModules => format!("{} [Tab] Focus Messages", wasteland_help_text),
         OverviewFocus::Messages => "[↑]/[↓] Scroll  [Tab] Focus Core Modules".to_string(),
         OverviewFocus::CoreModules => format!("{}  [Tab] Focus Jukebox", core_help_text),
-        OverviewFocus::Jukebox => "[   ] ⏯  [←]/[→] ⏮/⏭  [+]/[-] 🔈  [m] Library  [Tab] Remove Overview Focus".to_string(),
+        OverviewFocus::Jukebox => "[Spc] ⏯  [←]/[→] ⏮/⏭  [+]/[-] 🔈  [m] Library  [Tab] Remove Overview Focus".to_string(),
     };
 
-    let help_text = format!("{}  [Enter] Select  [r] Refresh  [q] Quit", focus_hint);
+    let help_text = format!("{}  [Ent] Select  [r] Refresh  [q] Quit", focus_hint);
 
     let help = Paragraph::new(help_text)
         .block(

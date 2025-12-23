@@ -19,7 +19,7 @@ impl OverseerHandler {
         let registry_url = self.registry_url.clone();
         tokio::spawn(async move {
             // Mock call - in real implementation would fetch from network
-            let modules = Self::fetch_registry_modules(&registry_url).await;
+            let modules = Self::fetch_registry_manifests(&registry_url).await;
             if let Ok(modules) = modules {
                 let _ = tx.send(HandlerMessage::RegistryRefreshed(modules));
             }

@@ -119,7 +119,7 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn load_from_path(path: &Path) -> Result<Self> {
+    pub fn load_from_manifest_path(path: &Path) -> Result<Self> {
         let config_path = path.join("config.yml");
         let config_content = fs::read_to_string(&config_path)?;
         let config: ModuleConfig = serde_yaml::from_str(&config_content)?;
@@ -152,7 +152,7 @@ impl Module {
         Ok(self.cached_template.as_ref().unwrap())
     }
 
-    pub fn render_overview(&mut self, is_selected: bool, area: Rect, buf: &mut Buffer) -> std::result::Result<(), String> {
+    pub fn render_overview_cta(&mut self, is_selected: bool, area: Rect, buf: &mut Buffer) -> std::result::Result<(), String> {
         self.get_template()?;
 
         if self.config.is_blinkable() {
@@ -174,7 +174,7 @@ impl Module {
         let mut template = self.cached_template.take()
             .ok_or_else(|| "Template not loaded".to_string())?;
 
-        template.render_overview(is_selected, area, buf, self);
+        template.render_overview_cta(is_selected, area, buf, self);
 
         self.cached_template = Some(template);
 
@@ -223,7 +223,7 @@ pub enum ModuleManagerView {
 #[derive(Debug)]
 pub struct ModuleManager {
     modules: Vec<Module>,
-    pub modules_path: PathBuf,
+    pub manifests_path: PathBuf,
     pub namespace: String,
     pub selected_module: usize,
     pub current_view: ModuleManagerView,
@@ -232,10 +232,10 @@ pub struct ModuleManager {
 }
 
 impl ModuleManager {
-    pub fn new(modules_path: PathBuf, namespace: String) -> Self {
+    pub fn new(manifests_path: PathBuf, namespace: String) -> Self {
         Self {
             modules: Vec::new(),
-            modules_path,
+            manifests_path,
             namespace,
             selected_module: 0,
             current_view: ModuleManagerView::ModuleListView,
@@ -519,25 +519,24 @@ impl ModuleManager {
     pub fn discover_modules(&mut self) -> Result<()> {
         self.modules.clear();
 
-        if !self.modules_path.exists() {
-            fs::create_dir_all(&self.modules_path)?;
+        if !self.manifests_path.exists() {
+            fs::create_dir_all(&self.manifests_path)?;
             return Ok(());
         }
 
-        for entry in fs::read_dir(&self.modules_path)? {
+        for entry in fs::read_dir(&self.manifests_path)? {
             let entry = entry?;
             let path = entry.path();
 
             if path.is_dir() {
                 let config_path = path.join("config.yml");
                 if config_path.exists() {
-                    match Module::load_from_path(&path) {
+                    match Module::load_from_manifest_path(&path) {
                         Ok(module) => {
-                            // println!("Loaded module: {}", module.config.name);
                             self.modules.push(module);
                         }
                         Err(e) => {
-                            panic!("Failed to load module at {:?}: {}", path, e);
+                            panic!("Failed to load manifest at {:?}: {}", path, e);
                         }
                     }
                 }

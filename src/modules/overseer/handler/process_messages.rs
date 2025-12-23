@@ -15,7 +15,7 @@ impl OverseerHandler {
                     self.status_message = None;
                 }
                 HandlerMessage::RegistryRefreshed(modules) => {
-                    self.registry_modules = modules;
+                    self.registry_manifests = modules;
                     self.status_message = None;
                 }
                 HandlerMessage::DeviceTrusted(mac) => {

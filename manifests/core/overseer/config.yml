@@ -1,4 +1,4 @@
-# modules/core/overseer/config.yml
+# manifests/core/overseer/config.yml
 name: "Overseer"
 module_type: "overseer"
 bus_topic: "overseer"

@@ -130,18 +130,18 @@ impl App {
             log_error!("Failed to load overview header image: {}", e);
         }
 
-        let core_modules_path = PathBuf::from("./modules/core/");
+        let core_manifests_path = PathBuf::from("./manifests/core/");
         let core_modules_namespace= "core".to_string();
-        let mut core_module_manager = ModuleManager::new(core_modules_path, core_modules_namespace);
+        let mut core_module_manager = ModuleManager::new(core_manifests_path, core_modules_namespace);
 
-        let wasteland_modules_path = PathBuf::from("./modules/wasteland/");
+        let wasteland_manifests_path = PathBuf::from("./manifests/wasteland/");
         let wasteland_modules_namespace= "wasteland".to_string();
-        let mut wasteland_module_manager = ModuleManager::new(wasteland_modules_path, wasteland_modules_namespace);
+        let mut wasteland_module_manager = ModuleManager::new(wasteland_manifests_path, wasteland_modules_namespace);
 
         let (message_bus, bus_receiver) = MessageBus::new();
         let database = Database::new_implied_all_schemas()?;
 
-        // Discover modules on startup
+        // Discover module manifests on startup
         if let Err(e) = wasteland_module_manager.discover_modules() {
             panic!("Failed to discover wasteland modules: {}", e);
         }
@@ -150,10 +150,10 @@ impl App {
         }
 
         // Initialize DiscoveryManager for BLE field units
-        let wasteland_modules_path = PathBuf::from("./modules/wasteland/");
+        let wasteland_manifests_path = PathBuf::from("./manifests/wasteland/");
         let discovery_manager = Arc::new(DiscoveryManager::new(
             message_bus.clone(),
-            wasteland_modules_path.clone(),
+            wasteland_manifests_path.clone(),
             database.clone(),
         ));
 
@@ -190,7 +190,7 @@ impl App {
 
         // Initialize handlers for modules
         if let Err(e) = wasteland_module_manager.initialize_module_handlers(
-            wasteland_modules_path.clone(),
+            wasteland_manifests_path.clone(),
             Some(discovery_manager.clone()),
             &database,
             &message_bus
@@ -199,7 +199,7 @@ impl App {
         }
 
         if let Err(e) = core_module_manager.initialize_module_handlers(
-            wasteland_modules_path.clone(),
+            wasteland_manifests_path.clone(),
             Some(discovery_manager.clone()),
             &database,
             &message_bus
@@ -640,7 +640,7 @@ impl App {
         if let Some(discovery_manager) = self.discovery_manager.as_ref() {
             // Re-initialize handlers after refresh
             if let Err(e) = self.wasteland_module_manager.initialize_module_handlers(
-                self.wasteland_module_manager.modules_path.clone(),
+                self.wasteland_module_manager.manifests_path.clone(),
                 Some(discovery_manager.clone()),
                 &self.database,
                 &self.message_bus

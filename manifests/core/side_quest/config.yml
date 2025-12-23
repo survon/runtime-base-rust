@@ -1,4 +1,4 @@
-# modules/core/side_quest/config.yml
+# manifests/core/side_quest/config.yml
 name: "Side Quest"
 module_type: "side_quest"
 bus_topic: "side_quest"

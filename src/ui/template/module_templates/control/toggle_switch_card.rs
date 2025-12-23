@@ -119,7 +119,7 @@ impl ToggleSwitch {
 }
 
 impl UiTemplate for ToggleSwitch {
-    fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let ViewData {
             label,
             description,

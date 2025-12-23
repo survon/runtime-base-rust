@@ -538,7 +538,7 @@ impl LlmService {
             I couldn't find relevant information in the knowledge base.\n\n\
             **Try:**\n\
             • Rephrasing with different keywords\n\
-            • Adding PDFs/guides to `modules/wasteland/knowledge_*/knowledge/`\n\
+            • Adding PDFs/guides to `manifests/wasteland/knowledge_*/knowledge/`\n\
             • Restarting to re-ingest knowledge base",
             topic.to_lowercase()
         )

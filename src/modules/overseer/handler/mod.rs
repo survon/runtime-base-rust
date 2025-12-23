@@ -1,7 +1,7 @@
 // src/modules/overseer/handler.rs
 mod installer;
-mod list_registry_modules;
-mod fetch_registry_modules;
+mod list_registry_manifests;
+mod fetch_registry_manifests;
 mod handle_key;
 mod update_bindings;
 mod trait_module_handler;
@@ -61,7 +61,7 @@ use crate::util::{
 
 /// Registry response format for module listings
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegistryModule {
+pub struct RegistryManifest {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -76,7 +76,7 @@ pub struct RegistryModule {
 /// Registry API response
 #[derive(Debug, Deserialize)]
 pub struct RegistryResponse {
-    pub modules: Vec<RegistryModule>,
+    pub modules: Vec<RegistryManifest>,
     pub total: usize,
 }
 
@@ -93,7 +93,7 @@ enum HandlerMessage {
     DevicesRefreshed(Vec<(String, String, i16)>),
     TrustedDevicesRefreshed(Vec<(String, String)>),
     KnownDevicesRefreshed(Vec<KnownDevice>),
-    RegistryRefreshed(Vec<RegistryModule>),
+    RegistryRefreshed(Vec<RegistryManifest>),
     DeviceTrusted(String), // mac address
     DeviceDiscovered {
         mac: String,
@@ -133,7 +133,7 @@ pub struct OverseerHandler {
     message_rx: mpsc::UnboundedReceiver<HandlerMessage>,
     pending_devices: Vec<(String, String, i16)>, // (mac, name, rssi)
     known_devices: Vec<KnownDevice>,
-    registry_modules: Vec<RegistryModule>,
+    registry_manifests: Vec<RegistryManifest>,
     installed_modules: Vec<String>,
     archived_modules: Vec<String>,
     status_message: Option<String>,

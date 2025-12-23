@@ -38,7 +38,7 @@ impl OverseerHandler {
             message_rx,
             pending_devices: Vec::new(),
             known_devices: Vec::new(),
-            registry_modules: Vec::new(),
+            registry_manifests: Vec::new(),
             installed_modules: Vec::new(),
             archived_modules: Vec::new(),
             status_message: None,

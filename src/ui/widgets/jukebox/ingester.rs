@@ -170,8 +170,8 @@ impl<'a> JukeboxIngester<'a> {
         let mut hasher = DefaultHasher::new();
 
         // Hash all album module directories
-        for modules_dir in ["./modules/core", "./modules/wasteland"] {
-            let path = std::path::PathBuf::from(modules_dir);
+        for manifests_dir in ["./manifests/core", "./manifests/wasteland"] {
+            let path = std::path::PathBuf::from(manifests_dir);
             if !path.exists() {
                 continue;
             }

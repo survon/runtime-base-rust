@@ -144,7 +144,7 @@ impl OverseerHandler {
                     None
                 }
                 KeyCode::Down => {
-                    let max = self.registry_modules.len().saturating_sub(1);
+                    let max = self.registry_manifests.len().saturating_sub(1);
                     if self.selected_index < max {
                         self.selected_index += 1;
                     }

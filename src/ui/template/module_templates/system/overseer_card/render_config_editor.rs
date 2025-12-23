@@ -134,20 +134,20 @@ impl OverseerCard {
                 vec![
                     "Editing mode:",
                     "",
-                    "Enter - Save",
-                    "Esc   - Cancel",
-                    "←/→   - Move cursor",
+                    "[Ent]   - Save",
+                    "[←]/[→] - Move cursor",
+                    "[Esc]   - Cancel",
                 ]
             } else {
                 vec![
                     "Navigation:",
                     "",
-                    "↑/↓     - Select field",
-                    "Enter   - Edit text",
-                    "Space   - Edit text",
-                    "←/→     - Toggle bool/enum",
-                    "s       - Save config",
-                    "Esc     - Close editor",
+                    "[↑]/[↓] - Select field",
+                    "[Ent]   - Edit text",
+                    "[Spc]   - Edit text",
+                    "[←]/[→] - Toggle bool/enum",
+                    "[s]     - Save config",
+                    "[Esc]   - Close editor",
                 ]
             };
 
@@ -164,9 +164,9 @@ impl OverseerCard {
         } else {
             // Show abbreviated help at bottom
             let help = if is_editing {
-                "Enter: Save | Esc: Cancel"
+                "[Ent] Save  [Esc] Cancel"
             } else {
-                "↑/↓: Select | Enter: Edit | ←/→: Toggle | s: Save | Esc: Close"
+                "[↑]/[↓] Select  [Ent] Edit  [←]/[→] Toggle  [s] Save  [Esc] Close"
             };
 
             buf.set_string(

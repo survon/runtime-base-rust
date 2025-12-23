@@ -81,7 +81,7 @@ impl OverseerHandler {
             .insert("known_devices".to_string(), serde_json::json!(known_list));
 
         let module_list: Vec<String> = self
-            .registry_modules
+            .registry_manifests
             .iter()
             .map(|m| format!("{} - {}", m.name, m.description))
             .collect();

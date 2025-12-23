@@ -225,13 +225,13 @@ RAM:1243
 ### Step 1: Create Module Directory
 
 ```bash
-mkdir -p modules/wasteland/a01
+mkdir -p manifests/wasteland/a01
 ```
 
 ### Step 2: Create `config.yml`
 
 ```yaml
-# modules/wasteland/a01/config.yml
+# manifests/wasteland/a01/config.yml
 name: "Environmental Monitor"
 module_type: "monitoring"
 bus_topic: "a01"      # Must match device "i" field
@@ -356,7 +356,7 @@ RAM:1243
 ### Issue: No messages in UI
 
 **Check:**
-1. Module directory exists: `ls modules/wasteland/a01/config.yml`
+1. Module manifests directory exists: `ls manifests/wasteland/a01/config.yml`
 2. `bus_topic` matches device's `"i"` field
 3. Topic is whitelisted (temp fix until auto-registration)
 4. BLE connection established (check logs for "✓ Got notification stream")
@@ -465,8 +465,8 @@ message_format:
     b: <int>  # humidity_pct (range: 0 to 100)
     c: <int>  # message_count (incrementing)
 
-# Hub Module Config
-module_config: ./modules/wasteland/a01/config.yml
+# Hub Manifest Config
+module_config: ./manifests/wasteland/a01/config.yml
 
 # Update Frequency
 interval: 3000ms

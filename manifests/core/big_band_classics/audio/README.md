@@ -12,7 +12,7 @@ Run the Survon OS installer and select the option to download audio files when p
 ### Option 2: Manual Download
 1. Download the archive from Internet Archive:
    ```bash
-   cd ~/modules/core/big_band_mix/audio
+   cd ~/manifests/core/big_band_mix/audio
    curl -L "https://archive.org/compress/BigBandMixRecordings1935-1945/formats=VBR%20MP3&file=/BigBandMixRecordings1935-1945.zip" -o BigBandMix.zip
    ```
 

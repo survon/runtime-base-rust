@@ -144,7 +144,7 @@ impl SideQuestCard {
                     [1] One week from now\n\
                     [2] One month from now\n\
                     [3] Three months from now\n\n\
-                    [Enter] Skip (no deadline)")
+                    [Ent] Skip (no deadline)")
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
@@ -181,7 +181,7 @@ impl SideQuestCard {
 
         // Help
         let help_text = match create_step {
-            "Title" | "Description" => "[Enter] Next  [Esc] Cancel",
+            "Title" | "Description" => "[Ent] Next  [Esc] Cancel",
             "Topic" | "Urgency" => "[Esc] Cancel",
             "TriggerDate" => "[Esc] Cancel",
             "Confirm" => "[Esc] Cancel",

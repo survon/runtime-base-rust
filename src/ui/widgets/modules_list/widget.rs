@@ -143,7 +143,7 @@ impl ModulesListWidget {
     fn render_module_box(&self, module: &mut Module, is_selected: bool, area: Rect, buf: &mut Buffer) {
         // If module has a template, render it directly
         if ModuleManager::is_displayable_module(module) {
-            if let Err(e) = module.render_overview(is_selected, area, buf) {
+            if let Err(e) = module.render_overview_cta(is_selected, area, buf) {
                 // If template fails, fall back to metadata view
                 log_error!("Template render failed: {}", e);
                 self.render_metadata_card(module, is_selected, area, buf);
