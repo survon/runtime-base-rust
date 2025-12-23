@@ -105,7 +105,7 @@ impl OverseerCard {
         };
 
         // Help
-        let help_text = "↑/↓: Select • Enter: Trust & Register • 'i': Ignore • 's': Scan Now • 'v': View All • Esc: Back";
+        let help_text = "[Enter] Trust  [i] Ignore  [s] Scan  [v] View All  [Esc] Back";
         let help_component = UiComponent::help(help_text);
         Widget::render(help_component, chunks[help_index], buf);
     }

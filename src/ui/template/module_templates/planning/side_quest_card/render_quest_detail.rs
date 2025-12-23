@@ -66,7 +66,7 @@ impl SideQuestCard {
         Widget::render(details_widget, chunks[1], buf);
 
         // Help
-        let help_text = "'c': Mark Complete • 'b'/Esc: Back to List";
+        let help_text = "[c] Complete  [Esc] Back";
         let help_component = UiComponent::help(help_text);
         Widget::render(help_component, chunks[2], buf);
     }

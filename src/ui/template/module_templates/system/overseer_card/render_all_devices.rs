@@ -59,7 +59,7 @@ impl OverseerCard {
 
         // Device list
         if known_devices.is_empty() {
-            let empty_message = "No devices discovered yet.\n\nDevices will appear here when they're in range.\n\nPress 'r' to refresh scanning.";
+            let empty_message = "No devices discovered yet.\n\nDevices will appear here when they're in range.\n\nPress '[r]' to refresh scanning.";
             let empty_message_component = UiComponent::empty_message(empty_message, Some(border_color));
             Widget::render(empty_message_component, chunks[1], buf);
         } else {
@@ -114,7 +114,7 @@ impl OverseerCard {
         };
 
         // Help
-        let help_text = "↑/↓: Navigate • 't': Toggle Trust • 'd': Delete • 's': Scan Now • 'p': Pending • Esc: Back";
+        let help_text = "[t] Toggle Trust  [d] Delete  [s] Scan  [p] Pending  [Esc] Back";
         let help_component = UiComponent::help(help_text);
         Widget::render(help_component, chunks[help_index], buf);
     }

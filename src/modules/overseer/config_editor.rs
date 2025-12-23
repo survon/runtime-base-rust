@@ -924,11 +924,11 @@ impl ConfigEditor {
         } else {
             // Show abbreviated help at bottom
             let help = if self.is_new_module && self.fields.len() == 2 {
-                "↑/↓: Select | ←/→: Change Type | Enter: Continue | Esc: Cancel"
+                "←/→: Change Type | Esc: Cancel"
             } else if self.is_editing {
                 "Enter: Save | Esc: Cancel"
             } else {
-                "↑/↓: Select | Enter: Edit | ←/→: Toggle | s: Save | Esc: Close"
+                " ←/→: Toggle | s: Save | Esc: Close"
             };
 
             buf.set_string(

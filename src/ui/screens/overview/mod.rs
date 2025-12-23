@@ -49,7 +49,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
 
     let is_none_focused = matches!(app.overview_focus, OverviewFocus::None);
     let is_jukebox_focused = matches!(app.overview_focus, OverviewFocus::Jukebox);
-    let is_wasteland_modules_list_focused = matches!(app.overview_focus, OverviewFocus::WastelandModules);
+        let is_wasteland_modules_list_focused = matches!(app.overview_focus, OverviewFocus::WastelandModules);
     let is_wasteland_modules_list_view = matches!(app.wasteland_module_manager.current_view, ModuleManagerView::ModuleListView);
     let is_core_modules_list_focused = matches!(app.overview_focus, OverviewFocus::CoreModules);
     let is_core_modules_list_view = matches!(app.core_module_manager.current_view, ModuleManagerView::ModuleListView);
@@ -87,7 +87,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     // Render wasteland modules
     let mut needs_redraw = false;
     {
-        let is_focused: Option<bool> = if is_wasteland_modules_list_focused {
+            let is_focused: Option<bool> = if is_wasteland_modules_list_focused {
             Some(true)
         } else if is_none_focused {
             None
@@ -194,29 +194,29 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         if app.wasteland_module_manager.get_modules().is_empty() {
             "No wasteland modules found."
         } else if is_wasteland_modules_list_view {
-            "←/→: Navigate Wasteland Modules"
+            "[←]/[→] Navigate Wasteland Modules"
         } else {
-            "Esc: Back to List"
+            "[Esc] Back to List"
         }
     };
 
     let core_help_text: &str = {
         if is_core_modules_list_view {
-            "←/→: Navigate Core Modules"
+            "[←]/[→] Navigate Core Modules"
         } else {
-            "Esc: Back to List"
+            "[Esc] Back to List"
         }
     };
 
     let focus_hint = match app.overview_focus {
-        OverviewFocus::None => "Tab: Focus Wasteland Modules".to_string(),
-        OverviewFocus::WastelandModules => format!("{} • Tab: Focus Messages", wasteland_help_text),
-        OverviewFocus::Messages => "↑/↓: Scroll Messages • Tab: Focus Core Modules".to_string(),
-        OverviewFocus::CoreModules => format!("{} • Tab: Remove Overview Focus", core_help_text),
-        OverviewFocus::Jukebox => "Space: Play/Pause • ←/→: Skip • +/-: Volume • m: Library • Tab: Focus Next".to_string(),
+        OverviewFocus::None => "[Tab] Focus Wasteland Modules".to_string(),
+        OverviewFocus::WastelandModules => format!("{} [Tab] Focus Messages", wasteland_help_text),
+        OverviewFocus::Messages => "[↑]/[↓] Scroll  [Tab] Focus Core Modules".to_string(),
+        OverviewFocus::CoreModules => format!("{}  [Tab] Focus Jukebox", core_help_text),
+        OverviewFocus::Jukebox => "[   ] ⏯  [←]/[→] ⏮/⏭  [+]/[-] 🔈  [m] Library  [Tab] Remove Overview Focus".to_string(),
     };
 
-    let help_text = format!("{} • Enter: Select • 'r': Refresh • 'q': Quit", focus_hint);
+    let help_text = format!("{}  [Enter] Select  [r] Refresh  [q] Quit", focus_hint);
 
     let help = Paragraph::new(help_text)
         .block(

@@ -58,7 +58,7 @@ impl SideQuestCard {
 
         // Quest list
         if quests.is_empty() {
-            let empty_msg = Paragraph::new("No side quests yet!\n\nPress 'n' to create your first quest.\n\nTrack activities you want to do someday -\nrock climbing, that new restaurant,\nlearning a skill, etc.")
+            let empty_msg = Paragraph::new("No side quests yet!\n\nPress '[n]' to create your first quest.\n\nTrack activities you want to do someday -\nrock climbing, that new restaurant,\nlearning a skill, etc.")
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
@@ -109,7 +109,7 @@ impl SideQuestCard {
         };
 
         // Help
-        let help_text = "↑/↓: Navigate • Enter: View Details • 'n': New Quest • 'c': Complete • 'd': Delete • Esc: Back";
+        let help_text = "[n]: New | [c]: Complete | [d]: Delete | [Esc]: Back";
         let help_component = UiComponent::help(help_text);
         Widget::render(help_component, chunks[help_index], buf);
     }

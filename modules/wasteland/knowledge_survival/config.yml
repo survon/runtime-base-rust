@@ -1,10 +1,8 @@
-name: "Survival Guide"
-module_type: knowledge
-bus_topic: knowledge_survival
-template: ""  # Empty template = won't show in dashboard
-
-# Optional metadata
 bindings:
-  description: "Emergency survival procedures and protocols"
-  version: "2.1"
-  last_updated: "2024-01-15"
+  description: Emergency survival procedures and protocols
+  last_updated: 2024-01-15
+  version: '2.1'
+bus_topic: knowledge_survival
+module_type: knowledge
+name: Survival Guide
+template: ''

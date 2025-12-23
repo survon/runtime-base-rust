@@ -64,7 +64,7 @@ impl OverseerHandler {
         // Now do async refresh for things that need network/async ops
         handler.refresh_async_data_only();
 
-        handler.status_message = Some("Ready - Press 's' to scan for devices".to_string());
+        handler.status_message = Some("Ready - Press '[s]' to scan for devices".to_string());
 
         handler
     }

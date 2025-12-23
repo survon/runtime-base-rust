@@ -141,10 +141,10 @@ impl SideQuestCard {
             }
             "TriggerDate" => {
                 let content = Paragraph::new("\nOptional: Set a trigger date\n\n\
-                    1. One week from now\n\
-                    2. One month from now\n\
-                    3. Three months from now\n\n\
-                    Enter: Skip (no deadline)")
+                    [1] One week from now\n\
+                    [2] One month from now\n\
+                    [3] Three months from now\n\n\
+                    [Enter] Skip (no deadline)")
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
@@ -161,7 +161,7 @@ impl SideQuestCard {
                     Description: {}\n\
                     Topic: {}\n\
                     Urgency: {}\n\n\
-                    Create this quest? (y/n)",
+                    Create this quest? ([y]/[n])",
                     form_title, form_description, form_topic, form_urgency
                 );
 
@@ -181,11 +181,11 @@ impl SideQuestCard {
 
         // Help
         let help_text = match create_step {
-            "Title" | "Description" => "Type to enter text • Enter: Next • Esc: Cancel",
-            "Topic" | "Urgency" => "↑/↓: Navigate • Enter: Select • Esc: Cancel",
-            "TriggerDate" => "1/2/3: Select • Enter: Skip • Esc: Cancel",
-            "Confirm" => "'y': Create Quest • 'n': Cancel • Esc: Cancel",
-            _ => "Esc: Cancel",
+            "Title" | "Description" => "[Enter] Next  [Esc] Cancel",
+            "Topic" | "Urgency" => "[Esc] Cancel",
+            "TriggerDate" => "[Esc] Cancel",
+            "Confirm" => "[Esc] Cancel",
+            _ => "[Esc] Cancel",
         };
         let help_component = UiComponent::help(help_text);
         Widget::render(help_component, chunks[2], buf);

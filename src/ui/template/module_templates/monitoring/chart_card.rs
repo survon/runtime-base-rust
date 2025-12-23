@@ -1,14 +1,14 @@
-// src/ui/module_templates/monitoring/chart_card.rs
-use crate::modules::Module;
-use crate::ui::template::UiTemplate;
-use ratatui::prelude::*;
-use ratatui::buffer::Buffer;
-use ratatui::widgets::{
-    Block, Borders, Widget, BarChart, Sparkline, Paragraph,
+use ratatui::{
+    prelude::*,
+    buffer::Buffer,
+    widgets::{Block, Borders, Widget, BarChart, Sparkline, Paragraph, Padding},
+    layout::{Constraint, Direction, Layout, Alignment},
 };
-use ratatui::symbols;
-use ratatui::layout::{Constraint, Direction, Layout, Alignment};
-use crate::log_debug;
+
+use crate::{
+    modules::Module,
+    ui::template::UiTemplate,
+};
 
 #[derive(Debug)]
 pub struct ChartCard;
@@ -123,7 +123,14 @@ impl ChartCard {
         Vec::new()
     }
 
-    fn render_line_chart(&self, module: &mut Module, area: Rect, buf: &mut Buffer, is_selected: bool) {
+    fn render_line_chart(
+        &self,
+        module: &mut Module,
+        area: Rect,
+        buf: &mut Buffer,
+        is_selected: bool,
+        is_contained: bool,
+    ) {
         let ViewData {
             history,
             a,
@@ -148,20 +155,23 @@ impl ChartCard {
             .split(area);
 
         // Render block
-        let chart_area = Block::default()
-            .title(format!(" {}{}{} ", connected_icon, chart_title, status_suffix))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(border_color))
-            .inner(chunks[0]);
+        let container: Block = if is_contained {
+            Block::default()
+                .borders(Borders::NONE)
+                .padding(Padding::symmetric(1, 1))
+        } else {
+            Block::default()
+                .title(format!(" {}{}{} ", connected_icon, chart_title, status_suffix))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+        };
 
-        Block::default()
-            .title(format!(" {}{}{} ", connected_icon, chart_title, status_suffix))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(border_color))
-            .render(chunks[0], buf);
+        let inner_area = container.inner(chunks[0]);
+
+        container.render(chunks[0], buf);
 
         // Calculate how many points fit in the width
-        let max_visible = chart_area.width.saturating_sub(2) as usize;
+        let max_visible = inner_area.width.saturating_sub(2) as usize;
 
         // Get sliding window of most recent data that fits
         let visible_data: Vec<(f64, f64)> = history.iter()
@@ -173,17 +183,17 @@ impl ChartCard {
             .collect();
 
         // Draw simple ASCII line chart
-        if !visible_data.is_empty() && chart_area.height > 2 {
-            let height = chart_area.height as f64;
-            let width = chart_area.width as f64;
+        if !visible_data.is_empty() && inner_area.height > 2 {
+            let height = inner_area.height as f64;
+            let width = inner_area.width as f64;
             let data_points = visible_data.len() as f64;
 
             for (i, (_, val)) in visible_data.iter().enumerate() {
-                let x = chart_area.x + ((i as f64 / data_points.max(1.0)) * width) as u16;
+                let x = inner_area.x + ((i as f64 / data_points.max(1.0)) * width) as u16;
                 let normalized = ((val - min_value) / (max_value - min_value)).clamp(0.0, 1.0);
-                let y = chart_area.y + chart_area.height - 1 - ((normalized * (height - 1.0)) as u16);
+                let y = inner_area.y + inner_area.height - 1 - ((normalized * (height - 1.0)) as u16);
 
-                if x < chart_area.x + chart_area.width && y >= chart_area.y {
+                if x < inner_area.x + inner_area.width && y >= inner_area.y {
                     let style = if !is_connected {
                         Style::default().fg(Color::DarkGray)
                     } else {
@@ -202,7 +212,14 @@ impl ChartCard {
         value_widget.render(chunks[1], buf);
     }
 
-    fn render_bar_chart(&self, module: &mut Module, area: Rect, buf: &mut Buffer, is_selected: bool) {
+    fn render_bar_chart(
+        &self,
+        module: &mut Module,
+        area: Rect,
+        buf: &mut Buffer,
+        is_selected: bool,
+        is_contained: bool,
+    ) {
         let ViewData {
             module_name,
             history,
@@ -240,15 +257,21 @@ impl ChartCard {
 
         let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
 
+        let container = if is_contained {
+            Block::default()
+                .borders(Borders::NONE)
+                .padding(Padding::symmetric(1, 1))
+        } else {
+            Block::default()
+                .title(format!(" {}{}{} (Showing {} of {}) ",
+                               connected_icon, module_name, status_suffix,
+                               recent_data.len(), history.len()))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+        };
+
         let bar_chart = BarChart::default()
-            .block(
-                Block::default()
-                    .title(format!(" {}{}{} (Showing {} of {}) ",
-                                   connected_icon, module_name, status_suffix,
-                                   recent_data.len(), history.len()))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-            )
+            .block(container)
             .data(&bar_data)
             .bar_width(3)
             .bar_gap(1)
@@ -259,7 +282,14 @@ impl ChartCard {
         Widget::render(bar_chart, area, buf);
     }
 
-    fn render_sparkline(&self, module: &mut Module, area: Rect, buf: &mut Buffer, is_selected: bool) {
+    fn render_sparkline(
+        &self,
+        module: &mut Module,
+        area: Rect,
+        buf: &mut Buffer,
+        is_selected: bool,
+        is_contained: bool,
+    ) {
         let ViewData {
             module_name,
             history,
@@ -296,13 +326,19 @@ impl ChartCard {
             .map(|(val_a, _, _)| val_a.round() as u64)
             .collect();
 
+        let container = if is_contained {
+            Block::default()
+                .borders(Borders::NONE)
+                .padding(Padding::symmetric(1, 1))
+        } else {
+            Block::default()
+                .title(format!(" {}{}{} ", connected_icon, module_name, status_suffix))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+        };
+
         let sparkline = Sparkline::default()
-            .block(
-                Block::default()
-                    .title(format!(" {}{}{} ", connected_icon, module_name, status_suffix))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-            )
+            .block(container)
             .data(&spark_data)
             .style(Style::default().fg(if is_connected { Color::Yellow } else { Color::DarkGray }))
             .max(max_value as u64);
@@ -328,23 +364,27 @@ impl ChartCard {
 
 impl UiTemplate for ChartCard {
     fn render_overview(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+        let is_contained = false;
+
         let ViewData { chart_type, .. } = self.get_view_data(is_selected, area, buf, module);
 
         match chart_type {
-            "bar" => self.render_bar_chart(module, area, buf, is_selected),
-            "sparkline" | "spark" => self.render_sparkline(module, area, buf, is_selected),
-            "line" | _ => self.render_line_chart(module, area, buf, is_selected),
+            "bar" => self.render_bar_chart(module, area, buf, is_selected, is_contained),
+            "sparkline" | "spark" => self.render_sparkline(module, area, buf, is_selected, is_contained),
+            "line" | _ => self.render_line_chart(module, area, buf, is_selected, is_contained),
         }
     }
 
     fn render_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let is_selected = false;
+        let is_contained = true;
+
         let ViewData { chart_type, .. } = self.get_view_data(is_selected, area, buf, module);
 
         match chart_type {
-            "bar" => self.render_bar_chart(module, area, buf, is_selected),
-            "sparkline" | "spark" => self.render_sparkline(module, area, buf, is_selected),
-            "line" | _ => self.render_line_chart(module, area, buf, is_selected),
+            "bar" => self.render_bar_chart(module, area, buf, is_selected, is_contained),
+            "sparkline" | "spark" => self.render_sparkline(module, area, buf, is_selected, is_contained),
+            "line" | _ => self.render_line_chart(module, area, buf, is_selected, is_contained),
         }
     }
 

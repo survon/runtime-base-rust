@@ -100,7 +100,7 @@ impl OverseerCard {
         };
 
         // Help
-        let help_text = "↑/↓: Navigate • Enter: Select • 's': Scan for Devices • 'r': Refresh • Esc: Back";
+        let help_text = "[s] Scan  [r] Refresh  [Esc] Back";
         let help_component = UiComponent::help(help_text);
         Widget::render(help_component, chunks[help_index], buf);
     }

@@ -33,7 +33,7 @@ use crate::modules::{
     ModuleManagerView
 };
 
-use crate::widgets::{
+use crate::ui::widgets::{
     jukebox::{
         actor::JukeboxActor,
         widget::JukeboxWidget,
