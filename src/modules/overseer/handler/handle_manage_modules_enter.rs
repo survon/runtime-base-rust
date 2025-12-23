@@ -28,7 +28,7 @@ impl OverseerHandler {
                                 .unwrap_or_default();
 
                             // Create editor with FULL config
-                            self.config_editor = Some(ConfigEditor::from_module_config(
+                            self.config_editor = Some(ConfigEditor::from_manifest(
                                 module_name.clone(),
                                 module_type,
                                 &config,
