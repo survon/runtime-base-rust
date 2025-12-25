@@ -1,7 +1,7 @@
 use crate::util::database::Database;
 
 impl Database {
-    pub(super) fn _init_llm_schema(&self) -> rusqlite::Result<()> {
+    pub(super) fn _llm__init_schema(&self) -> rusqlite::Result<()> {
         {
             let conn = self.app_conn.lock().unwrap();
             conn.execute(

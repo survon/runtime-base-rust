@@ -9,7 +9,7 @@ use crate::{
 };
 
 impl Database {
-    pub(super) fn _search_knowledge(&self, query: &str, domains: &[String], limit: usize) -> rusqlite::Result<Vec<KnowledgeChunk>> {
+    pub(super) fn _llm__search_knowledge(&self, query: &str, domains: &[String], limit: usize) -> rusqlite::Result<Vec<KnowledgeChunk>> {
         let clean_query = sanitize_fts5_query(query);
         if clean_query.trim().is_empty() {
             return Ok(Vec::new());

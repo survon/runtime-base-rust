@@ -9,7 +9,7 @@ use crate::util::{
         discovery::DiscoveryManager,
     }
 };
-use crate::modules::overseer::database::WastelandDatabase;
+use crate::modules::overseer::database::OverseerDatabase;
 
 use super::{OverseerHandler, WastelandView};
 

@@ -65,11 +65,11 @@ impl Database {
 
         // Module-specific initialization
         use crate::modules::llm::database::LlmDatabase;
-        use crate::modules::overseer::database::WastelandDatabase;
+        use crate::modules::overseer::database::OverseerDatabase;
         use crate::modules::side_quest::database::SideQuestDatabase;
 
         self.init_llm_schema()?;
-        self.init_wasteland_schema()?;
+        self.init_overseer_schema()?;
         self.init_side_quest_schema()?;
 
         Ok(())

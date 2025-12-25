@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Database {
-    pub(super) fn _insert_knowledge_chunk(&self, chunk: KnowledgeChunk) -> rusqlite::Result<()> {
+    pub(super) fn _llm__insert_knowledge_chunk(&self, chunk: KnowledgeChunk) -> rusqlite::Result<()> {
         let conn = self.knowledge_conn.lock().unwrap();
         conn.execute(
             "INSERT INTO knowledge (source_file, domain, category, title, body, chunk_index, metadata)

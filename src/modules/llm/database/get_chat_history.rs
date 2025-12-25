@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Database {
-    pub(super) fn _get_chat_history(&self, session_id: &str, limit: usize) -> rusqlite::Result<Vec<ChatMessage>> {
+    pub(super) fn _llm__get_chat_history(&self, session_id: &str, limit: usize) -> rusqlite::Result<Vec<ChatMessage>> {
         let conn = self.app_conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, session_id, role, content, timestamp, module_name

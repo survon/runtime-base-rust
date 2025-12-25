@@ -1,4 +1,4 @@
-use crate::modules::overseer::database::WastelandDatabase;
+use crate::modules::overseer::database::OverseerDatabase;
 use super::{HandlerMessage, OverseerHandler};
 
 impl OverseerHandler {

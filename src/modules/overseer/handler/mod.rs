@@ -49,7 +49,7 @@ use crate::modules::{
     module_handler::ModuleHandler,
     overseer::{
         config_editor::{ConfigEditor, EditorAction, FieldValue},
-        database::{KnownDevice, WastelandDatabase},
+        database::{OverseerDatabase, KnownDevice},
         handler::{installer::*},
     },
     ConfigValidator, Module,

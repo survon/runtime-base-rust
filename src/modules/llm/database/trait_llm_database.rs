@@ -18,26 +18,26 @@ pub trait LlmDatabase {
 
 impl LlmDatabase for Database {
     fn init_llm_schema(&self) -> rusqlite::Result<()> {
-        self._init_llm_schema()
+        self._llm__init_schema()
     }
 
     fn insert_chat_message(&self, message: ChatMessage) -> rusqlite::Result<i64> {
-        self._insert_chat_message(message)
+        self._llm__insert_chat_message(message)
     }
 
     fn get_chat_history(&self, session_id: &str, limit: usize) -> rusqlite::Result<Vec<ChatMessage>> {
-        self._get_chat_history(session_id, limit)
+        self._llm__get_chat_history(session_id, limit)
     }
 
     fn insert_knowledge_chunk(&self, chunk: KnowledgeChunk) -> rusqlite::Result<()> {
-        self._insert_knowledge_chunk(chunk)
+        self._llm__insert_knowledge_chunk(chunk)
     }
 
     fn search_knowledge(&self, query: &str, domains: &[String], limit: usize) -> rusqlite::Result<Vec<KnowledgeChunk>> {
-        self._search_knowledge(query, domains, limit)
+        self._llm__search_knowledge(query, domains, limit)
     }
 
     fn clear_knowledge(&self) -> rusqlite::Result<()> {
-        self._clear_knowledge()
+        self._llm__clear_knowledge()
     }
 }

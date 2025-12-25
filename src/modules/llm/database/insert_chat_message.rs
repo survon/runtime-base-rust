@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Database {
-    pub(super) fn _insert_chat_message(&self, message: ChatMessage) -> rusqlite::Result<i64> {
+    pub(super) fn _llm__insert_chat_message(&self, message: ChatMessage) -> rusqlite::Result<i64> {
         let conn = self.app_conn.lock().unwrap();
         conn.execute(
             "INSERT INTO chat_messages (session_id, role, content, timestamp, module_name)

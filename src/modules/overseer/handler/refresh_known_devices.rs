@@ -1,5 +1,5 @@
 use crate::log_error;
-use crate::modules::overseer::database::WastelandDatabase;
+use crate::modules::overseer::database::OverseerDatabase;
 
 use super::OverseerHandler;
 
