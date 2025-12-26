@@ -324,7 +324,6 @@ impl ModuleManager {
 
                         log_info!("🚰 Registering valve_control handler for device: {}", device_id);
 
-                        // NEW: Pass discovery_manager to valve handler
                         let handler = Box::new(
                             valve_control::handler::ValveControlHandler::new(
                                 message_bus.clone(),

@@ -259,7 +259,6 @@ pub struct ComConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComBindings {
-    // For toggle_switch template
     #[serde(default)]
     pub state: Option<bool>,
     #[serde(default)]
@@ -274,8 +273,6 @@ pub struct ComBindings {
     pub ports: Option<Vec<String>>,
     #[serde(default)]
     pub messages: Option<Vec<String>>,
-
-    // For activity_card template
     #[serde(default)]
     pub activity_log: Option<Vec<String>>,
     #[serde(default)]
