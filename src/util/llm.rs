@@ -11,7 +11,7 @@ use tokio::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::util::database::Database;
-use crate::modules::llm::database::{LlmDatabase, ChatMessage, KnowledgeChunk};
+use crate::module::strategies::llm::database::{LlmDatabase, ChatMessage, KnowledgeChunk};
 use crate::{log_error, log_debug};
 
 /// LLM service with optional lightweight summarizer

@@ -9,7 +9,7 @@ use ratatui::{
 use std::time::Duration;
 
 use crate::log_error;
-use crate::modules::{Module, ModuleManager};
+use crate::module::{Module, ModuleManager};
 use crate::ui::style::dim_unless_focused;
 
 const MODULES_PER_ROW: usize = 3;

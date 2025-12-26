@@ -4,7 +4,7 @@ use std::fs;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use color_eyre::Result;
-use crate::modules::{Module, ModuleManager};
+use crate::module::{Module, ModuleManager};
 use crate::util::database::Database;
 use super::database::{JukeboxDatabase, Album, Track};
 use crate::{log_info, log_warn, log_debug};

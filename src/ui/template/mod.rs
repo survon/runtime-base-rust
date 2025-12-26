@@ -1,5 +1,5 @@
 // src/ui/template.rs
-use crate::modules::Module;
+use crate::module::Module;
 use ratatui::prelude::*;
 use std::collections::HashMap;
 use std::fmt::Debug;

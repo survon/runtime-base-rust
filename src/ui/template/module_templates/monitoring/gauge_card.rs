@@ -1,7 +1,7 @@
 // src/ui/module_templates/monitoring/gauge_card.rs - ENHANCED VERSION
 // Add CMD window status indicator to existing gauge
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;

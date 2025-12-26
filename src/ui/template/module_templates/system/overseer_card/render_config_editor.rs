@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 use super::OverseerCard;
 
 impl OverseerCard {

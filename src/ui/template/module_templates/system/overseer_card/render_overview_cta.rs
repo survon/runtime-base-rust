@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, BorderType},
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::components::UiComponent;
 use crate::util::string::StringUtils;
 

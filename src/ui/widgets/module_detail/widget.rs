@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget},
 };
 use ratatui::prelude::Style;
-use crate::modules::ModuleManager;
+use crate::module::ModuleManager;
 use crate::ui::style::dim_unless_focused;
 
 #[derive(Debug)]

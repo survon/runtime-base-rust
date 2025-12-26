@@ -7,7 +7,7 @@ use ratatui::{
     text::Line,
 };
 use crate::app::{App, OverviewFocus};
-use crate::modules::ModuleManagerView;
+use crate::module::ModuleManagerView;
 
 pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let header_constraints = Constraint::Length(10);

@@ -1,5 +1,5 @@
 // src/ui/module_templates/core/llm_card.rs
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::template::UiTemplate;
 use ratatui::prelude::*;
 use ratatui::buffer::Buffer;

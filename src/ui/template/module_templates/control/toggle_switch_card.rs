@@ -6,7 +6,7 @@ use ratatui::layout::{Alignment, Layout, Constraint, Direction};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::template::UiTemplate;
 
 #[derive(Debug)]

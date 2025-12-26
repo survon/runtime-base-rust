@@ -1,4 +1,4 @@
-use crate::modules::Module;
+use crate::module::Module;
 
 use super::ChartCard;
 

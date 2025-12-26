@@ -4,7 +4,7 @@ use ratatui::{
 };
 
 use crate::{
-    modules::Module,
+    module::Module,
     ui::template::UiTemplate,
 };
 

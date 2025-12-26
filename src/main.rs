@@ -2,7 +2,7 @@ use crate::app::App;
 
 pub mod app;
 pub mod ui;
-pub mod modules;
+pub mod module;
 pub mod util;
 
 #[tokio::main]

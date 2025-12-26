@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::collections::HashMap;
 use crate::util::database::{Database};
-use crate::modules::llm::database::{KnowledgeChunk, LlmDatabase};
+use crate::module::strategies::llm::database::{KnowledgeChunk, LlmDatabase};
 use crate::{log_error, log_debug, log_info, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

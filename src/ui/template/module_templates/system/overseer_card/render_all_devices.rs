@@ -6,7 +6,7 @@ use ratatui::{
 
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::components::UiComponent;
 use super::{ViewData, OverseerCard};
 

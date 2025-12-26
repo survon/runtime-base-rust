@@ -3,7 +3,7 @@ use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
 use ratatui::widgets::{Block, Borders, List, ListItem, Widget};
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::template::UiTemplate;
 
 #[derive(Debug)]

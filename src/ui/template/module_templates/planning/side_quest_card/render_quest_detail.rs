@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::components::UiComponent;
 use super::{SideQuestCard, ViewData};
 

@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 use crate::ui::template::UiTemplate;
 use super::{ViewData, OverseerCard};
 

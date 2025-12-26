@@ -11,23 +11,19 @@ use std::collections::HashMap;
 use ratatui::{layout::Rect, Frame};
 
 use crate::util::{
-    database::{Database},
-    knowledge::KnowledgeIngester,
+    database::Database,
+    image::ImageCache,
     io::{
-        bus::{BusMessage, BusReceiver, MessageBus},
-        transport::TransportManager,
-        event::{AppEvent, Event, EventHandler},
-        discovery::{DiscoveryManager},
         ble_scheduler::{CommandPriority, QueuedCommand},
+        bus::{BusMessage, BusReceiver, MessageBus},
+        discovery::DiscoveryManager,
+        event::{AppEvent, Event, EventHandler},
+        transport::TransportManager,
     },
-    image::ImageCache
+    knowledge::KnowledgeIngester
 };
 
-use crate::modules::{
-    llm::{
-      handler::LlmHandler,
-      database::ChatMessage
-    },
+use crate::module::{
     Module,
     ModuleManager,
     ModuleManagerView
@@ -36,28 +32,28 @@ use crate::modules::{
 use crate::ui::widgets::{
     jukebox::{
         actor::JukeboxActor,
-        widget::JukeboxWidget,
         ingester::JukeboxIngester,
+        widget::JukeboxWidget,
     },
     messages_window::{
         actor::MessagesActor,
         widget::MessagesWidget,
     },
-    modules_list::widget::ModulesListWidget,
     module_detail::widget::ModuleDetailWidget,
+    modules_list::widget::ModulesListWidget,
 };
 
 use crate::ui::{
-    document::{
-        DocumentManager,
-    },
-    screens::{
-        splash::SplashScreen
-    },
-    style::{AdaptiveColors}
+    document::DocumentManager,
+    screens::splash::SplashScreen,
+    style::AdaptiveColors
 };
 
 use crate::{log_debug, log_error, log_info};
+use crate::module::strategies::llm::{
+    database::ChatMessage,
+    handler::LlmHandler
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSource {
@@ -980,7 +976,7 @@ impl App {
             // Get mutable access to the LLM handler
             if let Some(llm_handler) = self.core_module_manager
                 .get_handler_mut("llm")
-                .and_then(|h| h.as_any_mut().downcast_mut::<crate::modules::llm::LlmHandler>())
+                .and_then(|h| h.as_any_mut().downcast_mut::<crate::module::strategies::llm::LlmHandler>())
             {
                 // Submit the message - the handler now does all the work
                 if let Err(e) = llm_handler.submit_message(

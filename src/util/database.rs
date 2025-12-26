@@ -64,9 +64,9 @@ impl Database {
         self.init_core_tables()?;
 
         // Module-specific initialization
-        use crate::modules::llm::database::LlmDatabase;
-        use crate::modules::overseer::database::OverseerDatabase;
-        use crate::modules::side_quest::database::SideQuestDatabase;
+        use crate::module::strategies::llm::database::LlmDatabase;
+        use crate::module::strategies::overseer::database::OverseerDatabase;
+        use crate::module::strategies::side_quest::database::SideQuestDatabase;
 
         self.init_llm_schema()?;
         self.init_overseer_schema()?;

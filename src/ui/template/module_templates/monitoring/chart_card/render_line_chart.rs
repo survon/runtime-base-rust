@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Padding, Paragraph},
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 
 use super::{ChartCard, ViewData};
 

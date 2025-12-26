@@ -5,7 +5,7 @@ use ratatui::{
 
 };
 
-use crate::modules::Module;
+use crate::module::Module;
 use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
