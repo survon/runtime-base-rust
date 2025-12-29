@@ -44,7 +44,7 @@ use crate::ui::widgets::{
 };
 
 use crate::ui::{
-    document::DocumentManager,
+    document::manager::DocumentManager,
     screens::splash::SplashScreen,
     style::AdaptiveColors
 };
