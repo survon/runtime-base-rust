@@ -15,7 +15,7 @@ pub struct CouncilAdvisor {
     pub role: String,
     pub capabilities: Vec<String>,
     pub status: AdvisorStatus,
-    pub last_seen: Option<u64>>,
+    pub last_seen: Option<u64>,
     pub config: Option<serde_json::Value>,
 }
 
