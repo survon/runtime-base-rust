@@ -3,7 +3,7 @@ use crate::{
     module::{
         config::validation::{
             config_validator::ConfigValidator,
-            error::ValidationError
+            error::ValidationError,
         },
         get_supported_templates,
         TypedModuleConfig,
