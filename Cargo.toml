@@ -1,5 +1,5 @@
 [package]
-name = "runtime-base-rust"
+name = "survon-runtime-base"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
@@ -50,6 +50,6 @@ rand = "0.8.5"
 reqwest = { version = "0.12", features = ["json"] }
 
 [[bin]]
-name = "runtime-base-rust"
+name = "survon-runtime-base"
 path = "src/main.rs"
 

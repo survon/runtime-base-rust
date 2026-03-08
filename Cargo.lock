@@ -3094,41 +3094,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "runtime-base-rust"
-version = "0.1.0"
-dependencies = [
- "btleplug",
- "chrono",
- "color-eyre",
- "crossterm 0.28.1",
- "futures",
- "gag",
- "hound",
- "image",
- "lazy_static",
- "libc",
- "llama_cpp",
- "pdf",
- "pdf-extract",
- "rand",
- "ratatui 0.29.0",
- "ratatui-image",
- "reqwest",
- "rodio",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_yaml",
- "throbber-widgets-tui",
- "tokio",
- "tokio-serial",
- "tracing",
- "tracing-subscriber",
- "tui-scrollview",
- "uuid",
-]
-
-[[package]]
 name = "rusqlite"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3582,6 +3547,41 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "survon-runtime-base"
+version = "0.1.0"
+dependencies = [
+ "btleplug",
+ "chrono",
+ "color-eyre",
+ "crossterm 0.28.1",
+ "futures",
+ "gag",
+ "hound",
+ "image",
+ "lazy_static",
+ "libc",
+ "llama_cpp",
+ "pdf",
+ "pdf-extract",
+ "rand",
+ "ratatui 0.29.0",
+ "ratatui-image",
+ "reqwest",
+ "rodio",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "throbber-widgets-tui",
+ "tokio",
+ "tokio-serial",
+ "tracing",
+ "tracing-subscriber",
+ "tui-scrollview",
+ "uuid",
+]
 
 [[package]]
 name = "symphonia"
