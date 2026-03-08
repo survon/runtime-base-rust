@@ -47,6 +47,60 @@ All sensor data, control commands, and system events flow through the central me
 
 ## Installation
 Clone and build manually, or use the Survon OS installer for RPi 3B (armhf):
+
+## Council System
+
+The Council system is a multi-member advisory system that provides intelligent guidance and decision support for the Survon smart homestead.
+
+### Features
+- Multi-member Support: Multiple council members with different expertise areas
+- Expertise Routing: Queries automatically routed to appropriate advisors
+- Consensus Building: Builds consensus from multiple council member responses
+- Real-time Communication: Message-based communication with advisors
+- CLI Integration: Command-line interface for council management
+- UI Interface: Interactive chat interface for council interaction
+
+### Quick Start
+
+#### Via CLI
+```bash
+# Start council chat
+./target/release/runtime-base-rust council chat --advisor hardware_expert --query "What is the current system status?"
+
+# Check council status
+./target/release/runtime-base-rust council status
+
+# List available advisors
+./target/release/runtime-base-rust council advisors list
+
+# Run council tests
+./target/release/runtime-base-rust council test --all
+```
+
+#### Via UI
+1. Start the Survon application: `./target/release/runtime-base-rust`
+2. Press `Tab` to navigate to council interface
+3. Use arrow keys to select advisors
+4. Press `Enter` to send messages
+5. Use `Esc` to return to overview
+
+### Available Advisors
+
+| Advisor | Expertise | Description |
+|---------|-----------|-------------|
+| hardware_expert | Device management | Hardware troubleshooting and device management |
+| knowledge_base | Information retrieval | Knowledge base queries and documentation |
+| system_monitor | System health | System performance and health monitoring |
+| security_specialist | Security | Security and access control specialist |
+
+### Documentation
+For complete council system documentation, see:
+- [Council Usage Guide](docs/council/README.md)
+- [Council Architecture](docs/council/architecture.md)
+- [Council API Reference](docs/council/api.md)
+
+### Installation Commands
+Clone and build manually, or use the Survon OS installer for RPi 3B (armhf):
 ```bash
 curl -sSL https://raw.githubusercontent.com/survon/survon-os/master/scripts/install.sh | bash
 ```

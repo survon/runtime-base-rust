@@ -45,15 +45,14 @@ use crate::ui::widgets::{
 
 use crate::ui::{
     document::manager::DocumentManager,
+    screens::council::{CouncilScreen, CouncilUiState},
     screens::splash::SplashScreen,
+    screens::overview::render_overview,
     style::AdaptiveColors
 };
 
 use crate::{log_debug, log_error, log_info};
-use crate::module::strategies::llm::{
-    database::ChatMessage,
-    handler::LlmHandler
-};
+use crate::module::strategies::llm::{database::ChatMessage, handler::LlmHandler};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSource {
@@ -67,6 +66,7 @@ pub enum OverviewFocus {
     WastelandModules,
     Messages,
     CoreModules,
+    Council,
     Jukebox,
 }
 
@@ -74,6 +74,7 @@ pub enum OverviewFocus {
 pub enum AppMode {
     Splash,
     Overview,
+    Council,
     ModuleDetail(ModuleSource, usize),
 }
 
@@ -94,6 +95,8 @@ pub struct App {
     // Widgets
     pub jukebox_widget: Option<JukeboxWidget>,
     pub messages_widget: Option<MessagesWidget>,
+    pub council_screen: Option<CouncilScreen>,
+    pub council_state: CouncilUiState,
     pub modules_list_widget: ModulesListWidget,
     pub module_detail_widget: ModuleDetailWidget,
 
@@ -287,6 +290,8 @@ impl App {
             palette: AdaptiveColors::detect(),
             jukebox_widget: Some(jukebox_widget),
             messages_widget: Some(messages_widget),
+            council_screen: Some(CouncilScreen::new()),
+            council_state: CouncilUiState::default(),
             modules_list_widget: ModulesListWidget::new(),
             module_detail_widget: ModuleDetailWidget::new(),
             wasteland_module_manager,
@@ -419,8 +424,8 @@ impl App {
         let should_animate: bool = {
             match self.mode {
                 AppMode::Splash => true,
-                AppMode::Overview => {
-                    self.has_animating_child()
+                AppMode::Council => {
+                    self.council_screen.is_some()
                 },
                 _ => false,
             }
@@ -614,6 +619,7 @@ impl App {
             OverviewFocus::WastelandModules,
             OverviewFocus::Messages,
             OverviewFocus::CoreModules,
+            OverviewFocus::Council,
             OverviewFocus::Jukebox,
         ];
 
@@ -650,9 +656,12 @@ impl App {
     fn render_current_mode(&mut self, frame: &mut Frame) {
         match &self.mode {
             AppMode::Splash => self.render_splash(frame),
-            AppMode::Overview => self.render_widget_mode(frame),
-
-            // Support full-screen module mode
+            AppMode::Council => {
+                if let Some(ref council) = self.council_screen {
+                    CouncilScreen::render(self, frame.area(), frame.buffer_mut());
+                }
+            },
+            AppMode::Overview => render_overview(self, frame.area(), frame.buffer_mut()),
             AppMode::ModuleDetail(source, module_idx) => {
                 let is_focused = Some(true);
                 self.render_module_detail(frame, source.clone(), *module_idx, is_focused)
@@ -864,6 +873,14 @@ impl App {
                             }
                         }
                     },
+                    OverviewFocus::Council => {
+                        if let Some(_council) = &self.council_screen {
+                            CouncilScreen::handle_key_event(self, key_code);
+                            true
+                        } else {
+                            false
+                        }
+                    },
                     OverviewFocus::Messages => {
                         if let Some(messages) = &self.messages_widget {
                             match key_code {
@@ -880,14 +897,17 @@ impl App {
                 // Only process global keys if the focused widget didn't handle it
                 if !event_handled {
                     match key_code {
-                        KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
+                        KeyCode::Esc => self.events.send(AppEvent::Quit),
                         KeyCode::Enter => self.events.send(AppEvent::Select),
-                        KeyCode::Char('c' | 'C') => self.events.send(AppEvent::Quit),
-                        KeyCode::Char('r' | 'R') => self.events.send(AppEvent::RefreshModules),
                         KeyCode::Tab => self.toggle_overview_focus(1),
                         KeyCode::BackTab => self.toggle_overview_focus(-1),
                         _ => {}
                     }
+                }
+            },
+            AppMode::Council => {
+                if let Some(_council) = &self.council_screen {
+                    CouncilScreen::handle_key_event(self, key_code);
                 }
             },
             AppMode::ModuleDetail(source, module_idx) => {
