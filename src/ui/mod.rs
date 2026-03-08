@@ -13,6 +13,7 @@ use ratatui::{
 };
 use crate::{
     app::{App, AppMode},
+    ui::screens::council::CouncilScreen,
     ui::screens::overview::render_overview
 };
 
@@ -21,6 +22,9 @@ impl Widget for &mut App {
         match &self.mode {
             AppMode::Splash => {},
             AppMode::Overview => render_overview(self, area, buf),
+            AppMode::Council => {
+                CouncilScreen::render(self, area, buf);
+            },
             AppMode::ModuleDetail(_source, _module_idx) => {},
         }
     }

@@ -1,13 +1,13 @@
 // src/ui/screens/overview/mod.rs
+use crate::app::{App, OverviewFocus};
+use crate::module::ModuleManagerView;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Stylize, Style},
-    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
+    style::{Color, Style, Stylize},
     text::Line,
+    widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
-use crate::app::{App, OverviewFocus};
-use crate::module::ModuleManagerView;
 
 pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     let header_constraints = Constraint::Length(10);
@@ -32,10 +32,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
 
     let header_layout = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            title_constraints,
-            jukebox_constraints,
-        ])
+        .constraints([title_constraints, jukebox_constraints])
         .split(main_layout[0]);
 
     let content_layout = Layout::default()
@@ -49,10 +46,17 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
 
     let is_none_focused = matches!(app.overview_focus, OverviewFocus::None);
     let is_jukebox_focused = matches!(app.overview_focus, OverviewFocus::Jukebox);
-        let is_wasteland_modules_list_focused = matches!(app.overview_focus, OverviewFocus::WastelandModules);
-    let is_wasteland_modules_list_view = matches!(app.wasteland_module_manager.current_view, ModuleManagerView::ModuleListView);
+    let is_wasteland_modules_list_focused =
+        matches!(app.overview_focus, OverviewFocus::WastelandModules);
+    let is_wasteland_modules_list_view = matches!(
+        app.wasteland_module_manager.current_view,
+        ModuleManagerView::ModuleListView
+    );
     let is_core_modules_list_focused = matches!(app.overview_focus, OverviewFocus::CoreModules);
-    let is_core_modules_list_view = matches!(app.core_module_manager.current_view, ModuleManagerView::ModuleListView);
+    let is_core_modules_list_view = matches!(
+        app.core_module_manager.current_view,
+        ModuleManagerView::ModuleListView
+    );
     let is_messages_focused = matches!(app.overview_focus, OverviewFocus::Messages);
 
     // Render title
@@ -61,7 +65,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
             Block::bordered()
                 .title(" Survon ")
                 .title_alignment(Alignment::Center)
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Rounded),
         )
         .style(Style::default().fg(Color::Green))
         .alignment(Alignment::Center);
@@ -87,7 +91,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
     // Render wasteland modules
     let mut needs_redraw = false;
     {
-            let is_focused: Option<bool> = if is_wasteland_modules_list_focused {
+        let is_focused: Option<bool> = if is_wasteland_modules_list_focused {
             Some(true)
         } else if is_none_focused {
             None
@@ -101,7 +105,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
                 content_layout[0],
                 buf,
                 is_focused,
-                &mut needs_redraw
+                &mut needs_redraw,
             );
         } else {
             let selected_module_index = app.wasteland_module_manager.selected_module;
@@ -112,16 +116,21 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
                 selected_module_index,
                 is_focused,
                 content_layout[0],
-                buf
+                buf,
             );
 
             let inner_area = container.inner(content_layout[0]);
 
             // Update bindings for this module
-            app.wasteland_module_manager.update_module_bindings(selected_module_index);
+            app.wasteland_module_manager
+                .update_module_bindings(selected_module_index);
 
             // Render the module's template content
-            if let Some(module) = app.wasteland_module_manager.get_modules_mut().get_mut(selected_module_index) {
+            if let Some(module) = app
+                .wasteland_module_manager
+                .get_modules_mut()
+                .get_mut(selected_module_index)
+            {
                 if let Err(e) = module.render_detail(inner_area, buf) {
                     render_template_error(inner_area, buf, e);
                 }
@@ -163,7 +172,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
                 content_layout[2],
                 buf,
                 is_focused,
-                &mut needs_redraw
+                &mut needs_redraw,
             );
         } else {
             let selected_module_index = app.core_module_manager.selected_module;
@@ -173,16 +182,21 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
                 selected_module_index,
                 is_focused,
                 content_layout[2],
-                buf
+                buf,
             );
 
             let inner_area = container.inner(content_layout[2]);
 
             // Update bindings for this module
-            app.core_module_manager.update_module_bindings(selected_module_index);
+            app.core_module_manager
+                .update_module_bindings(selected_module_index);
 
             // Render the module's template content
-            if let Some(module) = app.core_module_manager.get_modules_mut().get_mut(selected_module_index) {
+            if let Some(module) = app
+                .core_module_manager
+                .get_modules_mut()
+                .get_mut(selected_module_index)
+            {
                 if let Err(e) = module.render_detail(inner_area, buf) {
                     render_template_error(inner_area, buf, e);
                 }
@@ -212,8 +226,11 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         OverviewFocus::None => "[Tab] Focus Wasteland Modules".to_string(),
         OverviewFocus::WastelandModules => format!("{} [Tab] Focus Messages", wasteland_help_text),
         OverviewFocus::Messages => "[↑]/[↓] Scroll  [Tab] Focus Core Modules".to_string(),
-        OverviewFocus::CoreModules => format!("{}  [Tab] Focus Jukebox", core_help_text),
-        OverviewFocus::Jukebox => "[Spc] ⏯  [←]/[→] ⏮/⏭  [+]/[-] 🔈  [m] Library  [Tab] Remove Overview Focus".to_string(),
+        OverviewFocus::CoreModules => format!("{}  [Tab] Focus Council", core_help_text),
+        OverviewFocus::Council => "[↑]/[↓] Scroll  [Tab] Focus Jukebox".to_string(),
+        OverviewFocus::Jukebox => {
+            "[Spc] ⏯  [←]/[→] ⏮/⏭  [+]/[-] 🔈  [m] Library  [Tab] Remove Overview Focus".to_string()
+        }
     };
 
     let help_text = format!("{}  [Ent] Select  [r] Refresh  [q] Quit", focus_hint);
@@ -222,7 +239,7 @@ pub fn render_overview(app: &mut App, area: Rect, buf: &mut Buffer) {
         .block(
             Block::bordered()
                 .title(" Controls ")
-                .border_type(BorderType::Rounded)
+                .border_type(BorderType::Rounded),
         )
         .fg(Color::Yellow)
         .alignment(Alignment::Center);
@@ -239,7 +256,8 @@ fn render_template_error(area: Rect, buf: &mut Buffer, error: String) {
         Line::from(""),
         Line::from("Check your module's config.yml:").style(Style::default().fg(Color::Gray)),
         Line::from("  - Is the 'template' field correct?").style(Style::default().fg(Color::Gray)),
-        Line::from("  - Are all required bindings present?").style(Style::default().fg(Color::Gray)),
+        Line::from("  - Are all required bindings present?")
+            .style(Style::default().fg(Color::Gray)),
     ];
 
     let error_widget = Paragraph::new(error_lines)
@@ -247,7 +265,7 @@ fn render_template_error(area: Rect, buf: &mut Buffer, error: String) {
             Block::bordered()
                 .title(" Error ")
                 .border_type(BorderType::Rounded)
-                .style(Style::default().fg(Color::Red))
+                .style(Style::default().fg(Color::Red)),
         )
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });

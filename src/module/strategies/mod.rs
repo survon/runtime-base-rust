@@ -6,3 +6,4 @@ pub mod side_quest;
 pub mod knowledge;
 pub mod com;
 pub mod album;
+pub mod council;

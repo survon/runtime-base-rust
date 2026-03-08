@@ -1,102 +1,110 @@
 ---
 phase: 6
-plan: 1
+plan: 2
 type: implementation
-objective: Implement multi-member council with expertise routing and consensus building
-context: Extending existing council service with multi-member support, expertise routing, and consensus building while maintaining all existing patterns and conventions
+objective: Add testing and interaction capabilities for council system
+context: Building on Phase 6 multi-member council implementation, this phase adds testing framework, CLI commands, UI interface, and documentation to make the council system usable and testable.
 ---
 
 ## Objective
 
-Implement Phase 6: Multi-Member Council for the Survon project, extending existing council infrastructure to support multiple council members, expertise routing, and consensus building.
+Add comprehensive testing and interaction capabilities to the council system, making it fully functional and testable. This includes:
+
+- Testing framework for council functionality
+- CLI commands for council testing and interaction
+- UI interface for council chat and interaction
+- Documentation for council usage
 
 ## Context
 
-Building on Phase 1-5 completion, this phase extends the existing council service infrastructure with multi-member support. The existing systems to leverage include:
+Building on the existing council infrastructure from Phase 6, this phase focuses on making the council system usable and testable. The existing systems to leverage include:
 
-- ✅ **Council Service** - Phase 4 already implemented
-- ✅ **Service Discovery** - Council discovery already implemented  
-- ✅ **Module System** - Ready to extend with multi-member strategy
+- ✅ **Council Service** - Multi-member council already implemented
+- ✅ **Service Discovery** - Already supports multiple council members
+- ✅ **Module System** - Ready to extend with testing capabilities
 - ✅ **Message Bus** - Event-driven communication ready
-- ✅ **LLM Integration** - Phase 3 already implemented
+- ✅ **UI Framework** - Template system ready for council interface
+- ✅ **CLI Framework** - Need to implement CLI commands
+- ✅ **Testing Framework** - Need to implement test suite
 
 ## Tasks
 
-### Task 1: Extend Service Discovery for Multiple Members
+### Task 1: Create Council Test Suite
 **Type:** auto  
-**Description:** Extend the existing service discovery system to support multiple council members with expertise categorization.
-**Verification:** Service discovery returns multiple council members with categorized expertise.
-**Success Criteria:** Discovery system can identify and categorize multiple council members by expertise.
+**Description:** Create comprehensive test suite for council functionality including service discovery, multi-member coordination, expertise routing, and consensus building.
+**Verification:** All council tests pass successfully.
+**Success Criteria:** Council system is fully testable with comprehensive test coverage.
 
-### Task 2: Implement Multi-Member Strategy
+### Task 2: Add Council CLI Commands
 **Type:** auto  
-**Description:** Create a new multi-member strategy that extends the existing council strategy with multi-member support.
-**Verification:** Multi-member strategy correctly handles multiple advisors and routes queries appropriately.
-**Success Criteria:** Strategy can manage multiple council members and route queries based on expertise.
+**Description:** Add CLI commands for council testing, interaction, and management including chat, status, and configuration commands.
+**Verification:** CLI commands work correctly and provide expected output.
+**Success Criteria:** Users can interact with council system via CLI commands.
 
-### Task 3: Implement Expertise Routing
+### Task 3: Add Council UI Interface
 **Type:** auto  
-**Description:** Add expertise routing to the council communication system to route queries to appropriate members.
-**Verification:** Queries are routed to council members based on their expertise areas.
-**Success Criteria:** Message routing system correctly directs queries to relevant council members.
+**Description:** Add council chat interface to main UI with multi-member support, message history, and interactive features.
+**Verification:** Council UI interface works correctly and allows interaction with multiple council members.
+**Success Criteria:** Users can interact with council system via UI interface.
 
-### Task 4: Implement Consensus Building
+### Task 4: Add Council Documentation
 **Type:** auto  
-**Description:** Add consensus building functionality using existing LLM integration for related queries.
-**Verification:** Consensus building works for related queries using LLM analysis.
-**Success Criteria:** System can build consensus from multiple council member responses.
+**Description:** Add comprehensive documentation for council system including usage examples, configuration guides, and troubleshooting.
+**Verification:** Documentation is complete and accurate.
+**Success Criteria:** Users can understand and use council system through documentation.
 
-### Task 5: Extend UI Framework with Multi-Member Interface
+### Task 5: Update Main Layout with Council Access
 **Type:** auto  
-**Description:** Add multi-member interface components to the existing UI framework.
-**Verification:** Multi-member interface displays correctly and allows interaction with multiple advisors.
-**Success Criteria:** UI shows multiple council members with their expertise and allows query routing.
+**Description:** Add council interface access to main application layout with keyboard shortcuts and navigation.
+**Verification:** Council interface is accessible from main layout.
+**Success Criteria:** Users can easily access and navigate council interface.
 
-### Task 6: Extend App Initialization
+### Task 6: Add Keyboard Shortcuts for Council
 **Type:** auto  
-**Description:** Update app initialization to include multi-member council components.
-**Verification:** App starts with multi-member council functionality available.
-**Success Criteria:** Multi-member council components are properly initialized on app startup.
-
-### Task 7: Update Main Layout with Multi-Member Interface
-**Type:** auto  
-**Description:** Add multi-member interface to the main application layout.
-**Verification:** Multi-member interface is accessible from main layout.
-**Success Criteria:** Users can access and interact with multi-member council from main interface.
+**Description:** Add keyboard shortcuts for council access and navigation including quick access and context switching.
+**Verification:** Keyboard shortcuts work correctly and improve user experience.
+**Success Criteria:** Users can efficiently access council system using keyboard shortcuts.
 
 ## Verification & Success Criteria
 
 ### Overall Verification
-- Multi-member council system functions correctly
-- Expertise routing works as expected
-- Consensus building produces coherent results
-- UI interface is functional and user-friendly
+- Council system is fully testable with comprehensive test suite
+- CLI commands provide complete council interaction capabilities
+- UI interface allows intuitive council interaction
+- Documentation is complete and accurate
+- All council functionality is accessible and usable
 
 ### Success Criteria
-- Multiple council members can be discovered and categorized
-- Queries are routed to appropriate members based on expertise
-- Consensus building works for related queries
-- Multi-member interface is fully functional
-- All existing council functionality remains intact
+- All council tests pass successfully
+- CLI commands work correctly for all council operations
+- UI interface is functional and user-friendly
+- Documentation covers all council features and usage
+- Keyboard shortcuts improve user experience
+- Council system is fully integrated into main application
 
 ## Output Specification
 
 ### Created Files
-- `src/module/strategies/multi_member.rs` - New multi-member strategy
-- `src/service_council/multi_member/` - New multi-member service components  
-- `src/ui/multi_member/` - New multi-member UI components
-- `src/service/discovery.rs` - Extended council discovery
-- `src/app.rs` - Extended app initialization
-- `src/ui/main_layout.rs` - Updated with multi-member interface
+- `src/tests/council/` - Council test suite
+- `src/cli/commands/council.rs` - Council CLI commands
+- `src/ui/screens/council/` - Council UI interface
+- `docs/council/` - Council documentation
+- `src/ui/screens/overview/mod.rs` - Updated with council access
 
 ### Modified Files
-- `src/module/strategies/council.rs` - Extended with multi-member support
-- `src/service_council/mod.rs` - Extended with multi-member functionality
-- `src/util/io/discovery.rs` - Extended for multiple members
-- `src/ui/screens/overview/mod.rs` - Updated to include multi-member screen
+- `src/app.rs` - Updated with council keyboard shortcuts
+- `src/module/strategies/council.rs` - Extended with testing capabilities
+- `README.md` - Updated with council documentation
+- `src/ui/screens/overview/mod.rs` - Updated with council interface
 
 ### Dependencies
 - Extends existing council service infrastructure
-- Builds on existing service discovery system
-- Leverages existing message bus and LLM integration
+- Builds on existing UI framework and CLI system
+- Leverages existing testing framework
 - Maintains all existing patterns and conventions
+
+## Git Workflow
+- Commit changes as you go
+- Keep commits small and focused
+- Include descriptive commit messages
+- Maintain existing code patterns

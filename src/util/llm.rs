@@ -552,7 +552,7 @@ impl LlmService {
         if self.use_summarizer {
             "Smart Search + Lightweight Summarizer".to_string()
         } else {
-            "Smart Search (FTS5)".to_string()
+            "AI".to_string()
         }
     }
 }
