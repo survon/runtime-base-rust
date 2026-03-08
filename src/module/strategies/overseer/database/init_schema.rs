@@ -1,7 +1,4 @@
-use crate::{
-    log_info,
-    util::database::Database,
-};
+use crate::{log_info, util::database::Database};
 
 impl Database {
     pub(in crate::module) fn _overseer__init_schema(&self) -> rusqlite::Result<()> {
@@ -30,11 +27,13 @@ impl Database {
         )?;
 
         // MIGRATION: Copy data from old trusted_devices table if it exists
-        let old_table_exists: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='trusted_devices'",
-            [],
-            |row| row.get(0)
-        ).unwrap_or(0);
+        let old_table_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='trusted_devices'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         if old_table_exists > 0 {
             log_info!("Migrating data from trusted_devices to known_devices...");

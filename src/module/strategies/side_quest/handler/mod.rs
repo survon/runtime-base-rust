@@ -1,35 +1,32 @@
 // src/modules/side_quest/handler.rs
 
-mod new;
-mod load_quests;
-mod handle_quest_list_key;
 mod handle_create_quest_key;
 mod handle_detail_key;
+mod handle_quest_list_key;
+mod load_quests;
+mod new;
+mod publish_calendar_event;
 mod reset_form;
 mod save_quest;
-mod publish_calendar_event;
 
+use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use ratatui::crossterm::event::KeyCode;
 use std::any::Any;
-use chrono::{DateTime, Utc};
 
-use crate::module::{
-    trait_module_handler::ModuleHandler,
-    Module,
-};
+use super::{QuestUrgency, SideQuest};
+use crate::module::strategies::side_quest::database::SideQuestDatabase;
+use crate::module::{trait_module_handler::ModuleHandler, Module};
 use crate::util::{
     database::Database,
     io::{bus::MessageBus, event::AppEvent},
 };
-use crate::module::strategies::side_quest::database::SideQuestDatabase;
-use super::{QuestUrgency, SideQuest};
 
 #[derive(Debug, Clone, PartialEq)]
 enum SideQuestView {
-    QuestList,      // Main list of quests
-    CreateQuest,    // Form to create new quest
-    QuestDetail,    // View individual quest details
+    QuestList,   // Main list of quests
+    CreateQuest, // Form to create new quest
+    QuestDetail, // View individual quest details
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,7 +61,6 @@ pub struct SideQuestHandler {
     status_message: Option<String>,
 }
 
-
 impl ModuleHandler for SideQuestHandler {
     fn handle_key(&mut self, key_code: KeyCode, _module: &mut Module) -> Option<AppEvent> {
         match self.current_view {
@@ -91,15 +87,13 @@ impl ModuleHandler for SideQuestHandler {
         );
 
         // Quest list data
-        let quest_summaries: Vec<String> = self.quests
-            .iter()
-            .map(|q| q.display_summary())
-            .collect();
+        let quest_summaries: Vec<String> =
+            self.quests.iter().map(|q| q.display_summary()).collect();
 
-        module.config.bindings.insert(
-            "quests".to_string(),
-            serde_json::json!(quest_summaries),
-        );
+        module
+            .config
+            .bindings
+            .insert("quests".to_string(), serde_json::json!(quest_summaries));
 
         module.config.bindings.insert(
             "quest_count".to_string(),
@@ -112,20 +106,20 @@ impl ModuleHandler for SideQuestHandler {
             serde_json::json!(format!("{:?}", self.create_step)),
         );
 
-        module.config.bindings.insert(
-            "form_title".to_string(),
-            serde_json::json!(self.form_title),
-        );
+        module
+            .config
+            .bindings
+            .insert("form_title".to_string(), serde_json::json!(self.form_title));
 
         module.config.bindings.insert(
             "form_description".to_string(),
             serde_json::json!(self.form_description),
         );
 
-        module.config.bindings.insert(
-            "form_topic".to_string(),
-            serde_json::json!(self.form_topic),
-        );
+        module
+            .config
+            .bindings
+            .insert("form_topic".to_string(), serde_json::json!(self.form_topic));
 
         module.config.bindings.insert(
             "form_urgency".to_string(),
@@ -169,7 +163,8 @@ impl ModuleHandler for SideQuestHandler {
                 serde_json::json!(quest.urgency.as_str()),
             );
 
-            let trigger_str = quest.trigger_date
+            let trigger_str = quest
+                .trigger_date
                 .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
                 .unwrap_or_else(|| "No deadline".to_string());
 
@@ -181,15 +176,15 @@ impl ModuleHandler for SideQuestHandler {
 
         // Status message
         if let Some(status) = &self.status_message {
-            module.config.bindings.insert(
-                "status_message".to_string(),
-                serde_json::json!(status),
-            );
+            module
+                .config
+                .bindings
+                .insert("status_message".to_string(), serde_json::json!(status));
         } else {
-            module.config.bindings.insert(
-                "status_message".to_string(),
-                serde_json::json!(""),
-            );
+            module
+                .config
+                .bindings
+                .insert("status_message".to_string(), serde_json::json!(""));
         }
     }
 

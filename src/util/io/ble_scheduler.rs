@@ -1,20 +1,20 @@
 // src/util/io/ble_scheduler.rs
 //! BLE Command Scheduler - Queues commands and sends during advertised windows
 
+use btleplug::api::{Peripheral as _, WriteType};
+use btleplug::platform::Peripheral;
 use color_eyre::Result;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, Instant, sleep_until};
-use serde::{Deserialize, Serialize};
+use tokio::time::{sleep_until, Duration, Instant};
 use uuid::Uuid;
-use btleplug::api::{Peripheral as _, WriteType};
-use btleplug::platform::Peripheral;
 
+use crate::log_error;
 use crate::log_info;
 use crate::log_warn;
-use crate::log_error;
-use crate::util::io::bus::{MessageBus, BusMessage};
+use crate::util::io::bus::{BusMessage, MessageBus};
 
 /// Command to be sent to a device
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ pub struct QueuedCommand {
     pub command: serde_json::Value,
     pub priority: CommandPriority,
     pub queued_at: Instant,
-    pub max_age: Option<Duration>,  // Optional expiration
+    pub max_age: Option<Duration>, // Optional expiration
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -31,7 +31,7 @@ pub enum CommandPriority {
     Low = 0,
     Normal = 1,
     High = 2,
-    Critical = 3,  // Send immediately, don't wait for window
+    Critical = 3, // Send immediately, don't wait for window
 }
 
 /// Device schedule information extracted from telemetry
@@ -39,8 +39,8 @@ pub enum CommandPriority {
 pub struct DeviceSchedule {
     pub device_id: String,
     pub current_mode: DeviceMode,
-    pub cmd_window_opens_at: Option<Instant>,  // When next CMD window opens
-    pub cmd_window_duration: Duration,         // How long it stays open
+    pub cmd_window_opens_at: Option<Instant>, // When next CMD window opens
+    pub cmd_window_duration: Duration,        // How long it stays open
     pub last_updated: Instant,
 }
 
@@ -69,7 +69,7 @@ impl DeviceSchedule {
     /// Get time until CMD window opens (None if in window or unknown)
     pub fn time_until_cmd_window(&self) -> Option<Duration> {
         if self.current_mode == DeviceMode::Cmd {
-            return None;  // Already in window
+            return None; // Already in window
         }
 
         if let Some(opens_at) = self.cmd_window_opens_at {
@@ -157,8 +157,9 @@ impl BleCommandScheduler {
                         .and_then(|p| p.get("action"))
                         .and_then(|a| a.as_str())
                         .unwrap_or("unknown")
-                })
-            ).await;
+                }),
+            )
+            .await;
 
             return self.send_command_now(&device_id, &command.command).await;
         }
@@ -172,7 +173,11 @@ impl BleCommandScheduler {
         queue.sort_by(|a, b| b.priority.cmp(&a.priority));
 
         let queue_size = queue.len();
-        log_info!("📋 Device {} now has {} queued commands", device_id, queue_size);
+        log_info!(
+            "📋 Device {} now has {} queued commands",
+            device_id,
+            queue_size
+        );
 
         // Publish queue events
         self.publish_event(
@@ -185,8 +190,9 @@ impl BleCommandScheduler {
                     .and_then(|a| a.as_str())
                     .unwrap_or("unknown"),
                 "queue_size": queue_size
-            })
-        ).await;
+            }),
+        )
+        .await;
 
         Ok(())
     }
@@ -201,21 +207,20 @@ impl BleCommandScheduler {
         let mode = match metadata.get("mode").and_then(|v| v.as_str()) {
             Some("cmd") => DeviceMode::Cmd,
             Some("data") => DeviceMode::Data,
-            _ => return Ok(()),  // No mode info, skip
+            _ => return Ok(()), // No mode info, skip
         };
 
-        let cmd_in_secs = metadata.get("cmd_in")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        let cmd_in_secs = metadata.get("cmd_in").and_then(|v| v.as_u64()).unwrap_or(0);
 
-        let cmd_dur_secs = metadata.get("cmd_dur")
+        let cmd_dur_secs = metadata
+            .get("cmd_dur")
             .and_then(|v| v.as_u64())
             .unwrap_or(10);
 
         let cmd_window_opens_at = if cmd_in_secs > 0 {
             Some(Instant::now() + Duration::from_secs(cmd_in_secs))
         } else {
-            None  // Already in CMD window or unknown
+            None // Already in CMD window or unknown
         };
 
         let schedule = DeviceSchedule {
@@ -230,28 +235,44 @@ impl BleCommandScheduler {
         let should_send_now = schedule.is_in_cmd_window();
         let window_imminent = schedule.is_cmd_window_imminent();
 
-        self.device_schedules.write().await.insert(device_id.clone(), schedule);
+        self.device_schedules
+            .write()
+            .await
+            .insert(device_id.clone(), schedule);
 
         if should_send_now {
-            log_info!("🟢 Device {} is in CMD window - sending queued commands", device_id);
+            log_info!(
+                "🟢 Device {} is in CMD window - sending queued commands",
+                device_id
+            );
 
             self.publish_event(
                 "cmd_window_open",
                 &device_id,
-                serde_json::json!({ "duration": cmd_dur_secs })
-            ).await;
+                serde_json::json!({ "duration": cmd_dur_secs }),
+            )
+            .await;
 
             self.send_queued_commands(&device_id).await?;
         } else if window_imminent {
-            log_info!("🟡 Device {} CMD window opens in <5s - preparing", device_id);
+            log_info!(
+                "🟡 Device {} CMD window opens in <5s - preparing",
+                device_id
+            );
 
             self.publish_event(
                 "cmd_window_imminent",
                 &device_id,
-                serde_json::json!({ "seconds": cmd_in_secs })
-            ).await;
-        } else if let Some(time_until) = self.device_schedules.read().await.get(&device_id)
-            .and_then(|s| s.time_until_cmd_window()) {
+                serde_json::json!({ "seconds": cmd_in_secs }),
+            )
+            .await;
+        } else if let Some(time_until) = self
+            .device_schedules
+            .read()
+            .await
+            .get(&device_id)
+            .and_then(|s| s.time_until_cmd_window())
+        {
             log_info!(
                 "⏰ Device {} CMD window in {}s",
                 device_id,
@@ -261,8 +282,9 @@ impl BleCommandScheduler {
             self.publish_event(
                 "cmd_window_scheduled",
                 &device_id,
-                serde_json::json!({ "seconds": time_until.as_secs() })
-            ).await;
+                serde_json::json!({ "seconds": time_until.as_secs() }),
+            )
+            .await;
         }
 
         Ok(())
@@ -280,14 +302,19 @@ impl BleCommandScheduler {
         };
 
         let original_count = queue.len();
-        log_info!("📤 Sending {} queued commands to {}", original_count, device_id);
+        log_info!(
+            "📤 Sending {} queued commands to {}",
+            original_count,
+            device_id
+        );
 
         // Publish batch start
         self.publish_event(
             "batch_start",
             device_id,
-            serde_json::json!({ "count": original_count })
-        ).await;
+            serde_json::json!({ "count": original_count }),
+        )
+        .await;
 
         // Remove expired commands
         let now = Instant::now();
@@ -306,13 +333,14 @@ impl BleCommandScheduler {
             self.publish_event(
                 "commands_expired",
                 device_id,
-                serde_json::json!({ "count": expired_count })
-            ).await;
+                serde_json::json!({ "count": expired_count }),
+            )
+            .await;
         }
 
         // Send commands in priority order
         let commands = queue.drain(..).collect::<Vec<_>>();
-        drop(queues);  // Release lock before sending
+        drop(queues); // Release lock before sending
 
         for cmd in commands {
             log_info!("📨 Sending command to {}", device_id);
@@ -330,16 +358,18 @@ impl BleCommandScheduler {
                                 .and_then(|p| p.get("action"))
                                 .and_then(|a| a.as_str())
                                 .unwrap_or("unknown")
-                        })
-                    ).await;
+                        }),
+                    )
+                    .await;
                 }
                 Err(e) => {
                     log_error!("❌ Failed to send command: {}", e);
                     self.publish_event(
                         "error",
                         device_id,
-                        serde_json::json!({ "error": e.to_string() })
-                    ).await;
+                        serde_json::json!({ "error": e.to_string() }),
+                    )
+                    .await;
                 }
             }
         }
@@ -348,8 +378,9 @@ impl BleCommandScheduler {
         self.publish_event(
             "batch_complete",
             device_id,
-            serde_json::json!({ "count": original_count - expired_count })
-        ).await;
+            serde_json::json!({ "count": original_count - expired_count }),
+        )
+        .await;
 
         Ok(())
     }
@@ -357,12 +388,14 @@ impl BleCommandScheduler {
     /// Send a single command immediately (used for critical commands)
     async fn send_command_now(&self, device_id: &str, command: &serde_json::Value) -> Result<()> {
         let peripherals = self.peripherals.read().await;
-        let peripheral = peripherals.get(device_id)
+        let peripheral = peripherals
+            .get(device_id)
             .ok_or_else(|| color_eyre::eyre::eyre!("Device {} not registered", device_id))?;
 
         // Find TX characteristic
         let chars = peripheral.characteristics();
-        let tx_char = chars.iter()
+        let tx_char = chars
+            .iter()
             .find(|c| c.uuid == self.tx_char_uuid)
             .ok_or_else(|| color_eyre::eyre::eyre!("TX characteristic not found"))?;
 
@@ -372,7 +405,9 @@ impl BleCommandScheduler {
 
         log_info!("📡 TX: {}", json_str);
 
-        peripheral.write(tx_char, bytes, WriteType::WithoutResponse).await?;
+        peripheral
+            .write(tx_char, bytes, WriteType::WithoutResponse)
+            .await?;
 
         Ok(())
     }
@@ -454,7 +489,11 @@ pub fn extract_schedule_metadata(telemetry: &serde_json::Value) -> Option<serde_
 }
 
 /// Create a control command in SSP format
-pub fn create_control_command(device_id: &str, action: &str, payload: Option<serde_json::Value>) -> serde_json::Value {
+pub fn create_control_command(
+    device_id: &str,
+    action: &str,
+    payload: Option<serde_json::Value>,
+) -> serde_json::Value {
     serde_json::json!({
         "protocol": "ssp/1.0",
         "type": "control",
@@ -481,10 +520,10 @@ mod tests {
             "cmd_dur": 10
         });
 
-        scheduler.update_schedule_from_telemetry(
-            "test_device".to_string(),
-            &metadata
-        ).await.unwrap();
+        scheduler
+            .update_schedule_from_telemetry("test_device".to_string(), &metadata)
+            .await
+            .unwrap();
 
         let schedules = scheduler.device_schedules.read().await;
         let schedule = schedules.get("test_device").unwrap();
@@ -517,22 +556,28 @@ mod tests {
         let scheduler = BleCommandScheduler::new();
 
         // Queue low priority first
-        scheduler.queue_command(QueuedCommand {
-            device_id: "test".to_string(),
-            command: serde_json::json!({"action": "low"}),
-            priority: CommandPriority::Low,
-            queued_at: Instant::now(),
-            max_age: None,
-        }).await.unwrap();
+        scheduler
+            .queue_command(QueuedCommand {
+                device_id: "test".to_string(),
+                command: serde_json::json!({"action": "low"}),
+                priority: CommandPriority::Low,
+                queued_at: Instant::now(),
+                max_age: None,
+            })
+            .await
+            .unwrap();
 
         // Then high priority
-        scheduler.queue_command(QueuedCommand {
-            device_id: "test".to_string(),
-            command: serde_json::json!({"action": "high"}),
-            priority: CommandPriority::High,
-            queued_at: Instant::now(),
-            max_age: None,
-        }).await.unwrap();
+        scheduler
+            .queue_command(QueuedCommand {
+                device_id: "test".to_string(),
+                command: serde_json::json!({"action": "high"}),
+                priority: CommandPriority::High,
+                queued_at: Instant::now(),
+                max_age: None,
+            })
+            .await
+            .unwrap();
 
         let queues = scheduler.command_queues.read().await;
         let queue = queues.get("test").unwrap();

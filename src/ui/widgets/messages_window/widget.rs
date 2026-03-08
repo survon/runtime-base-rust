@@ -1,4 +1,5 @@
 // src/widgets/messages_window/widget.rs
+use color_eyre::Result;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -7,15 +8,14 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
 };
 use tokio::sync::mpsc;
-use color_eyre::Result;
 
-use super::state::{MessagesState, MessagesIntent, MessagesEvent};
+use super::state::{MessagesEvent, MessagesIntent, MessagesState};
+use crate::log_debug;
+use crate::ui::style::dim_unless_focused;
 use crate::util::io::{
     bus::{BusMessage, MessageBus},
     get_all_event_message_topics,
 };
-use crate::ui::style::dim_unless_focused;
-use crate::log_debug;
 
 #[derive(Debug)]
 pub struct MessagesWidget {
@@ -75,8 +75,12 @@ impl MessagesWidget {
         // Poll all message receivers for new messages to add
         for receiver in &mut self.message_receivers {
             while let Ok(msg) = receiver.try_recv() {
-                log_debug!("📨 MessagesWidget received: topic={}, source={}, payload={}",
-                    msg.topic, msg.source, msg.payload);
+                log_debug!(
+                    "📨 MessagesWidget received: topic={}, source={}, payload={}",
+                    msg.topic,
+                    msg.source,
+                    msg.payload
+                );
                 let _ = self.intent_tx.send(MessagesIntent::AddMessage(msg));
             }
         }
@@ -95,7 +99,11 @@ impl MessagesWidget {
     }
 
     fn is_at_bottom(&self) -> bool {
-        let max_scroll = self.current_state.messages.len().saturating_sub(self.visible_lines);
+        let max_scroll = self
+            .current_state
+            .messages
+            .len()
+            .saturating_sub(self.visible_lines);
         self.current_state.scroll_offset >= max_scroll
     }
 
@@ -105,10 +113,16 @@ impl MessagesWidget {
 
         // Update visible lines based on area
         self.visible_lines = (area.height.saturating_sub(2)) as usize;
-        let _ = self.intent_tx.send(MessagesIntent::SetVisibleLines(self.visible_lines));
+        let _ = self
+            .intent_tx
+            .send(MessagesIntent::SetVisibleLines(self.visible_lines));
 
         // Clamp scroll offset to valid range
-        let max_scroll = self.current_state.messages.len().saturating_sub(self.visible_lines);
+        let max_scroll = self
+            .current_state
+            .messages
+            .len()
+            .saturating_sub(self.visible_lines);
         let clamped_offset = self.current_state.scroll_offset.min(max_scroll);
 
         let content = if self.current_state.messages.is_empty() {
@@ -125,12 +139,7 @@ impl MessagesWidget {
                     if msg.topic == "scheduler_event" {
                         format_scheduler_event(msg)
                     } else {
-                        format!(
-                            "[{}] {}: {}",
-                            msg.source,
-                            msg.topic,
-                            msg.payload
-                        )
+                        format!("[{}] {}: {}", msg.source, msg.topic, msg.payload)
                     }
                 })
                 .collect();
@@ -146,7 +155,11 @@ impl MessagesWidget {
             let start = end.saturating_sub(self.visible_lines);
 
             if clamped_offset == 0 {
-                format!(" Message Bus ({}/{}) [LIVE] ", total.min(self.visible_lines), total)
+                format!(
+                    " Message Bus ({}/{}) [LIVE] ",
+                    total.min(self.visible_lines),
+                    total
+                )
             } else {
                 format!(
                     " Message Bus ({}-{}/{}) → {} ",
@@ -166,7 +179,7 @@ impl MessagesWidget {
                 Block::bordered()
                     .title(title)
                     .border_type(BorderType::Rounded)
-                    .style(border_style)
+                    .style(border_style),
             )
             .style(text_style)
             .wrap(Wrap { trim: true });
@@ -178,15 +191,24 @@ impl MessagesWidget {
 /// Format scheduler events with nice icons and structure
 fn format_scheduler_event(msg: &BusMessage) -> String {
     if let Ok(data) = serde_json::from_str::<serde_json::Value>(&msg.payload) {
-        let event = data.get("event").and_then(|v| v.as_str()).unwrap_or("unknown");
-        let device_id = data.get("device_id").and_then(|v| v.as_str()).unwrap_or("?");
+        let event = data
+            .get("event")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let device_id = data
+            .get("device_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
 
         match event {
             "command_queued" => {
                 let priority = data.get("priority").and_then(|v| v.as_str()).unwrap_or("?");
                 let action = data.get("action").and_then(|v| v.as_str()).unwrap_or("?");
                 let queue_size = data.get("queue_size").and_then(|v| v.as_u64()).unwrap_or(0);
-                format!("📥 [{}] Queued {} {}: {} in queue", device_id, priority, action, queue_size)
+                format!(
+                    "📥 [{}] Queued {} {}: {} in queue",
+                    device_id, priority, action, queue_size
+                )
             }
             "cmd_window_open" => {
                 let duration = data.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);

@@ -1,31 +1,33 @@
 // src/util/io/discovery.rs
 //! BLE Field Unit Discovery - Auto-detect and register Survon-compatible devices
 
+use btleplug::{
+    api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter, WriteType},
+    platform::{Adapter, Manager, Peripheral},
+};
 use color_eyre::Result;
+use futures::stream::StreamExt;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::{
+    sync::RwLock,
     time::{timeout, Duration},
-    sync::RwLock
-};
-use btleplug::{
-    api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter, WriteType},
-    platform::{Adapter, Manager, Peripheral}
 };
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use futures::stream::StreamExt;
 
+use crate::module::strategies::overseer::database::OverseerDatabase;
 use crate::util::{
     database::Database,
     io::{
-        bus::{MessageBus, BusMessage},
-        serial::{SspMessage, SourceInfo, Transport, MessageType},
-        ble_scheduler::{BleCommandScheduler, QueuedCommand, CommandPriority, extract_schedule_metadata},
-    }
+        ble_scheduler::{
+            extract_schedule_metadata, BleCommandScheduler, CommandPriority, QueuedCommand,
+        },
+        bus::{BusMessage, MessageBus},
+        serial::{MessageType, SourceInfo, SspMessage, Transport},
+    },
 };
-use crate::module::strategies::overseer::database::OverseerDatabase;
-use crate::{log_info, log_warn, log_error};
+use crate::{log_error, log_info, log_warn};
 
 // Survon BLE Service UUID (custom UUID for field units)
 const SURVON_SERVICE_UUID: &str = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -54,9 +56,9 @@ struct CompactCapabilities {
     #[serde(rename = "fw")]
     firmware: String,
     #[serde(rename = "s", default)]
-    sensors: Vec<String>,        // Just keys: ["a", "b", "c"]
+    sensors: Vec<String>, // Just keys: ["a", "b", "c"]
     #[serde(rename = "a", default)]
-    actuators: Vec<String>,       // Just keys: ["led"]
+    actuators: Vec<String>, // Just keys: ["led"]
 }
 
 impl CompactRegistrationResponse {
@@ -66,16 +68,26 @@ impl CompactRegistrationResponse {
             device_type: self.data.device_type,
             firmware_version: self.data.firmware,
             // Convert key arrays to SensorCapability structs
-            sensors: self.data.sensors.iter().map(|key| SensorCapability {
-                name: key.clone(),
-                unit: "".to_string(),  // Unknown for compact format
-                min_value: None,
-                max_value: None,
-            }).collect(),
-            actuators: self.data.actuators.iter().map(|key| ActuatorCapability {
-                name: key.clone(),
-                actuator_type: "digital".to_string(),  // Default assumption
-            }).collect(),
+            sensors: self
+                .data
+                .sensors
+                .iter()
+                .map(|key| SensorCapability {
+                    name: key.clone(),
+                    unit: "".to_string(), // Unknown for compact format
+                    min_value: None,
+                    max_value: None,
+                })
+                .collect(),
+            actuators: self
+                .data
+                .actuators
+                .iter()
+                .map(|key| ActuatorCapability {
+                    name: key.clone(),
+                    actuator_type: "digital".to_string(), // Default assumption
+                })
+                .collect(),
             commands: Vec::new(),
         }
     }
@@ -128,10 +140,13 @@ pub struct DiscoveryManager {
 }
 
 impl DiscoveryManager {
-    pub fn new(message_bus: MessageBus, modules_path: std::path::PathBuf, database: Database) -> Self {
-        let command_scheduler = Arc::new(
-            BleCommandScheduler::new().with_message_bus(message_bus.clone())
-        );
+    pub fn new(
+        message_bus: MessageBus,
+        modules_path: std::path::PathBuf,
+        database: Database,
+    ) -> Self {
+        let command_scheduler =
+            Arc::new(BleCommandScheduler::new().with_message_bus(message_bus.clone()));
 
         Self {
             adapter: Arc::new(RwLock::new(None)),
@@ -189,7 +204,10 @@ impl DiscoveryManager {
         // Now safe to stop
         adapter.stop_scan().await?;
 
-        log_info!("✅ Scan complete, processing {} peripheral(s)...", peripherals.len());
+        log_info!(
+            "✅ Scan complete, processing {} peripheral(s)...",
+            peripherals.len()
+        );
 
         let mut discovered_count = 0;
 
@@ -207,11 +225,9 @@ impl DiscoveryManager {
                     log_info!("📡 Found: {} ({}) RSSI: {} dBm", name, address, rssi);
 
                     // Record in database
-                    let is_new_device = self.database.record_device_discovery(
-                        &address,
-                        &name,
-                        rssi
-                    )?;
+                    let is_new_device = self
+                        .database
+                        .record_device_discovery(&address, &name, rssi)?;
 
                     if is_new_device {
                         discovered_count += 1;
@@ -224,7 +240,10 @@ impl DiscoveryManager {
                         address: address.clone(),
                         rssi,
                     };
-                    self.discovered_devices.write().await.insert(address.clone(), device);
+                    self.discovered_devices
+                        .write()
+                        .await
+                        .insert(address.clone(), device);
 
                     // Check trust status
                     let is_trusted = self.database.is_device_trusted(&address)?;
@@ -244,18 +263,22 @@ impl DiscoveryManager {
                             }
                         });
                     } else if is_new_device {
-                        log_info!("🆕 NEW device {} discovered, awaiting trust decision", address);
+                        log_info!(
+                            "🆕 NEW device {} discovered, awaiting trust decision",
+                            address
+                        );
 
                         // Send trust prompt to UI
                         let event = BusMessage::new(
                             "device_discovered".to_string(),
                             serde_json::json!({
-                            "mac_address": address,
-                            "name": name,
-                            "rssi": rssi,
-                            "is_new": true,
-                            "requires_trust_decision": true
-                        }).to_string(),
+                                "mac_address": address,
+                                "name": name,
+                                "rssi": rssi,
+                                "is_new": true,
+                                "requires_trust_decision": true
+                            })
+                            .to_string(),
                             "discovery_manager".to_string(),
                         );
 
@@ -269,7 +292,10 @@ impl DiscoveryManager {
             }
         }
 
-        log_info!("✅ Scan complete - {} new Survon device(s) discovered", discovered_count);
+        log_info!(
+            "✅ Scan complete - {} new Survon device(s) discovered",
+            discovered_count
+        );
         Ok(discovered_count)
     }
 
@@ -282,18 +308,15 @@ impl DiscoveryManager {
     ) -> Result<()> {
         log_info!("🎯 Command request: {} -> {}", device_id, action);
 
-        let command = crate::util::io::ble_scheduler::create_control_command(
-            &device_id,
-            action,
-            payload,
-        );
+        let command =
+            crate::util::io::ble_scheduler::create_control_command(&device_id, action, payload);
 
         let queued_cmd = QueuedCommand {
             device_id: device_id.clone(),
             command,
             priority,
             queued_at: tokio::time::Instant::now(),
-            max_age: Some(Duration::from_secs(300)),  // Commands expire after 5 minutes
+            max_age: Some(Duration::from_secs(300)), // Commands expire after 5 minutes
         };
 
         self.command_scheduler.queue_command(queued_cmd).await?;
@@ -315,24 +338,25 @@ impl DiscoveryManager {
         log_info!("✓ Discovered services for {}", address);
 
         let chars = peripheral.characteristics();
-        let rx_char = chars.iter()
+        let rx_char = chars
+            .iter()
             .find(|c| c.uuid == Uuid::parse_str(SURVON_RX_CHAR_UUID).unwrap())
             .ok_or_else(|| color_eyre::eyre::eyre!("RX characteristic not found"))?;
 
         peripheral.subscribe(rx_char).await?;
         log_info!("✓ Subscribed to notifications from {}", address);
 
-        let tx_char = chars.iter()
+        let tx_char = chars
+            .iter()
             .find(|c| c.uuid == Uuid::parse_str(SURVON_TX_CHAR_UUID).unwrap())
             .ok_or_else(|| color_eyre::eyre::eyre!("TX characteristic not found"))?;
 
         // 🔑 KEY CHANGE: No registration channel - we'll auto-register from telemetry
 
         // Register peripheral with scheduler immediately
-        self.command_scheduler.register_peripheral(
-            address.clone(),
-            peripheral.clone()
-        ).await;
+        self.command_scheduler
+            .register_peripheral(address.clone(), peripheral.clone())
+            .await;
 
         // Spawn listener for incoming data
         let bus = self.message_bus.clone();
@@ -349,7 +373,7 @@ impl DiscoveryManager {
             log_info!("📻 BLE listener task started for {}", addr_clone);
 
             let mut current_peripheral = peripheral_clone;
-            let mut device_registered = false;  // Track if we've registered capabilities
+            let mut device_registered = false; // Track if we've registered capabilities
 
             loop {
                 log_info!("📡 Acquiring notification stream for {}...", addr_clone);
@@ -369,14 +393,26 @@ impl DiscoveryManager {
                                 tokio::time::sleep(Duration::from_secs(10)).await;
                                 iteration += 1;
 
-                                log_info!("🫀 Keep-alive iteration {} for {}", iteration, keepalive_addr);
+                                log_info!(
+                                    "🫀 Keep-alive iteration {} for {}",
+                                    iteration,
+                                    keepalive_addr
+                                );
 
                                 match keepalive_peripheral.read(&keepalive_char).await {
                                     Ok(data) => {
-                                        log_info!("🫀 Keep-alive read OK for {} (got {} bytes)", keepalive_addr, data.len());
+                                        log_info!(
+                                            "🫀 Keep-alive read OK for {} (got {} bytes)",
+                                            keepalive_addr,
+                                            data.len()
+                                        );
                                     }
                                     Err(e) => {
-                                        log_warn!("🫀 Keep-alive failed for {}: {}", keepalive_addr, e);
+                                        log_warn!(
+                                            "🫀 Keep-alive failed for {}: {}",
+                                            keepalive_addr,
+                                            e
+                                        );
                                         break;
                                     }
                                 }
@@ -387,19 +423,24 @@ impl DiscoveryManager {
                         let mut last_chunk_time = std::time::Instant::now();
 
                         loop {
-                            match tokio::time::timeout(
-                                Duration::from_secs(5),
-                                stream.next()
-                            ).await {
+                            match tokio::time::timeout(Duration::from_secs(5), stream.next()).await
+                            {
                                 Ok(Some(data)) => {
-                                    log_info!("📥 Received {} bytes from {}", data.value.len(), addr_clone);
+                                    log_info!(
+                                        "📥 Received {} bytes from {}",
+                                        data.value.len(),
+                                        addr_clone
+                                    );
 
                                     let chunk = String::from_utf8_lossy(&data.value).to_string();
 
                                     // Clear stale buffers
                                     if last_chunk_time.elapsed().as_secs() > 3 {
                                         if !buffer.is_empty() {
-                                            log_warn!("⚠️ Clearing stale buffer ({} bytes)", buffer.len());
+                                            log_warn!(
+                                                "⚠️ Clearing stale buffer ({} bytes)",
+                                                buffer.len()
+                                            );
                                             buffer.clear();
                                         }
                                     }
@@ -426,13 +467,24 @@ impl DiscoveryManager {
                                             continue;
                                         }
 
-                                        log_info!("✅ COMPLETE MESSAGE ({} bytes): {}", message.len(), message);
+                                        log_info!(
+                                            "✅ COMPLETE MESSAGE ({} bytes): {}",
+                                            message.len(),
+                                            message
+                                        );
 
                                         // 🔑 AUTO-REGISTRATION: First telemetry message triggers registration
                                         if !device_registered {
-                                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&message) {
-                                                if let Some(device_id) = json.get("i").and_then(|v| v.as_str()) {
-                                                    log_info!("🆔 Discovered device ID: {}", device_id);
+                                            if let Ok(json) =
+                                                serde_json::from_str::<serde_json::Value>(&message)
+                                            {
+                                                if let Some(device_id) =
+                                                    json.get("i").and_then(|v| v.as_str())
+                                                {
+                                                    log_info!(
+                                                        "🆔 Discovered device ID: {}",
+                                                        device_id
+                                                    );
 
                                                     let capabilities = DeviceCapabilities {
                                                         device_id: device_id.to_string(),
@@ -462,8 +514,14 @@ impl DiscoveryManager {
                                                         commands: Vec::new(),
                                                     };
 
-                                                    if let Err(e) = self_clone.handle_registration(capabilities).await {
-                                                        log_error!("Failed to register device: {}", e);
+                                                    if let Err(e) = self_clone
+                                                        .handle_registration(capabilities)
+                                                        .await
+                                                    {
+                                                        log_error!(
+                                                            "Failed to register device: {}",
+                                                            e
+                                                        );
                                                     } else {
                                                         log_info!("✅ Device {} auto-registered from telemetry", device_id);
                                                         device_registered = true;
@@ -475,16 +533,31 @@ impl DiscoveryManager {
                                         // Parse as telemetry
                                         match SspMessage::parse_flexible(&message) {
                                             Ok(ssp) => {
-                                                log_info!("✅ Parsed SSP telemetry - topic: {}", ssp.topic);
+                                                log_info!(
+                                                    "✅ Parsed SSP telemetry - topic: {}",
+                                                    ssp.topic
+                                                );
 
                                                 // Extract schedule metadata
-                                                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&message) {
-                                                    if let Some(metadata) = extract_schedule_metadata(&json) {
-                                                        if let Err(e) = scheduler.update_schedule_from_telemetry(
-                                                            addr_clone.clone(),
-                                                            &metadata
-                                                        ).await {
-                                                            log_error!("Failed to update schedule: {}", e);
+                                                if let Ok(json) =
+                                                    serde_json::from_str::<serde_json::Value>(
+                                                        &message,
+                                                    )
+                                                {
+                                                    if let Some(metadata) =
+                                                        extract_schedule_metadata(&json)
+                                                    {
+                                                        if let Err(e) = scheduler
+                                                            .update_schedule_from_telemetry(
+                                                                addr_clone.clone(),
+                                                                &metadata,
+                                                            )
+                                                            .await
+                                                        {
+                                                            log_error!(
+                                                                "Failed to update schedule: {}",
+                                                                e
+                                                            );
                                                         }
                                                     }
                                                 }
@@ -493,7 +566,9 @@ impl DiscoveryManager {
                                                 let bus_msg = ssp.to_bus_message();
                                                 match bus.publish(bus_msg).await {
                                                     Ok(_) => log_info!("✅ Published to bus"),
-                                                    Err(e) => log_error!("❌ Publish failed: {}", e),
+                                                    Err(e) => {
+                                                        log_error!("❌ Publish failed: {}", e)
+                                                    }
                                                 }
                                             }
                                             Err(e) => {
@@ -504,14 +579,25 @@ impl DiscoveryManager {
 
                                     // Log remaining buffer state
                                     if !buffer.is_empty() {
-                                        log_info!("⏳ {} bytes remaining in buffer (incomplete message)", buffer.len());
+                                        log_info!(
+                                            "⏳ {} bytes remaining in buffer (incomplete message)",
+                                            buffer.len()
+                                        );
                                     }
                                 }
                                 Ok(None) => {
                                     log_warn!("📡 Stream returned None");
 
-                                    let is_connected = current_peripheral.is_connected().await.unwrap_or(false);
-                                    log_info!("🔌 Connection state: {}", if is_connected { "CONNECTED" } else { "DISCONNECTED" });
+                                    let is_connected =
+                                        current_peripheral.is_connected().await.unwrap_or(false);
+                                    log_info!(
+                                        "🔌 Connection state: {}",
+                                        if is_connected {
+                                            "CONNECTED"
+                                        } else {
+                                            "DISCONNECTED"
+                                        }
+                                    );
 
                                     keepalive_handle.abort();
 
@@ -520,8 +606,10 @@ impl DiscoveryManager {
                                         &addr_clone,
                                         &rx_char_clone,
                                         &mut current_peripheral,
-                                        &scheduler
-                                    ).await {
+                                        &scheduler,
+                                    )
+                                    .await
+                                    {
                                         log_error!("❌ Reconnect failed: {}", e);
                                         tokio::time::sleep(Duration::from_secs(5)).await;
                                     }
@@ -529,14 +617,18 @@ impl DiscoveryManager {
                                     break;
                                 }
                                 Err(_) => {
-                                    log_warn!("⏰ Timeout waiting for chunk (buffer: {} bytes)", buffer.len());
+                                    log_warn!(
+                                        "⏰ Timeout waiting for chunk (buffer: {} bytes)",
+                                        buffer.len()
+                                    );
 
                                     if !buffer.is_empty() {
                                         log_warn!("⚠️ Clearing incomplete message");
                                         buffer.clear();
                                     }
 
-                                    let is_connected = current_peripheral.is_connected().await.unwrap_or(false);
+                                    let is_connected =
+                                        current_peripheral.is_connected().await.unwrap_or(false);
 
                                     if !is_connected {
                                         log_error!("📡 Device disconnected during timeout");
@@ -547,8 +639,10 @@ impl DiscoveryManager {
                                             &addr_clone,
                                             &rx_char_clone,
                                             &mut current_peripheral,
-                                            &scheduler
-                                        ).await {
+                                            &scheduler,
+                                        )
+                                        .await
+                                        {
                                             log_error!("❌ Reconnect failed: {}", e);
                                             tokio::time::sleep(Duration::from_secs(5)).await;
                                         }
@@ -571,7 +665,10 @@ impl DiscoveryManager {
         });
 
         // 🔑 KEY CHANGE: Return immediately, don't wait for registration
-        log_info!("✅ Listener spawned for {}, will auto-register from telemetry", address);
+        log_info!(
+            "✅ Listener spawned for {}, will auto-register from telemetry",
+            address
+        );
 
         Ok(())
     }
@@ -618,7 +715,8 @@ impl DiscoveryManager {
         log_info!("🔄 Starting reconnect for {}", address);
 
         let adapter = adapter_lock.read().await;
-        let adapter = adapter.as_ref()
+        let adapter = adapter
+            .as_ref()
             .ok_or_else(|| color_eyre::eyre::eyre!("Adapter not available"))?;
 
         // Quick 3-second scan to refresh peripheral list
@@ -653,10 +751,9 @@ impl DiscoveryManager {
                     *current_peripheral = periph.clone();
 
                     // Re-register with scheduler
-                    scheduler.register_peripheral(
-                        address.to_string(),
-                        periph
-                    ).await;
+                    scheduler
+                        .register_peripheral(address.to_string(), periph)
+                        .await;
 
                     log_info!("✅ Reconnect complete for {}", address);
                     return Ok(());
@@ -664,7 +761,10 @@ impl DiscoveryManager {
             }
         }
 
-        Err(color_eyre::eyre::eyre!("Device {} not found in rescan", address))
+        Err(color_eyre::eyre::eyre!(
+            "Device {} not found in rescan",
+            address
+        ))
     }
 
     /// Connect to all trusted devices from database
@@ -699,7 +799,10 @@ impl DiscoveryManager {
 
                 // Register in background
                 tokio::spawn(async move {
-                    match self_clone.register_device(peripheral, mac_clone.clone()).await {
+                    match self_clone
+                        .register_device(peripheral, mac_clone.clone())
+                        .await
+                    {
                         Ok(_) => log_info!("✅ Registered trusted device: {}", mac_clone),
                         Err(e) => log_error!("❌ Failed to register {}: {}", mac_clone, e),
                     }
@@ -711,7 +814,10 @@ impl DiscoveryManager {
             }
         }
 
-        log_info!("🔌 Initiated connection to {} trusted device(s)", connected_count);
+        log_info!(
+            "🔌 Initiated connection to {} trusted device(s)",
+            connected_count
+        );
 
         Ok(())
     }
@@ -733,13 +839,17 @@ impl DiscoveryManager {
 
     /// Handle successful registration
     async fn handle_registration(&self, capabilities: DeviceCapabilities) -> Result<()> {
-        log_info!("Registering device: {} ({})", capabilities.device_id, capabilities.device_type);
+        log_info!(
+            "Registering device: {} ({})",
+            capabilities.device_id,
+            capabilities.device_type
+        );
 
         // Store in registered devices
-        self.registered_devices.write().await.insert(
-            capabilities.device_id.clone(),
-            capabilities.clone(),
-        );
+        self.registered_devices
+            .write()
+            .await
+            .insert(capabilities.device_id.clone(), capabilities.clone());
 
         // Generate module YAML
         self.generate_module_config(&capabilities).await?;
@@ -752,7 +862,10 @@ impl DiscoveryManager {
         );
         self.message_bus.publish(event).await?;
 
-        log_info!("✓ Device {} registered successfully", capabilities.device_id);
+        log_info!(
+            "✓ Device {} registered successfully",
+            capabilities.device_id
+        );
 
         Ok(())
     }
@@ -771,7 +884,8 @@ impl DiscoveryManager {
         // Get device name from discovered devices
         let device_name = {
             let devices = self.discovered_devices.read().await;
-            devices.get(&mac_address)
+            devices
+                .get(&mac_address)
                 .map(|d| d.name.clone())
                 .unwrap_or_else(|| "Unknown Device".to_string())
         };
@@ -782,7 +896,8 @@ impl DiscoveryManager {
         // Attempt registration
         if let Some(device) = self.discovered_devices.read().await.get(&mac_address) {
             let peripheral = device.peripheral.clone();
-            self.register_device(peripheral, mac_address.clone()).await?;
+            self.register_device(peripheral, mac_address.clone())
+                .await?;
         }
 
         Ok(())
@@ -838,7 +953,10 @@ impl DiscoveryManager {
         let mut config = serde_yaml::Mapping::new();
         config.insert(
             serde_yaml::Value::String("name".to_string()),
-            serde_yaml::Value::String(format!("{} ({})", capabilities.device_id, capabilities.device_type)),
+            serde_yaml::Value::String(format!(
+                "{} ({})",
+                capabilities.device_id, capabilities.device_type
+            )),
         );
         config.insert(
             serde_yaml::Value::String("module_type".to_string()),
@@ -926,10 +1044,14 @@ impl DiscoveryManager {
             "payload": payload
         });
 
-        format!("# {}", serde_json::to_string_pretty(&sample).unwrap()
-            .lines()
-            .collect::<Vec<_>>()
-            .join("\n# "))
+        format!(
+            "# {}",
+            serde_json::to_string_pretty(&sample)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>()
+                .join("\n# ")
+        )
     }
 
     /// Get list of discovered but unregistered devices
@@ -952,4 +1074,3 @@ impl DiscoveryManager {
             .collect()
     }
 }
-

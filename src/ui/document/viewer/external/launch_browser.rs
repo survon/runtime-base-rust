@@ -1,7 +1,4 @@
-use std::{
-    path::Path,
-    process::Stdio,
-};
+use std::{path::Path, process::Stdio};
 use tokio::process::Command as AsyncCommand;
 
 use crate::log_debug;
@@ -31,22 +28,22 @@ impl ExternalViewer {
                     "open" => {
                         // macOS open command - just pass the file path, no file:// prefix
                         cmd.arg(html_path);
-                    },
+                    }
                     "netsurf-gtk" | "surf" => {
                         // Minimal browsers - no special flags
                         cmd.arg(format!("file://{}", html_path.display()));
-                    },
+                    }
                     "midori" => {
                         cmd.arg("--app");
                         cmd.arg(format!("file://{}", html_path.display()));
-                    },
+                    }
                     "chromium-browser" | "google-chrome" | "firefox" => {
                         cmd.arg("--app");
                         cmd.arg(format!("file://{}", html_path.display()));
-                    },
+                    }
                     _ => {
                         cmd.arg(format!("file://{}", html_path.display()));
-                    },
+                    }
                 }
 
                 cmd.stdout(Stdio::null());

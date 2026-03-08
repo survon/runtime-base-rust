@@ -36,7 +36,10 @@ pub struct ServiceDiscovery {
 
 impl ServiceDiscovery {
     pub fn new(scan_pattern: String, web_port: u16) -> Self {
-        Self { scan_pattern, web_port }
+        Self {
+            scan_pattern,
+            web_port,
+        }
     }
 
     /// Discover council services on the network
@@ -45,9 +48,17 @@ impl ServiceDiscovery {
 
         // Try common hostnames based on pattern
         let positions = vec![
-            "physician", "agronomist", "botanist", "rancher",
-            "security", "engineer", "crafter", "technologist",
-            "counselor", "wilderness", "storyteller"
+            "physician",
+            "agronomist",
+            "botanist",
+            "rancher",
+            "security",
+            "engineer",
+            "crafter",
+            "technologist",
+            "counselor",
+            "wilderness",
+            "storyteller",
         ];
 
         for position in positions {
@@ -77,7 +88,10 @@ impl ServiceDiscovery {
         }
 
         // Test if Ollama API is responding
-        let status = match self.test_ollama_endpoint(&metadata.endpoints.ollama_api).await {
+        let status = match self
+            .test_ollama_endpoint(&metadata.endpoints.ollama_api)
+            .await
+        {
             Ok(_) => "available",
             Err(_) => "out_of_office",
         };

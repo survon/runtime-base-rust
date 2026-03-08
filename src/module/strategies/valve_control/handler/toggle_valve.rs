@@ -1,10 +1,6 @@
 use crate::{
-    log_error,
-    log_info,
-    util::io::{
-        ble_scheduler::CommandPriority,
-        bus::BusMessage,
-    }
+    log_error, log_info,
+    util::io::{ble_scheduler::CommandPriority, bus::BusMessage},
 };
 
 use super::{HandlerMessage, ValveControlHandler};
@@ -30,30 +26,37 @@ impl ValveControlHandler {
                     "action": if new_state { "open" } else { "close" }
                 });
 
-                match discovery_clone.send_command(
-                    device_id.clone(),
-                    "valve_control",
-                    Some(payload),
-                    CommandPriority::High,  // Valve control is HIGH priority
-                ).await {
+                match discovery_clone
+                    .send_command(
+                        device_id.clone(),
+                        "valve_control",
+                        Some(payload),
+                        CommandPriority::High, // Valve control is HIGH priority
+                    )
+                    .await
+                {
                     Ok(_) => {
                         log_info!("✓ Valve command queued");
                         let _ = tx.send(HandlerMessage::StatusUpdate(
-                            "Command queued, will send during CMD window".to_string()
+                            "Command queued, will send during CMD window".to_string(),
                         ));
                     }
                     Err(e) => {
                         log_error!("Failed to queue valve command: {}", e);
-                        let _ = tx.send(HandlerMessage::StatusUpdate(
-                            format!("❌ Failed to queue command: {}", e)
-                        ));
+                        let _ = tx.send(HandlerMessage::StatusUpdate(format!(
+                            "❌ Failed to queue command: {}",
+                            e
+                        )));
                     }
                 }
             });
         } else {
             self.status_message = Some(format!("⏳ Sending {} command...", action));
 
-            log_info!("🚰 Sending valve {} command directly (no scheduler)", action);
+            log_info!(
+                "🚰 Sending valve {} command directly (no scheduler)",
+                action
+            );
 
             let tx = self.message_tx.clone();
             let bus = self.message_bus.clone();
@@ -80,14 +83,15 @@ impl ValveControlHandler {
                     Ok(_) => {
                         log_info!("✓ Valve command published");
                         let _ = tx.send(HandlerMessage::StatusUpdate(
-                            "Command sent, waiting for response...".to_string()
+                            "Command sent, waiting for response...".to_string(),
                         ));
                     }
                     Err(e) => {
                         log_error!("Failed to publish valve command: {}", e);
-                        let _ = tx.send(HandlerMessage::StatusUpdate(
-                            format!("❌ Failed to send command: {}", e)
-                        ));
+                        let _ = tx.send(HandlerMessage::StatusUpdate(format!(
+                            "❌ Failed to send command: {}",
+                            e
+                        )));
                     }
                 }
             });

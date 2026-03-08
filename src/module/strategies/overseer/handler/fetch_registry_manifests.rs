@@ -1,7 +1,9 @@
-use super::{RegistryManifest, OverseerHandler};
+use super::{OverseerHandler, RegistryManifest};
 
 impl OverseerHandler {
-    pub(in crate::module) async fn fetch_registry_manifests(registry_url: &str) -> color_eyre::Result<Vec<RegistryManifest>> {
+    pub(in crate::module) async fn fetch_registry_manifests(
+        registry_url: &str,
+    ) -> color_eyre::Result<Vec<RegistryManifest>> {
         // Mock implementation
         Ok(vec![
             RegistryManifest {

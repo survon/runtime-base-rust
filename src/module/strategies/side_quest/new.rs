@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use super::{SideQuest, QuestUrgency};
+use super::{QuestUrgency, SideQuest};
 
 impl SideQuest {
     pub fn new(

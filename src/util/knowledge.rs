@@ -1,14 +1,14 @@
+use crate::module::strategies::llm::database::{KnowledgeChunk, LlmDatabase};
+use crate::util::database::Database;
+use crate::{log_debug, log_error, log_info, log_warn};
 use color_eyre::Result;
+use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
+use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::fs;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
-use crate::util::database::{Database};
-use crate::module::strategies::llm::database::{KnowledgeChunk, LlmDatabase};
-use crate::{log_error, log_debug, log_info, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleConfig {
@@ -40,7 +40,7 @@ impl<'a> KnowledgeIngester<'a> {
                 let stored: u64 = stored_checksum.parse().unwrap_or(0);
                 Ok(current_checksum != stored)
             }
-            _ => Ok(true) // No checksum stored, need to ingest
+            _ => Ok(true), // No checksum stored, need to ingest
         }
     }
 
@@ -83,14 +83,22 @@ impl<'a> KnowledgeIngester<'a> {
 
         // Store new checksum
         let checksum = self.calculate_modules_checksum()?;
-        self.database.save_module_state("knowledge_checksum", &checksum.to_string())?;
+        self.database
+            .save_module_state("knowledge_checksum", &checksum.to_string())?;
 
-        log_info!("Knowledge ingestion complete. Processed {} chunks.", total_chunks);
+        log_info!(
+            "Knowledge ingestion complete. Processed {} chunks.",
+            total_chunks
+        );
 
         Ok(())
     }
 
-    fn process_knowledge_directory(&self, knowledge_dir: &Path, config: &ModuleConfig) -> Result<usize> {
+    fn process_knowledge_directory(
+        &self,
+        knowledge_dir: &Path,
+        config: &ModuleConfig,
+    ) -> Result<usize> {
         let mut chunk_count = 0;
 
         // Recursively process all files in knowledge directory and subdirectories
@@ -99,7 +107,12 @@ impl<'a> KnowledgeIngester<'a> {
         Ok(chunk_count)
     }
 
-    fn process_directory_recursive(&self, dir: &Path, config: &ModuleConfig, chunk_count: &mut usize) -> Result<()> {
+    fn process_directory_recursive(
+        &self,
+        dir: &Path,
+        config: &ModuleConfig,
+        chunk_count: &mut usize,
+    ) -> Result<()> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -121,7 +134,8 @@ impl<'a> KnowledgeIngester<'a> {
     }
 
     fn process_file(&self, file_path: &Path, config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
-        let extension = file_path.extension()
+        let extension = file_path
+            .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("")
             .to_lowercase();
@@ -142,13 +156,21 @@ impl<'a> KnowledgeIngester<'a> {
         }
     }
 
-    fn process_text_file(&self, file_path: &Path, config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
+    fn process_text_file(
+        &self,
+        file_path: &Path,
+        config: &ModuleConfig,
+    ) -> Result<Vec<KnowledgeChunk>> {
         let content = fs::read_to_string(file_path)?;
         let chunks = self.chunk_text(&content, file_path, config);
         Ok(chunks)
     }
 
-    fn process_html_file(&self, file_path: &Path, config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
+    fn process_html_file(
+        &self,
+        file_path: &Path,
+        config: &ModuleConfig,
+    ) -> Result<Vec<KnowledgeChunk>> {
         let content = fs::read_to_string(file_path)?;
         // Simple HTML stripping - remove tags
         let text_content = content
@@ -174,13 +196,25 @@ impl<'a> KnowledgeIngester<'a> {
         Ok(chunks)
     }
 
-    fn chunk_text_with_images(&self, content: &str, file_path: &Path, config: &ModuleConfig, metadata: String) -> Vec<KnowledgeChunk> {
+    fn chunk_text_with_images(
+        &self,
+        content: &str,
+        file_path: &Path,
+        config: &ModuleConfig,
+        metadata: String,
+    ) -> Vec<KnowledgeChunk> {
         let mut chunks = Vec::new();
-        let paragraphs: Vec<&str> = content.split("\n\n").filter(|p| !p.trim().is_empty()).collect();
+        let paragraphs: Vec<&str> = content
+            .split("\n\n")
+            .filter(|p| !p.trim().is_empty())
+            .collect();
 
         for (index, paragraph) in paragraphs.iter().enumerate() {
             let inferred_domains = self.infer_domains_from_content(paragraph);
-            let primary_domain = inferred_domains.first().unwrap_or(&"general".to_string()).clone();
+            let primary_domain = inferred_domains
+                .first()
+                .unwrap_or(&"general".to_string())
+                .clone();
 
             let chunk = KnowledgeChunk {
                 id: None,
@@ -198,7 +232,11 @@ impl<'a> KnowledgeIngester<'a> {
         chunks
     }
 
-    fn process_pdf_file(&self, file_path: &Path, config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
+    fn process_pdf_file(
+        &self,
+        file_path: &Path,
+        config: &ModuleConfig,
+    ) -> Result<Vec<KnowledgeChunk>> {
         log_info!("    Processing PDF: {}", file_path.display());
 
         // Use pdf_extract to get the full text
@@ -237,10 +275,11 @@ impl<'a> KnowledgeIngester<'a> {
                         body: paragraph.trim().to_string(),
                         chunk_index: para_index as i32,
                         metadata: serde_json::json!({
-                        "file_type": "pdf",
-                        "full_path": file_path.to_string_lossy(),
-                        "paragraph_index": para_index,
-                    }).to_string(),
+                            "file_type": "pdf",
+                            "full_path": file_path.to_string_lossy(),
+                            "paragraph_index": para_index,
+                        })
+                        .to_string(),
                     };
 
                     all_chunks.push(chunk);
@@ -257,7 +296,11 @@ impl<'a> KnowledgeIngester<'a> {
         }
     }
 
-    fn extract_pdf_with_images(&self, file_path: &Path, cache_dir: &Path) -> Result<(String, HashMap<String, String>)> {
+    fn extract_pdf_with_images(
+        &self,
+        file_path: &Path,
+        cache_dir: &Path,
+    ) -> Result<(String, HashMap<String, String>)> {
         // For now, just extract text - image extraction requires additional PDF parsing
         match pdf_extract::extract_text(file_path) {
             Ok(content) => {
@@ -276,17 +319,29 @@ impl<'a> KnowledgeIngester<'a> {
         }
     }
 
-    fn process_rtf_file(&self, _file_path: &Path, _config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
+    fn process_rtf_file(
+        &self,
+        _file_path: &Path,
+        _config: &ModuleConfig,
+    ) -> Result<Vec<KnowledgeChunk>> {
         log_warn!("    RTF processing not implemented yet");
         Ok(vec![])
     }
 
-    fn process_doc_file(&self, _file_path: &Path, _config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
+    fn process_doc_file(
+        &self,
+        _file_path: &Path,
+        _config: &ModuleConfig,
+    ) -> Result<Vec<KnowledgeChunk>> {
         log_warn!("    DOC/DOCX processing not implemented yet");
         Ok(vec![])
     }
 
-    fn process_image_file(&self, _file_path: &Path, _config: &ModuleConfig) -> Result<Vec<KnowledgeChunk>> {
+    fn process_image_file(
+        &self,
+        _file_path: &Path,
+        _config: &ModuleConfig,
+    ) -> Result<Vec<KnowledgeChunk>> {
         log_warn!("    Image OCR processing not implemented yet");
         Ok(vec![])
     }
@@ -294,65 +349,847 @@ impl<'a> KnowledgeIngester<'a> {
     fn infer_domains_from_content(&self, content: &str) -> Vec<String> {
         let domain_keywords = vec![
             // Agriculture & Farming
-            ("agriculture", vec!["farm", "farming", "crop", "crops", "harvest", "plant", "planting", "seed", "seeds", "soil", "fertilizer", "irrigation", "livestock", "cattle", "sheep", "goat", "pig", "chicken", "poultry", "dairy", "barn", "pasture", "field", "acre", "tractor", "plow", "cultivate", "organic", "pesticide", "herbicide", "compost", "manure", "ranch", "grazing"]),
-
+            (
+                "agriculture",
+                vec![
+                    "farm",
+                    "farming",
+                    "crop",
+                    "crops",
+                    "harvest",
+                    "plant",
+                    "planting",
+                    "seed",
+                    "seeds",
+                    "soil",
+                    "fertilizer",
+                    "irrigation",
+                    "livestock",
+                    "cattle",
+                    "sheep",
+                    "goat",
+                    "pig",
+                    "chicken",
+                    "poultry",
+                    "dairy",
+                    "barn",
+                    "pasture",
+                    "field",
+                    "acre",
+                    "tractor",
+                    "plow",
+                    "cultivate",
+                    "organic",
+                    "pesticide",
+                    "herbicide",
+                    "compost",
+                    "manure",
+                    "ranch",
+                    "grazing",
+                ],
+            ),
             // Construction & Building
-            ("construction", vec!["build", "building", "construction", "house", "home", "foundation", "concrete", "cement", "lumber", "wood", "frame", "framing", "roof", "roofing", "wall", "walls", "door", "window", "floor", "flooring", "plumbing", "electrical", "wiring", "insulation", "drywall", "paint", "siding", "brick", "stone", "nail", "screw", "hammer", "saw", "drill", "level", "measure", "blueprint", "permit", "contractor", "carpenter", "mason", "architect"]),
-
+            (
+                "construction",
+                vec![
+                    "build",
+                    "building",
+                    "construction",
+                    "house",
+                    "home",
+                    "foundation",
+                    "concrete",
+                    "cement",
+                    "lumber",
+                    "wood",
+                    "frame",
+                    "framing",
+                    "roof",
+                    "roofing",
+                    "wall",
+                    "walls",
+                    "door",
+                    "window",
+                    "floor",
+                    "flooring",
+                    "plumbing",
+                    "electrical",
+                    "wiring",
+                    "insulation",
+                    "drywall",
+                    "paint",
+                    "siding",
+                    "brick",
+                    "stone",
+                    "nail",
+                    "screw",
+                    "hammer",
+                    "saw",
+                    "drill",
+                    "level",
+                    "measure",
+                    "blueprint",
+                    "permit",
+                    "contractor",
+                    "carpenter",
+                    "mason",
+                    "architect",
+                ],
+            ),
             // Survival & Emergency Preparedness
-            ("survival", vec!["survival", "emergency", "preparedness", "wilderness", "rescue", "danger", "crisis", "disaster", "shelter", "fire", "water", "food", "hunting", "fishing", "trap", "snare", "forage", "edible", "poisonous", "first", "aid", "medical", "wound", "injury", "compass", "navigation", "map", "signal", "whistle", "knife", "rope", "cordage", "tarp", "sleeping", "bag", "backpack", "kit", "supplies", "cache", "stockpile", "bunker", "prepper", "shtf"]),
-
+            (
+                "survival",
+                vec![
+                    "survival",
+                    "emergency",
+                    "preparedness",
+                    "wilderness",
+                    "rescue",
+                    "danger",
+                    "crisis",
+                    "disaster",
+                    "shelter",
+                    "fire",
+                    "water",
+                    "food",
+                    "hunting",
+                    "fishing",
+                    "trap",
+                    "snare",
+                    "forage",
+                    "edible",
+                    "poisonous",
+                    "first",
+                    "aid",
+                    "medical",
+                    "wound",
+                    "injury",
+                    "compass",
+                    "navigation",
+                    "map",
+                    "signal",
+                    "whistle",
+                    "knife",
+                    "rope",
+                    "cordage",
+                    "tarp",
+                    "sleeping",
+                    "bag",
+                    "backpack",
+                    "kit",
+                    "supplies",
+                    "cache",
+                    "stockpile",
+                    "bunker",
+                    "prepper",
+                    "shtf",
+                ],
+            ),
             // Food & Cooking
-            ("food", vec!["cook", "cooking", "recipe", "food", "eat", "meal", "kitchen", "stove", "oven", "pan", "pot", "knife", "cutting", "board", "ingredient", "spice", "herb", "salt", "pepper", "oil", "butter", "meat", "vegetable", "fruit", "bread", "bake", "baking", "roast", "fry", "boil", "steam", "grill", "marinade", "sauce", "soup", "stew", "preserve", "canning", "pickle", "smoke", "cure", "ferment", "nutrition", "vitamin", "protein", "carbohydrate"]),
-
+            (
+                "food",
+                vec![
+                    "cook",
+                    "cooking",
+                    "recipe",
+                    "food",
+                    "eat",
+                    "meal",
+                    "kitchen",
+                    "stove",
+                    "oven",
+                    "pan",
+                    "pot",
+                    "knife",
+                    "cutting",
+                    "board",
+                    "ingredient",
+                    "spice",
+                    "herb",
+                    "salt",
+                    "pepper",
+                    "oil",
+                    "butter",
+                    "meat",
+                    "vegetable",
+                    "fruit",
+                    "bread",
+                    "bake",
+                    "baking",
+                    "roast",
+                    "fry",
+                    "boil",
+                    "steam",
+                    "grill",
+                    "marinade",
+                    "sauce",
+                    "soup",
+                    "stew",
+                    "preserve",
+                    "canning",
+                    "pickle",
+                    "smoke",
+                    "cure",
+                    "ferment",
+                    "nutrition",
+                    "vitamin",
+                    "protein",
+                    "carbohydrate",
+                ],
+            ),
             // Health & Medicine
-            ("health", vec!["health", "medicine", "medical", "doctor", "nurse", "hospital", "clinic", "treatment", "therapy", "drug", "medication", "pill", "dose", "symptom", "disease", "illness", "infection", "virus", "bacteria", "antibiotic", "vaccine", "immune", "fever", "pain", "headache", "nausea", "wound", "bandage", "surgery", "operation", "diagnosis", "patient", "recovery", "healing", "prevention", "hygiene", "sanitation", "exercise", "fitness", "diet", "nutrition", "mental", "stress", "anxiety", "depression"]),
-
+            (
+                "health",
+                vec![
+                    "health",
+                    "medicine",
+                    "medical",
+                    "doctor",
+                    "nurse",
+                    "hospital",
+                    "clinic",
+                    "treatment",
+                    "therapy",
+                    "drug",
+                    "medication",
+                    "pill",
+                    "dose",
+                    "symptom",
+                    "disease",
+                    "illness",
+                    "infection",
+                    "virus",
+                    "bacteria",
+                    "antibiotic",
+                    "vaccine",
+                    "immune",
+                    "fever",
+                    "pain",
+                    "headache",
+                    "nausea",
+                    "wound",
+                    "bandage",
+                    "surgery",
+                    "operation",
+                    "diagnosis",
+                    "patient",
+                    "recovery",
+                    "healing",
+                    "prevention",
+                    "hygiene",
+                    "sanitation",
+                    "exercise",
+                    "fitness",
+                    "diet",
+                    "nutrition",
+                    "mental",
+                    "stress",
+                    "anxiety",
+                    "depression",
+                ],
+            ),
             // Electronics & Technology
-            ("electronics", vec!["electronic", "electronics", "circuit", "voltage", "current", "resistance", "capacitor", "resistor", "transistor", "diode", "led", "wire", "cable", "battery", "power", "solar", "generator", "motor", "sensor", "arduino", "raspberry", "pi", "microcontroller", "computer", "programming", "code", "software", "hardware", "digital", "analog", "signal", "frequency", "amplifier", "oscilloscope", "multimeter", "soldering", "pcb", "component", "relay", "switch", "button"]),
-
+            (
+                "electronics",
+                vec![
+                    "electronic",
+                    "electronics",
+                    "circuit",
+                    "voltage",
+                    "current",
+                    "resistance",
+                    "capacitor",
+                    "resistor",
+                    "transistor",
+                    "diode",
+                    "led",
+                    "wire",
+                    "cable",
+                    "battery",
+                    "power",
+                    "solar",
+                    "generator",
+                    "motor",
+                    "sensor",
+                    "arduino",
+                    "raspberry",
+                    "pi",
+                    "microcontroller",
+                    "computer",
+                    "programming",
+                    "code",
+                    "software",
+                    "hardware",
+                    "digital",
+                    "analog",
+                    "signal",
+                    "frequency",
+                    "amplifier",
+                    "oscilloscope",
+                    "multimeter",
+                    "soldering",
+                    "pcb",
+                    "component",
+                    "relay",
+                    "switch",
+                    "button",
+                ],
+            ),
             // Mechanical & Engineering
-            ("mechanical", vec!["mechanical", "engineering", "machine", "engine", "motor", "gear", "bearing", "shaft", "pump", "valve", "pipe", "hydraulic", "pneumatic", "pressure", "force", "torque", "leverage", "pulley", "belt", "chain", "spring", "bolt", "nut", "washer", "gasket", "seal", "lubrication", "oil", "grease", "maintenance", "repair", "troubleshoot", "calibrate", "alignment", "tolerance", "specification", "material", "steel", "aluminum", "plastic", "rubber"]),
-
+            (
+                "mechanical",
+                vec![
+                    "mechanical",
+                    "engineering",
+                    "machine",
+                    "engine",
+                    "motor",
+                    "gear",
+                    "bearing",
+                    "shaft",
+                    "pump",
+                    "valve",
+                    "pipe",
+                    "hydraulic",
+                    "pneumatic",
+                    "pressure",
+                    "force",
+                    "torque",
+                    "leverage",
+                    "pulley",
+                    "belt",
+                    "chain",
+                    "spring",
+                    "bolt",
+                    "nut",
+                    "washer",
+                    "gasket",
+                    "seal",
+                    "lubrication",
+                    "oil",
+                    "grease",
+                    "maintenance",
+                    "repair",
+                    "troubleshoot",
+                    "calibrate",
+                    "alignment",
+                    "tolerance",
+                    "specification",
+                    "material",
+                    "steel",
+                    "aluminum",
+                    "plastic",
+                    "rubber",
+                ],
+            ),
             // Energy & Power
-            ("energy", vec!["energy", "power", "electricity", "electrical", "grid", "utility", "solar", "wind", "hydro", "hydroelectric", "turbine", "generator", "alternator", "transformer", "inverter", "battery", "storage", "fuel", "gas", "gasoline", "diesel", "propane", "natural", "coal", "nuclear", "renewable", "sustainable", "efficiency", "conservation", "consumption", "load", "demand", "supply", "voltage", "amperage", "watt", "kilowatt", "megawatt"]),
-
+            (
+                "energy",
+                vec![
+                    "energy",
+                    "power",
+                    "electricity",
+                    "electrical",
+                    "grid",
+                    "utility",
+                    "solar",
+                    "wind",
+                    "hydro",
+                    "hydroelectric",
+                    "turbine",
+                    "generator",
+                    "alternator",
+                    "transformer",
+                    "inverter",
+                    "battery",
+                    "storage",
+                    "fuel",
+                    "gas",
+                    "gasoline",
+                    "diesel",
+                    "propane",
+                    "natural",
+                    "coal",
+                    "nuclear",
+                    "renewable",
+                    "sustainable",
+                    "efficiency",
+                    "conservation",
+                    "consumption",
+                    "load",
+                    "demand",
+                    "supply",
+                    "voltage",
+                    "amperage",
+                    "watt",
+                    "kilowatt",
+                    "megawatt",
+                ],
+            ),
             // Water & Plumbing
-            ("water", vec!["water", "plumbing", "pipe", "pipes", "faucet", "tap", "valve", "pump", "well", "spring", "stream", "river", "lake", "pond", "reservoir", "tank", "cistern", "filter", "filtration", "purification", "chlorine", "disinfection", "pressure", "flow", "drain", "drainage", "sewer", "septic", "waste", "treatment", "irrigation", "sprinkler", "hose", "leak", "repair", "installation", "maintenance", "quality", "testing", "contamination", "clean", "potable"]),
-
+            (
+                "water",
+                vec![
+                    "water",
+                    "plumbing",
+                    "pipe",
+                    "pipes",
+                    "faucet",
+                    "tap",
+                    "valve",
+                    "pump",
+                    "well",
+                    "spring",
+                    "stream",
+                    "river",
+                    "lake",
+                    "pond",
+                    "reservoir",
+                    "tank",
+                    "cistern",
+                    "filter",
+                    "filtration",
+                    "purification",
+                    "chlorine",
+                    "disinfection",
+                    "pressure",
+                    "flow",
+                    "drain",
+                    "drainage",
+                    "sewer",
+                    "septic",
+                    "waste",
+                    "treatment",
+                    "irrigation",
+                    "sprinkler",
+                    "hose",
+                    "leak",
+                    "repair",
+                    "installation",
+                    "maintenance",
+                    "quality",
+                    "testing",
+                    "contamination",
+                    "clean",
+                    "potable",
+                ],
+            ),
             // Transportation & Vehicles
-            ("transportation", vec!["vehicle", "car", "truck", "motorcycle", "bike", "bicycle", "boat", "ship", "plane", "aircraft", "helicopter", "train", "engine", "motor", "transmission", "brake", "tire", "wheel", "steering", "suspension", "fuel", "gas", "diesel", "maintenance", "repair", "oil", "change", "battery", "alternator", "starter", "radiator", "cooling", "heating", "air", "conditioning", "exhaust", "muffler", "carburetor", "injection", "spark", "plug"]),
-
+            (
+                "transportation",
+                vec![
+                    "vehicle",
+                    "car",
+                    "truck",
+                    "motorcycle",
+                    "bike",
+                    "bicycle",
+                    "boat",
+                    "ship",
+                    "plane",
+                    "aircraft",
+                    "helicopter",
+                    "train",
+                    "engine",
+                    "motor",
+                    "transmission",
+                    "brake",
+                    "tire",
+                    "wheel",
+                    "steering",
+                    "suspension",
+                    "fuel",
+                    "gas",
+                    "diesel",
+                    "maintenance",
+                    "repair",
+                    "oil",
+                    "change",
+                    "battery",
+                    "alternator",
+                    "starter",
+                    "radiator",
+                    "cooling",
+                    "heating",
+                    "air",
+                    "conditioning",
+                    "exhaust",
+                    "muffler",
+                    "carburetor",
+                    "injection",
+                    "spark",
+                    "plug",
+                ],
+            ),
             // Communication & Networking
-            ("communication", vec!["radio", "antenna", "frequency", "ham", "amateur", "broadcast", "transmit", "receive", "signal", "modulation", "amplifier", "repeater", "satellite", "internet", "network", "wifi", "ethernet", "cable", "fiber", "optic", "router", "switch", "modem", "protocol", "tcp", "ip", "dns", "server", "client", "wireless", "cellular", "phone", "telephone", "voip", "encryption", "security", "firewall", "vpn", "bandwidth", "latency"]),
-
+            (
+                "communication",
+                vec![
+                    "radio",
+                    "antenna",
+                    "frequency",
+                    "ham",
+                    "amateur",
+                    "broadcast",
+                    "transmit",
+                    "receive",
+                    "signal",
+                    "modulation",
+                    "amplifier",
+                    "repeater",
+                    "satellite",
+                    "internet",
+                    "network",
+                    "wifi",
+                    "ethernet",
+                    "cable",
+                    "fiber",
+                    "optic",
+                    "router",
+                    "switch",
+                    "modem",
+                    "protocol",
+                    "tcp",
+                    "ip",
+                    "dns",
+                    "server",
+                    "client",
+                    "wireless",
+                    "cellular",
+                    "phone",
+                    "telephone",
+                    "voip",
+                    "encryption",
+                    "security",
+                    "firewall",
+                    "vpn",
+                    "bandwidth",
+                    "latency",
+                ],
+            ),
             // Security & Safety
-            ("security", vec!["security", "safety", "protection", "guard", "alarm", "camera", "surveillance", "monitor", "sensor", "detector", "lock", "key", "access", "control", "gate", "fence", "barrier", "perimeter", "intrusion", "theft", "burglar", "fire", "smoke", "carbon", "monoxide", "emergency", "evacuation", "procedure", "protocol", "risk", "assessment", "hazard", "danger", "warning", "sign", "label", "certification", "compliance", "regulation", "standard"]),
-
+            (
+                "security",
+                vec![
+                    "security",
+                    "safety",
+                    "protection",
+                    "guard",
+                    "alarm",
+                    "camera",
+                    "surveillance",
+                    "monitor",
+                    "sensor",
+                    "detector",
+                    "lock",
+                    "key",
+                    "access",
+                    "control",
+                    "gate",
+                    "fence",
+                    "barrier",
+                    "perimeter",
+                    "intrusion",
+                    "theft",
+                    "burglar",
+                    "fire",
+                    "smoke",
+                    "carbon",
+                    "monoxide",
+                    "emergency",
+                    "evacuation",
+                    "procedure",
+                    "protocol",
+                    "risk",
+                    "assessment",
+                    "hazard",
+                    "danger",
+                    "warning",
+                    "sign",
+                    "label",
+                    "certification",
+                    "compliance",
+                    "regulation",
+                    "standard",
+                ],
+            ),
             // Crafts & Manufacturing
-            ("crafts", vec!["craft", "crafts", "making", "handmade", "diy", "workshop", "tool", "tools", "woodworking", "metalworking", "welding", "soldering", "cutting", "drilling", "sanding", "finishing", "polish", "stain", "varnish", "glue", "adhesive", "joint", "connection", "assembly", "fabrication", "manufacturing", "production", "quality", "precision", "measurement", "template", "jig", "fixture", "clamp", "vise", "bench", "lathe", "mill"]),
-
+            (
+                "crafts",
+                vec![
+                    "craft",
+                    "crafts",
+                    "making",
+                    "handmade",
+                    "diy",
+                    "workshop",
+                    "tool",
+                    "tools",
+                    "woodworking",
+                    "metalworking",
+                    "welding",
+                    "soldering",
+                    "cutting",
+                    "drilling",
+                    "sanding",
+                    "finishing",
+                    "polish",
+                    "stain",
+                    "varnish",
+                    "glue",
+                    "adhesive",
+                    "joint",
+                    "connection",
+                    "assembly",
+                    "fabrication",
+                    "manufacturing",
+                    "production",
+                    "quality",
+                    "precision",
+                    "measurement",
+                    "template",
+                    "jig",
+                    "fixture",
+                    "clamp",
+                    "vise",
+                    "bench",
+                    "lathe",
+                    "mill",
+                ],
+            ),
             // Gardening & Horticulture
-            ("gardening", vec!["garden", "gardening", "plant", "plants", "flower", "flowers", "vegetable", "vegetables", "fruit", "fruits", "tree", "trees", "shrub", "grass", "lawn", "landscape", "landscaping", "soil", "compost", "fertilizer", "mulch", "seed", "seedling", "transplant", "prune", "trim", "water", "irrigation", "pest", "disease", "organic", "greenhouse", "nursery", "harvest", "bloom", "pollination", "propagation", "cutting", "grafting"]),
-
+            (
+                "gardening",
+                vec![
+                    "garden",
+                    "gardening",
+                    "plant",
+                    "plants",
+                    "flower",
+                    "flowers",
+                    "vegetable",
+                    "vegetables",
+                    "fruit",
+                    "fruits",
+                    "tree",
+                    "trees",
+                    "shrub",
+                    "grass",
+                    "lawn",
+                    "landscape",
+                    "landscaping",
+                    "soil",
+                    "compost",
+                    "fertilizer",
+                    "mulch",
+                    "seed",
+                    "seedling",
+                    "transplant",
+                    "prune",
+                    "trim",
+                    "water",
+                    "irrigation",
+                    "pest",
+                    "disease",
+                    "organic",
+                    "greenhouse",
+                    "nursery",
+                    "harvest",
+                    "bloom",
+                    "pollination",
+                    "propagation",
+                    "cutting",
+                    "grafting",
+                ],
+            ),
             // Weather & Climate
-            ("weather", vec!["weather", "climate", "temperature", "humidity", "pressure", "barometric", "wind", "rain", "snow", "ice", "storm", "hurricane", "tornado", "lightning", "thunder", "forecast", "prediction", "meteorology", "atmosphere", "cloud", "precipitation", "evaporation", "condensation", "front", "high", "low", "seasonal", "drought", "flood", "freeze", "frost", "heat", "cold", "measurement", "instrument", "thermometer", "barometer", "anemometer"]),
-
+            (
+                "weather",
+                vec![
+                    "weather",
+                    "climate",
+                    "temperature",
+                    "humidity",
+                    "pressure",
+                    "barometric",
+                    "wind",
+                    "rain",
+                    "snow",
+                    "ice",
+                    "storm",
+                    "hurricane",
+                    "tornado",
+                    "lightning",
+                    "thunder",
+                    "forecast",
+                    "prediction",
+                    "meteorology",
+                    "atmosphere",
+                    "cloud",
+                    "precipitation",
+                    "evaporation",
+                    "condensation",
+                    "front",
+                    "high",
+                    "low",
+                    "seasonal",
+                    "drought",
+                    "flood",
+                    "freeze",
+                    "frost",
+                    "heat",
+                    "cold",
+                    "measurement",
+                    "instrument",
+                    "thermometer",
+                    "barometer",
+                    "anemometer",
+                ],
+            ),
             // Finance & Economics
-            ("finance", vec!["money", "finance", "financial", "economy", "economic", "cost", "price", "budget", "expense", "income", "profit", "loss", "investment", "savings", "bank", "banking", "loan", "credit", "debt", "interest", "rate", "tax", "taxes", "insurance", "currency", "dollar", "cash", "payment", "purchase", "sale", "market", "business", "trade", "commerce", "accounting", "bookkeeping", "record", "transaction", "receipt", "invoice"]),
-
+            (
+                "finance",
+                vec![
+                    "money",
+                    "finance",
+                    "financial",
+                    "economy",
+                    "economic",
+                    "cost",
+                    "price",
+                    "budget",
+                    "expense",
+                    "income",
+                    "profit",
+                    "loss",
+                    "investment",
+                    "savings",
+                    "bank",
+                    "banking",
+                    "loan",
+                    "credit",
+                    "debt",
+                    "interest",
+                    "rate",
+                    "tax",
+                    "taxes",
+                    "insurance",
+                    "currency",
+                    "dollar",
+                    "cash",
+                    "payment",
+                    "purchase",
+                    "sale",
+                    "market",
+                    "business",
+                    "trade",
+                    "commerce",
+                    "accounting",
+                    "bookkeeping",
+                    "record",
+                    "transaction",
+                    "receipt",
+                    "invoice",
+                ],
+            ),
             // Education & Learning
-            ("education", vec!["education", "learning", "teach", "teaching", "student", "teacher", "school", "university", "college", "course", "class", "lesson", "study", "research", "book", "textbook", "manual", "guide", "instruction", "tutorial", "training", "skill", "knowledge", "information", "data", "fact", "theory", "practice", "exercise", "test", "exam", "grade", "degree", "certificate", "diploma", "curriculum", "syllabus", "homework", "assignment", "project"]),
-
+            (
+                "education",
+                vec![
+                    "education",
+                    "learning",
+                    "teach",
+                    "teaching",
+                    "student",
+                    "teacher",
+                    "school",
+                    "university",
+                    "college",
+                    "course",
+                    "class",
+                    "lesson",
+                    "study",
+                    "research",
+                    "book",
+                    "textbook",
+                    "manual",
+                    "guide",
+                    "instruction",
+                    "tutorial",
+                    "training",
+                    "skill",
+                    "knowledge",
+                    "information",
+                    "data",
+                    "fact",
+                    "theory",
+                    "practice",
+                    "exercise",
+                    "test",
+                    "exam",
+                    "grade",
+                    "degree",
+                    "certificate",
+                    "diploma",
+                    "curriculum",
+                    "syllabus",
+                    "homework",
+                    "assignment",
+                    "project",
+                ],
+            ),
             // General Homestead
-            ("homestead", vec!["homestead", "homesteading", "rural", "country", "property", "land", "acreage", "self", "sufficient", "sustainable", "independence", "off", "grid", "cabin", "cottage", "barn", "shed", "outbuilding", "fence", "fencing", "gate", "path", "driveway", "maintenance", "upkeep", "repair", "improvement", "renovation", "upgrade", "planning", "design", "layout", "zoning", "permit", "inspection", "neighbor", "community", "local"])
+            (
+                "homestead",
+                vec![
+                    "homestead",
+                    "homesteading",
+                    "rural",
+                    "country",
+                    "property",
+                    "land",
+                    "acreage",
+                    "self",
+                    "sufficient",
+                    "sustainable",
+                    "independence",
+                    "off",
+                    "grid",
+                    "cabin",
+                    "cottage",
+                    "barn",
+                    "shed",
+                    "outbuilding",
+                    "fence",
+                    "fencing",
+                    "gate",
+                    "path",
+                    "driveway",
+                    "maintenance",
+                    "upkeep",
+                    "repair",
+                    "improvement",
+                    "renovation",
+                    "upgrade",
+                    "planning",
+                    "design",
+                    "layout",
+                    "zoning",
+                    "permit",
+                    "inspection",
+                    "neighbor",
+                    "community",
+                    "local",
+                ],
+            ),
         ];
 
         let content_lower = content.to_lowercase();
         let mut domain_scores: Vec<(String, usize)> = Vec::new();
 
         for (domain, keywords) in domain_keywords {
-            let score = keywords.iter()
+            let score = keywords
+                .iter()
                 .filter(|&&keyword| content_lower.contains(keyword))
                 .count();
 
@@ -363,7 +1200,8 @@ impl<'a> KnowledgeIngester<'a> {
 
         // Sort by score, take top domains
         domain_scores.sort_by(|a, b| b.1.cmp(&a.1));
-        let found_domains: Vec<String> = domain_scores.into_iter()
+        let found_domains: Vec<String> = domain_scores
+            .into_iter()
             .take(3) // Top 3 domains
             .map(|(domain, _)| domain)
             .collect();
@@ -375,13 +1213,24 @@ impl<'a> KnowledgeIngester<'a> {
         }
     }
 
-    fn chunk_text(&self, content: &str, file_path: &Path, config: &ModuleConfig) -> Vec<KnowledgeChunk> {
+    fn chunk_text(
+        &self,
+        content: &str,
+        file_path: &Path,
+        config: &ModuleConfig,
+    ) -> Vec<KnowledgeChunk> {
         let mut chunks = Vec::new();
-        let paragraphs: Vec<&str> = content.split("\n\n").filter(|p| !p.trim().is_empty()).collect();
+        let paragraphs: Vec<&str> = content
+            .split("\n\n")
+            .filter(|p| !p.trim().is_empty())
+            .collect();
 
         for (index, paragraph) in paragraphs.iter().enumerate() {
             let inferred_domains = self.infer_domains_from_content(paragraph); // <-- Using it here
-            let primary_domain = inferred_domains.first().unwrap_or(&"general".to_string()).clone();
+            let primary_domain = inferred_domains
+                .first()
+                .unwrap_or(&"general".to_string())
+                .clone();
 
             let chunk = KnowledgeChunk {
                 id: None,
@@ -406,7 +1255,12 @@ impl<'a> KnowledgeIngester<'a> {
 
     fn extract_title(&self, paragraph: &str, index: usize) -> String {
         let first_line = paragraph.lines().next().unwrap_or("");
-        if first_line.len() < 100 && (first_line.contains(':') || first_line.chars().all(|c| c.is_uppercase() || c.is_whitespace())) {
+        if first_line.len() < 100
+            && (first_line.contains(':')
+                || first_line
+                    .chars()
+                    .all(|c| c.is_uppercase() || c.is_whitespace()))
+        {
             first_line.to_string()
         } else {
             format!("Section {}", index + 1)

@@ -1,29 +1,26 @@
-mod field_value;
-mod new_module;
-mod expand_fields_for_type;
-mod add_monitoring_defaults;
-mod add_valve_control_defaults;
-mod add_com_defaults;
-mod add_llm_defaults;
-mod from_manifest;
-mod add_monitoring_fields;
-mod add_valve_control_fields;
-mod add_llm_fields;
-mod add_com_fields;
-mod add_text_field;
-mod add_number_field;
 mod add_bool_field;
-mod to_full_config;
-mod handle_key;
-mod start_editing;
+mod add_com_defaults;
+mod add_com_fields;
+mod add_llm_defaults;
+mod add_llm_fields;
+mod add_monitoring_defaults;
+mod add_monitoring_fields;
+mod add_number_field;
+mod add_text_field;
+mod add_valve_control_defaults;
+mod add_valve_control_fields;
 mod apply_edit;
-mod to_bindings;
+mod expand_fields_for_type;
+mod field_value;
+mod from_manifest;
+mod handle_key;
+mod new_module;
 mod render;
+mod start_editing;
+mod to_bindings;
+mod to_full_config;
 
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
+use ratatui::{prelude::*, widgets::*};
 
 pub use field_value::*;
 

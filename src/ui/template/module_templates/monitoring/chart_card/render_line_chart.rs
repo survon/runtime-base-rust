@@ -36,8 +36,8 @@ impl ChartCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(5),      // Chart
-                Constraint::Length(2),   // Current value display
+                Constraint::Min(5),    // Chart
+                Constraint::Length(2), // Current value display
             ])
             .split(area);
 
@@ -48,7 +48,10 @@ impl ChartCard {
                 .padding(Padding::symmetric(1, 1))
         } else {
             Block::default()
-                .title(format!(" {}{}{} ", connected_icon, chart_title, status_suffix))
+                .title(format!(
+                    " {}{}{} ",
+                    connected_icon, chart_title, status_suffix
+                ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color))
         };
@@ -61,7 +64,8 @@ impl ChartCard {
         let max_visible = inner_area.width.saturating_sub(2) as usize;
 
         // Get sliding window of most recent data that fits
-        let visible_data: Vec<(f64, f64)> = history.iter()
+        let visible_data: Vec<(f64, f64)> = history
+            .iter()
             .rev()
             .take(max_visible.max(1))
             .rev()
@@ -78,7 +82,8 @@ impl ChartCard {
             for (i, (_, val)) in visible_data.iter().enumerate() {
                 let x = inner_area.x + ((i as f64 / data_points.max(1.0)) * width) as u16;
                 let normalized = ((val - min_value) / (max_value - min_value)).clamp(0.0, 1.0);
-                let y = inner_area.y + inner_area.height - 1 - ((normalized * (height - 1.0)) as u16);
+                let y =
+                    inner_area.y + inner_area.height - 1 - ((normalized * (height - 1.0)) as u16);
 
                 if x < inner_area.x + inner_area.width && y >= inner_area.y {
                     let style = if !is_connected {
@@ -94,7 +99,11 @@ impl ChartCard {
         // Current value display
         let value_text = format!("Cur: {:.1} {} (Last {} points)", a, unit, history.len());
         let value_widget = Paragraph::new(value_text)
-            .style(Style::default().fg(if is_connected { Color::White } else { Color::Red }))
+            .style(Style::default().fg(if is_connected {
+                Color::White
+            } else {
+                Color::Red
+            }))
             .alignment(Alignment::Center);
         value_widget.render(chunks[1], buf);
     }

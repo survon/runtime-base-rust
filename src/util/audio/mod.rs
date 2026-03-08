@@ -1,11 +1,11 @@
 // src/audio/mod.rs
+use crate::log_error;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use crate::log_error;
 
 pub trait AudioPlayer {
     fn play(&mut self, path: &str, repeat: bool) -> Result<(), String>;
@@ -82,7 +82,10 @@ impl AudioPlayer for AudioJackPlayer {
             }
 
             let sink_arc = Arc::new(sink);
-            sinks_clone.lock().unwrap().insert(path.clone(), sink_arc.clone());
+            sinks_clone
+                .lock()
+                .unwrap()
+                .insert(path.clone(), sink_arc.clone());
 
             sink_arc.sleep_until_end();
             sinks_clone.lock().unwrap().remove(&path);
@@ -120,10 +123,16 @@ impl AudioPlayer for AudioJackPlayer {
 
 struct GpioPwmPlayer;
 impl AudioPlayer for GpioPwmPlayer {
-    fn play(&mut self, _: &str, _: bool) -> Result<(), String> { Err("GPIO not ready".into()) }
-    fn stop(&mut self, _: &str) -> Result<(), String> { Err("GPIO not ready".into()) }
+    fn play(&mut self, _: &str, _: bool) -> Result<(), String> {
+        Err("GPIO not ready".into())
+    }
+    fn stop(&mut self, _: &str) -> Result<(), String> {
+        Err("GPIO not ready".into())
+    }
     fn set_volume(&mut self, _: f32) {}
-    fn is_finished(&self, _: &str) -> bool { true }
+    fn is_finished(&self, _: &str) -> bool {
+        true
+    }
 }
 
 #[derive(Clone)]

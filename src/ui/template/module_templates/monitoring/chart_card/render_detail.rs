@@ -1,7 +1,4 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
+use ratatui::{buffer::Buffer, layout::Rect};
 
 use crate::module::Module;
 
@@ -16,7 +13,9 @@ impl ChartCard {
 
         match chart_type {
             "bar" => self.render_bar_chart(module, area, buf, is_selected, is_contained),
-            "sparkline" | "spark" => self.render_sparkline(module, area, buf, is_selected, is_contained),
+            "sparkline" | "spark" => {
+                self.render_sparkline(module, area, buf, is_selected, is_contained)
+            }
             "line" | _ => self.render_line_chart(module, area, buf, is_selected, is_contained),
         }
     }

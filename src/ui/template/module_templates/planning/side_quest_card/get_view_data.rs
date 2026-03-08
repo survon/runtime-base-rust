@@ -1,11 +1,7 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    prelude::Color,
-};
+use ratatui::{buffer::Buffer, layout::Rect, prelude::Color};
 
-use crate::module::Module;
 use super::{SideQuestCard, ViewData};
+use crate::module::Module;
 
 impl SideQuestCard {
     pub(super) fn get_view_data<'a>(
@@ -13,7 +9,7 @@ impl SideQuestCard {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &'a mut Module
+        module: &'a mut Module,
     ) -> ViewData<'a> {
         let current_view = module
             .config
@@ -22,7 +18,11 @@ impl SideQuestCard {
             .and_then(|v| v.as_str())
             .unwrap_or("QuestList");
 
-        let border_color = if is_selected { Color::White } else { Color::Magenta };
+        let border_color = if is_selected {
+            Color::White
+        } else {
+            Color::Magenta
+        };
 
         let selected_index = module
             .config
@@ -150,7 +150,6 @@ impl SideQuestCard {
             .get("selected_quest_trigger")
             .and_then(|v| v.as_str())
             .unwrap_or("No deadline");
-
 
         ViewData {
             current_view,

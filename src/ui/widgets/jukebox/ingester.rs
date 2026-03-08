@@ -1,13 +1,13 @@
 // src/widgets/jukebox/ingester.rs
-use std::path::Path;
-use std::fs;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use color_eyre::Result;
+use super::database::{Album, JukeboxDatabase, Track};
 use crate::module::{Module, ModuleManager};
 use crate::util::database::Database;
-use super::database::{JukeboxDatabase, Album, Track};
-use crate::{log_info, log_warn, log_debug};
+use crate::{log_debug, log_info, log_warn};
+use color_eyre::Result;
+use std::collections::hash_map::DefaultHasher;
+use std::fs;
+use std::hash::{Hash, Hasher};
+use std::path::Path;
 
 pub struct JukeboxIngester<'a> {
     database: &'a Database,
@@ -24,11 +24,15 @@ impl<'a> JukeboxIngester<'a> {
 
         match self.database.get_module_state("jukebox_checksum") {
             Ok(Some(stored_checksum)) => {
-                log_debug!("Jukebox checksum: stored={}, current={}", stored_checksum, current_checksum);
+                log_debug!(
+                    "Jukebox checksum: stored={}, current={}",
+                    stored_checksum,
+                    current_checksum
+                );
                 let stored: u64 = stored_checksum.parse().unwrap_or(0);
                 Ok(current_checksum != stored)
             }
-            _ => Ok(true) // No checksum stored, need to ingest
+            _ => Ok(true), // No checksum stored, need to ingest
         }
     }
 
@@ -49,9 +53,14 @@ impl<'a> JukeboxIngester<'a> {
 
         // Store new checksum
         let checksum = self.calculate_albums_checksum()?;
-        self.database.save_module_state("jukebox_checksum", &checksum.to_string())?;
+        self.database
+            .save_module_state("jukebox_checksum", &checksum.to_string())?;
 
-        log_info!("✅ Album ingestion complete: {} tracks from {} albums", total_tracks, album_count);
+        log_info!(
+            "✅ Album ingestion complete: {} tracks from {} albums",
+            total_tracks,
+            album_count
+        );
 
         Ok(())
     }
@@ -61,25 +70,35 @@ impl<'a> JukeboxIngester<'a> {
         log_info!("  🎀 Processing: {}", config.name);
 
         // Extract album metadata from bindings
-        let title = config.bindings.get("title")
+        let title = config
+            .bindings
+            .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or(&config.name)
             .to_string();
 
-        let artist = config.bindings.get("artist")
+        let artist = config
+            .bindings
+            .get("artist")
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown Artist")
             .to_string();
 
-        let year = config.bindings.get("year")
+        let year = config
+            .bindings
+            .get("year")
             .and_then(|v| v.as_i64())
             .map(|y| y as i32);
 
-        let genre = config.bindings.get("genre")
+        let genre = config
+            .bindings
+            .get("genre")
             .and_then(|v| v.as_str())
             .map(String::from);
 
-        let credits = config.bindings.get("credits")
+        let credits = config
+            .bindings
+            .get("credits")
             .and_then(|v| v.as_str())
             .map(String::from);
 
@@ -97,19 +116,20 @@ impl<'a> JukeboxIngester<'a> {
         let album_id = self.database.insert_album(&album)?;
 
         // Process tracklist
-        let track_count = if let Some(tracklist) = config.bindings.get("tracklist").and_then(|v| v.as_array()) {
+        let track_count = if let Some(tracklist) =
+            config.bindings.get("tracklist").and_then(|v| v.as_array())
+        {
             let mut count = 0;
 
             for (idx, track_value) in tracklist.iter().enumerate() {
                 if let Some(track_obj) = track_value.as_object() {
-                    let track_title = track_obj.get("title")
+                    let track_title = track_obj
+                        .get("title")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Unknown Track")
                         .to_string();
 
-                    let file_name = track_obj.get("file")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                    let file_name = track_obj.get("file").and_then(|v| v.as_str()).unwrap_or("");
 
                     let file_path = module.path.join("audio").join(file_name);
 
@@ -122,7 +142,10 @@ impl<'a> JukeboxIngester<'a> {
                     // Skip non-audio files (README.md, .txt, etc.)
                     if let Some(ext) = file_path.extension() {
                         let ext_str = ext.to_string_lossy().to_lowercase();
-                        if !matches!(ext_str.as_str(), "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac") {
+                        if !matches!(
+                            ext_str.as_str(),
+                            "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac"
+                        ) {
                             log_debug!("    Skipping non-audio file: {:?}", file_path);
                             continue;
                         }
@@ -132,11 +155,13 @@ impl<'a> JukeboxIngester<'a> {
                         continue;
                     }
 
-                    let duration = track_obj.get("duration_seconds")
+                    let duration = track_obj
+                        .get("duration_seconds")
                         .and_then(|v| v.as_i64())
                         .map(|d| d as i32);
 
-                    let track_artist = track_obj.get("artist")
+                    let track_artist = track_obj
+                        .get("artist")
                         .and_then(|v| v.as_str())
                         .map(String::from);
 
@@ -212,11 +237,15 @@ impl<'a> JukeboxIngester<'a> {
                 // Only hash audio files, skip README.md and other non-audio files
                 if let Some(ext) = path.extension() {
                     let ext_str = ext.to_string_lossy().to_lowercase();
-                    if matches!(ext_str.as_str(), "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac") {
+                    if matches!(
+                        ext_str.as_str(),
+                        "mp3" | "wav" | "flac" | "ogg" | "m4a" | "aac"
+                    ) {
                         path.hash(hasher);
                         if let Ok(metadata) = fs::metadata(&path) {
                             if let Ok(modified) = metadata.modified() {
-                                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH)
+                                {
                                     duration.as_secs().hash(hasher);
                                 }
                             }

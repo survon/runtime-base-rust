@@ -1,5 +1,5 @@
-mod new_user;
 mod new_assistant;
+mod new_user;
 
 use serde::{Deserialize, Serialize};
 
@@ -12,4 +12,3 @@ pub struct ChatMessage {
     pub timestamp: i64,
     pub module_name: String,
 }
-

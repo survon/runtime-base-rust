@@ -1,5 +1,5 @@
-use std::fs;
 use super::OverseerHandler;
+use std::fs;
 
 impl OverseerHandler {
     pub(in crate::module) fn refresh_installed_modules(&mut self) {

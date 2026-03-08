@@ -2,14 +2,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+use crate::module::strategies::overseer::database::OverseerDatabase;
 use crate::util::{
     database::Database,
-    io::{
-        bus::MessageBus,
-        discovery::DiscoveryManager,
-    }
+    io::{bus::MessageBus, discovery::DiscoveryManager},
 };
-use crate::module::strategies::overseer::database::OverseerDatabase;
 
 use super::{OverseerHandler, WastelandView};
 

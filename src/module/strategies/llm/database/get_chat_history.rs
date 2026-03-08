@@ -1,17 +1,21 @@
 use rusqlite::params;
 
-use crate::util::database::Database;
 use crate::module::strategies::llm::database::ChatMessage;
+use crate::util::database::Database;
 
 impl Database {
-    pub(in crate::module) fn _llm__get_chat_history(&self, session_id: &str, limit: usize) -> rusqlite::Result<Vec<ChatMessage>> {
+    pub(in crate::module) fn _llm__get_chat_history(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<ChatMessage>> {
         let conn = self.app_conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, session_id, role, content, timestamp, module_name
              FROM chat_messages
              WHERE session_id = ?1
              ORDER BY timestamp ASC
-             LIMIT ?2"
+             LIMIT ?2",
         )?;
 
         let rows = stmt.query_map(params![session_id, limit], |row| {

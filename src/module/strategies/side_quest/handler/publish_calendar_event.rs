@@ -4,7 +4,11 @@ use crate::log_info;
 use crate::module::strategies::side_quest::handler::SideQuestHandler;
 
 impl SideQuestHandler {
-    pub(in crate::module) fn publish_calendar_event(&self, quest_id: i64, trigger_date: DateTime<Utc>) {
+    pub(in crate::module) fn publish_calendar_event(
+        &self,
+        quest_id: i64,
+        trigger_date: DateTime<Utc>,
+    ) {
         let payload = serde_json::json!({
             "event_type": "side_quest_deadline",
             "quest_id": quest_id,

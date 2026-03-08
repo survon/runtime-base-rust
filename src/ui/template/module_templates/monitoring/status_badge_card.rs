@@ -1,11 +1,11 @@
 // src/ui/module_templates/monitoring/status_badge.rs
 use crate::module::Module;
 use crate::ui::template::UiTemplate;
-use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap, Widget};
-use ratatui::layout::{Alignment, Layout, Constraint, Direction};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph, Widget, Wrap};
 
 #[derive(Debug)]
 pub struct StatusBadge;
@@ -28,7 +28,7 @@ impl StatusBadge {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &'a mut Module
+        module: &'a mut Module,
     ) -> ViewData<'a> {
         let module_name = &module.config.name;
 
@@ -64,7 +64,9 @@ impl StatusBadge {
             .and_then(|v| v.as_i64())
             .map(|n| n.to_string())
             .or_else(|| {
-                module.config.bindings
+                module
+                    .config
+                    .bindings
                     .get("count")
                     .and_then(|v| v.as_f64())
                     .map(|n| format!("{:.1}", n))
@@ -75,21 +77,11 @@ impl StatusBadge {
             "online" | "active" | "success" | "ok" | "operational" => {
                 ("✓", Color::Green, "OPERATIONAL")
             }
-            "offline" | "inactive" | "down" | "error" | "failed" => {
-                ("✗", Color::Red, "ERROR")
-            }
-            "warning" | "degraded" | "slow" => {
-                ("⚠", Color::Yellow, "WARNING")
-            }
-            "pending" | "loading" | "starting" => {
-                ("⟳", Color::Cyan, "PENDING")
-            }
-            "maintenance" | "updating" => {
-                ("⚙", Color::Blue, "MAINTENANCE")
-            }
-            _ => {
-                ("?", Color::Gray, "UNKNOWN")
-            }
+            "offline" | "inactive" | "down" | "error" | "failed" => ("✗", Color::Red, "ERROR"),
+            "warning" | "degraded" | "slow" => ("⚠", Color::Yellow, "WARNING"),
+            "pending" | "loading" | "starting" => ("⟳", Color::Cyan, "PENDING"),
+            "maintenance" | "updating" => ("⚙", Color::Blue, "MAINTENANCE"),
+            _ => ("?", Color::Gray, "UNKNOWN"),
         };
 
         let border_color = if is_selected { Color::White } else { color };
@@ -109,7 +101,13 @@ impl StatusBadge {
 }
 
 impl UiTemplate for StatusBadge {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         let ViewData {
             status,
             module_name,
@@ -135,10 +133,10 @@ impl UiTemplate for StatusBadge {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Icon and status
-                Constraint::Length(2),  // Count/value if present
-                Constraint::Min(2),     // Message
-                Constraint::Length(1),  // Timestamp
+                Constraint::Length(3), // Icon and status
+                Constraint::Length(2), // Count/value if present
+                Constraint::Min(2),    // Message
+                Constraint::Length(1), // Timestamp
             ])
             .split(inner);
 
@@ -146,23 +144,24 @@ impl UiTemplate for StatusBadge {
         let status_line = Line::from(vec![
             Span::styled(
                 format!("{} ", icon),
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 status_display,
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
         ]);
-        let status_widget = Paragraph::new(status_line)
-            .alignment(Alignment::Center);
+        let status_widget = Paragraph::new(status_line).alignment(Alignment::Center);
         Widget::render(status_widget, chunks[0], buf);
 
         // Render count/value if present
         if let Some(count_str) = count {
             let count_widget = Paragraph::new(count_str)
-                .style(Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center);
             Widget::render(count_widget, chunks[1], buf);
         }
@@ -211,10 +210,10 @@ impl UiTemplate for StatusBadge {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Icon and status
-                Constraint::Length(2),  // Count/value if present
-                Constraint::Min(2),     // Message
-                Constraint::Length(1),  // Timestamp
+                Constraint::Length(3), // Icon and status
+                Constraint::Length(2), // Count/value if present
+                Constraint::Min(2),    // Message
+                Constraint::Length(1), // Timestamp
             ])
             .split(inner);
 
@@ -222,23 +221,24 @@ impl UiTemplate for StatusBadge {
         let status_line = Line::from(vec![
             Span::styled(
                 format!("{} ", icon),
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 status_display,
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
         ]);
-        let status_widget = Paragraph::new(status_line)
-            .alignment(Alignment::Center);
+        let status_widget = Paragraph::new(status_line).alignment(Alignment::Center);
         Widget::render(status_widget, chunks[0], buf);
 
         // Render count/value if present
         if let Some(count_str) = count {
             let count_widget = Paragraph::new(count_str)
-                .style(Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center);
             Widget::render(count_widget, chunks[1], buf);
         }

@@ -8,11 +8,20 @@ pub trait LlmDatabase {
 
     // Chat operations
     fn insert_chat_message(&self, message: ChatMessage) -> rusqlite::Result<i64>;
-    fn get_chat_history(&self, session_id: &str, limit: usize) -> rusqlite::Result<Vec<ChatMessage>>;
+    fn get_chat_history(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<ChatMessage>>;
 
     // Knowledge base operations
     fn insert_knowledge_chunk(&self, chunk: KnowledgeChunk) -> rusqlite::Result<()>;
-    fn search_knowledge(&self, query: &str, domains: &[String], limit: usize) -> rusqlite::Result<Vec<KnowledgeChunk>>;
+    fn search_knowledge(
+        &self,
+        query: &str,
+        domains: &[String],
+        limit: usize,
+    ) -> rusqlite::Result<Vec<KnowledgeChunk>>;
     fn clear_knowledge(&self) -> rusqlite::Result<()>;
 }
 
@@ -25,7 +34,11 @@ impl LlmDatabase for Database {
         self._llm__insert_chat_message(message)
     }
 
-    fn get_chat_history(&self, session_id: &str, limit: usize) -> rusqlite::Result<Vec<ChatMessage>> {
+    fn get_chat_history(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> rusqlite::Result<Vec<ChatMessage>> {
         self._llm__get_chat_history(session_id, limit)
     }
 
@@ -33,7 +46,12 @@ impl LlmDatabase for Database {
         self._llm__insert_knowledge_chunk(chunk)
     }
 
-    fn search_knowledge(&self, query: &str, domains: &[String], limit: usize) -> rusqlite::Result<Vec<KnowledgeChunk>> {
+    fn search_knowledge(
+        &self,
+        query: &str,
+        domains: &[String],
+        limit: usize,
+    ) -> rusqlite::Result<Vec<KnowledgeChunk>> {
         self._llm__search_knowledge(query, domains, limit)
     }
 

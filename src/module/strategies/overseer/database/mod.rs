@@ -1,13 +1,13 @@
-mod trait_overseer_database;
-mod init_schema;
-mod record_device_discovery;
-mod update_device_metadata;
-mod is_device_trusted;
-mod set_device_trust;
-mod trust_device;
-mod get_trusted_devices;
-mod get_all_known_devices;
 mod delete_device;
+mod get_all_known_devices;
+mod get_trusted_devices;
+mod init_schema;
+mod is_device_trusted;
+mod record_device_discovery;
+mod set_device_trust;
+mod trait_overseer_database;
+mod trust_device;
+mod update_device_metadata;
 
 use rusqlite::{params, Result};
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::log_info;
 use crate::util::database::Database;
 
-pub use trait_overseer_database::{OverseerDatabase};
+pub use trait_overseer_database::OverseerDatabase;
 
 /// Device record from database
 #[derive(Debug, Clone, Serialize, Deserialize)]

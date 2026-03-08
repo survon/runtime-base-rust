@@ -1,20 +1,20 @@
-use crate::module::Module;
 use crate::module::strategies::valve_control::handler::ValveControlHandler;
+use crate::module::Module;
 
 impl ValveControlHandler {
     pub(in crate::module) fn _update_bindings(&mut self, module: &mut Module) {
         self.process_messages();
 
-        module.config.bindings.insert(
-            "state".to_string(),
-            serde_json::json!(self.current_state),
-        );
+        module
+            .config
+            .bindings
+            .insert("state".to_string(), serde_json::json!(self.current_state));
 
         if let Some(status) = &self.status_message {
-            module.config.bindings.insert(
-                "status_message".to_string(),
-                serde_json::json!(status),
-            );
+            module
+                .config
+                .bindings
+                .insert("status_message".to_string(), serde_json::json!(status));
         }
 
         let description = if self.current_state {
@@ -23,23 +23,23 @@ impl ValveControlHandler {
             "Valve is CLOSED - Flow stopped"
         };
 
-        module.config.bindings.insert(
-            "description".to_string(),
-            serde_json::json!(description),
-        );
+        module
+            .config
+            .bindings
+            .insert("description".to_string(), serde_json::json!(description));
 
         if let Some(mode) = &self.current_mode {
-            module.config.bindings.insert(
-                "device_mode".to_string(),
-                serde_json::json!(mode),
-            );
+            module
+                .config
+                .bindings
+                .insert("device_mode".to_string(), serde_json::json!(mode));
         }
 
         if let Some(cmd_in) = self.cmd_window_opens_in {
-            module.config.bindings.insert(
-                "cmd_window_in".to_string(),
-                serde_json::json!(cmd_in),
-            );
+            module
+                .config
+                .bindings
+                .insert("cmd_window_in".to_string(), serde_json::json!(cmd_in));
         }
 
         let cmd_status = if self.is_in_cmd_window() {

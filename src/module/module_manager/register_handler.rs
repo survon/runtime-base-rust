@@ -1,7 +1,4 @@
-use crate::module::{
-    ModuleManager,
-    ModuleHandler,
-};
+use crate::module::{ModuleHandler, ModuleManager};
 
 impl ModuleManager {
     pub fn register_handler(&mut self, handler: Box<dyn ModuleHandler>) {

@@ -1,6 +1,6 @@
 // src/ui/module_templates/com/activity_card.rs
-use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
+use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, Widget};
 
 use crate::module::Module;
@@ -22,7 +22,7 @@ impl ActivityCard {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &mut Module
+        module: &mut Module,
     ) -> ViewData {
         let module_name = module.config.name.clone();
 
@@ -50,7 +50,9 @@ impl ActivityCard {
             .to_string();
 
         // Determine border color based on status
-        let border_color = if is_selected { Color::White } else {
+        let border_color = if is_selected {
+            Color::White
+        } else {
             match status.as_str() {
                 "error" => Color::Red,
                 "warning" => Color::Yellow,
@@ -98,7 +100,13 @@ impl ActivityCard {
 }
 
 impl UiTemplate for ActivityCard {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         let ViewData {
             status,
             border_color,
@@ -111,13 +119,12 @@ impl UiTemplate for ActivityCard {
             .map(|(text, style)| ListItem::new(text.as_str()).style(*style))
             .collect();
 
-        let list = List::new(list_items)
-            .block(
-                Block::default()
-                    .title(format!(" {} [{}] ", module_name, status.to_uppercase()))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-            );
+        let list = List::new(list_items).block(
+            Block::default()
+                .title(format!(" {} [{}] ", module_name, status.to_uppercase()))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color)),
+        );
 
         Widget::render(list, area, buf);
     }
@@ -135,13 +142,12 @@ impl UiTemplate for ActivityCard {
             .map(|(text, style)| ListItem::new(text.as_str()).style(*style))
             .collect();
 
-        let list = List::new(list_items)
-            .block(
-                Block::default()
-                    .title(format!(" {} [{}] ", module_name, status.to_uppercase()))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-            );
+        let list = List::new(list_items).block(
+            Block::default()
+                .title(format!(" {} [{}] ", module_name, status.to_uppercase()))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color)),
+        );
 
         Widget::render(list, area, buf);
     }

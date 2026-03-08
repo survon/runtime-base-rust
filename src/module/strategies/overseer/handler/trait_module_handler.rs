@@ -1,11 +1,8 @@
-use std::any::Any;
 use crossterm::event::KeyCode;
+use std::any::Any;
 
-use crate::module::{
-    trait_module_handler::ModuleHandler,
-    Module,
-};
 use crate::module::strategies::overseer::handler::OverseerHandler;
+use crate::module::{trait_module_handler::ModuleHandler, Module};
 use crate::util::io::event::AppEvent;
 
 impl ModuleHandler for OverseerHandler {
@@ -13,7 +10,11 @@ impl ModuleHandler for OverseerHandler {
         self._handle_key(key_code, _module)
     }
 
-    fn handle_event(&mut self, _event: &AppEvent, _module: &mut Module) -> color_eyre::Result<bool> {
+    fn handle_event(
+        &mut self,
+        _event: &AppEvent,
+        _module: &mut Module,
+    ) -> color_eyre::Result<bool> {
         Ok(false)
     }
 

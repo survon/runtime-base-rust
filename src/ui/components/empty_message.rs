@@ -1,6 +1,6 @@
 use ratatui::{
     layout::Alignment,
-    prelude::{Color, Stylize, Style},
+    prelude::{Color, Style, Stylize},
     widgets::{Block, Borders, Padding, Paragraph, Wrap},
 };
 
@@ -8,8 +8,7 @@ use super::UiComponent;
 
 impl UiComponent {
     pub fn empty_message(text: &str, border_color: Option<Color>) -> Paragraph {
-        let mut block = Block::default()
-            .padding(Padding::symmetric(1, 1));
+        let mut block = Block::default().padding(Padding::symmetric(1, 1));
 
         if let Some(border_color) = border_color {
             block = block

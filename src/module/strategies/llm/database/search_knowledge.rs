@@ -1,21 +1,25 @@
-use crate::{
-    log_debug,
-    util::database::Database,
-};
 use crate::module::strategies::llm::database::{
-    execute_search,
-    sanitize_fts5_query,
-    KnowledgeChunk
+    execute_search, sanitize_fts5_query, KnowledgeChunk,
 };
+use crate::{log_debug, util::database::Database};
 
 impl Database {
-    pub(in crate::module) fn _llm__search_knowledge(&self, query: &str, domains: &[String], limit: usize) -> rusqlite::Result<Vec<KnowledgeChunk>> {
+    pub(in crate::module) fn _llm__search_knowledge(
+        &self,
+        query: &str,
+        domains: &[String],
+        limit: usize,
+    ) -> rusqlite::Result<Vec<KnowledgeChunk>> {
         let clean_query = sanitize_fts5_query(query);
         if clean_query.trim().is_empty() {
             return Ok(Vec::new());
         }
 
-        log_debug!("Searching knowledge with query: '{}' (sanitized from '{}')", clean_query, query);
+        log_debug!(
+            "Searching knowledge with query: '{}' (sanitized from '{}')",
+            clean_query,
+            query
+        );
         if !domains.is_empty() {
             log_debug!("Filtering by domains: {:?}", domains);
         }
@@ -29,7 +33,10 @@ impl Database {
 
         // Strategy 2: If no results, try OR search
         if results.is_empty() && clean_query.contains(' ') {
-            let or_query = clean_query.split_whitespace().collect::<Vec<_>>().join(" OR ");
+            let or_query = clean_query
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" OR ");
             log_debug!("Strategy 2 (OR search): trying '{}'", or_query);
             results = execute_search(self, &or_query, domains, limit * 2)?;
             log_debug!("Strategy 2 (OR search): found {} results", results.len());
@@ -38,7 +45,10 @@ impl Database {
         // Strategy 3: If still no results, try each word individually
         if results.is_empty() {
             let words: Vec<&str> = clean_query.split_whitespace().collect();
-            log_debug!("Strategy 3 (individual words): trying {} words", words.len());
+            log_debug!(
+                "Strategy 3 (individual words): trying {} words",
+                words.len()
+            );
             for word in &words {
                 let word_results = execute_search(self, word, domains, limit)?;
                 log_debug!("  Word '{}': found {} results", word, word_results.len());
@@ -52,10 +62,14 @@ impl Database {
         // Filter results by relevance for OR queries
         if clean_query.contains(" OR ") {
             let keywords: Vec<&str> = clean_query.split(" OR ").collect();
-            results = results.into_iter()
+            results = results
+                .into_iter()
                 .filter(|chunk| {
                     let content_lower = format!("{} {}", chunk.title, chunk.body).to_lowercase();
-                    let matches = keywords.iter().filter(|&&keyword| content_lower.contains(keyword)).count();
+                    let matches = keywords
+                        .iter()
+                        .filter(|&&keyword| content_lower.contains(keyword))
+                        .count();
                     matches >= 2 || keywords.len() == 1
                 })
                 .take(limit)

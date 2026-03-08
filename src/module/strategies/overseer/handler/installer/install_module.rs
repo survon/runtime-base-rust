@@ -1,7 +1,4 @@
-use crate::module::strategies::overseer::handler::{
-    installer::ModuleInstaller,
-    InstallSource,
-};
+use crate::module::strategies::overseer::handler::{installer::ModuleInstaller, InstallSource};
 
 impl ModuleInstaller {
     pub async fn install_module(

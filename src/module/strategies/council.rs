@@ -1,5 +1,5 @@
+use crate::{log_debug, log_info};
 use serde::{Deserialize, Serialize};
-use crate::{log_info, log_debug};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CouncilConfig {
@@ -20,7 +20,7 @@ pub struct CouncilBindings {
     pub advisor_list: Vec<String>,
     pub active_council: Vec<String>,
     pub council_messages: Vec<String>,
-    
+
     #[serde(default)]
     pub status_message: Option<String>,
     #[serde(default)]
@@ -50,30 +50,39 @@ impl CouncilHandler {
 
     pub async fn initialize_advisors(&self) -> Result<(), color_eyre::Report> {
         log_info!("Initializing council advisors...");
-        
-        let device_ids = vec!["advisor_hardware".to_string(), "advisor_knowledge".to_string()];
-        
-        self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-            "council.init".to_string(),
-            serde_json::json!({
-                "advisors": device_ids,
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            }).to_string(),
-            "survon_tui".to_string(),
-        )).await;
-        
+
+        let device_ids = vec![
+            "advisor_hardware".to_string(),
+            "advisor_knowledge".to_string(),
+        ];
+
+        self.message_bus
+            .publish(crate::util::io::bus::BusMessage::new(
+                "council.init".to_string(),
+                serde_json::json!({
+                    "advisors": device_ids,
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                })
+                .to_string(),
+                "survon_tui".to_string(),
+            ))
+            .await;
+
         Ok(())
     }
 
     pub async fn handle_council_message(&self, message: &str) -> Result<(), color_eyre::Report> {
         log_info!("Council message received: {}", message);
-        
+
         let parsed_message: serde_json::Value = serde_json::from_str(message)?;
-        let topic = parsed_message.get("topic").and_then(|t| t.as_str()).unwrap_or("");
-        
+        let topic = parsed_message
+            .get("topic")
+            .and_then(|t| t.as_str())
+            .unwrap_or("");
+
         match topic {
             "council.query" => {
                 self.handle_council_query(parsed_message).await?;
@@ -85,16 +94,22 @@ impl CouncilHandler {
                 log_info!("Unknown council topic: {}", topic);
             }
         }
-        
+
         Ok(())
     }
 
-    async fn handle_council_query(&self, message: serde_json::Value) -> Result<(), color_eyre::Report> {
+    async fn handle_council_query(
+        &self,
+        message: serde_json::Value,
+    ) -> Result<(), color_eyre::Report> {
         let query = message.get("query").and_then(|q| q.as_str()).unwrap_or("");
-        let advisor = message.get("advisor").and_then(|a| a.as_str()).unwrap_or("");
-        
+        let advisor = message
+            .get("advisor")
+            .and_then(|a| a.as_str())
+            .unwrap_or("");
+
         log_info!("Council query from {}: {}", advisor, query);
-        
+
         match query {
             "device_status" => {
                 self.handle_device_status_query(advisor).await?;
@@ -109,16 +124,25 @@ impl CouncilHandler {
                 log_info!("Unknown query type: {}", query);
             }
         }
-        
+
         Ok(())
     }
 
-    async fn handle_council_command(&self, message: serde_json::Value) -> Result<(), color_eyre::Report> {
-        let command = message.get("command").and_then(|c| c.as_str()).unwrap_or("");
-        let advisor = message.get("advisor").and_then(|a| a.as_str()).unwrap_or("");
-        
+    async fn handle_council_command(
+        &self,
+        message: serde_json::Value,
+    ) -> Result<(), color_eyre::Report> {
+        let command = message
+            .get("command")
+            .and_then(|c| c.as_str())
+            .unwrap_or("");
+        let advisor = message
+            .get("advisor")
+            .and_then(|a| a.as_str())
+            .unwrap_or("");
+
         log_info!("Council command from {}: {}", advisor, command);
-        
+
         match command {
             "reboot_device" => {
                 self.handle_reboot_command(advisor).await?;
@@ -133,46 +157,52 @@ impl CouncilHandler {
                 log_info!("Unknown command: {}", command);
             }
         }
-        
+
         Ok(())
     }
 
     async fn handle_device_status_query(&self, advisor: &str) -> Result<(), color_eyre::Report> {
         if let Some(_discovery) = &self.discovery_manager {
-            self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-                "council.response".to_string(),
-                serde_json::json!({
-                    "advisor": advisor,
-                    "response": "device_status",
-                    "status": {"online": true},
-                    "timestamp": std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs()
-                }).to_string(),
-                "survon_tui".to_string(),
-            )).await;
+            self.message_bus
+                .publish(crate::util::io::bus::BusMessage::new(
+                    "council.response".to_string(),
+                    serde_json::json!({
+                        "advisor": advisor,
+                        "response": "device_status",
+                        "status": {"online": true},
+                        "timestamp": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs()
+                    })
+                    .to_string(),
+                    "survon_tui".to_string(),
+                ))
+                .await;
         }
-        
+
         Ok(())
     }
 
     async fn handle_knowledge_query(&self, advisor: &str) -> Result<(), color_eyre::Report> {
-        self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-            "council.response".to_string(),
-            serde_json::json!({
-                "advisor": advisor,
-                "response": "knowledge_base",
-                "results": vec![] as Vec<String>,
-                "query": "",
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            }).to_string(),
-            "survon_tui".to_string(),
-        )).await;
-        
+        self.message_bus
+            .publish(crate::util::io::bus::BusMessage::new(
+                "council.response".to_string(),
+                serde_json::json!({
+                    "advisor": advisor,
+                    "response": "knowledge_base",
+                    "results": vec![] as Vec<String>,
+                    "query": "",
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                })
+                .to_string(),
+                "survon_tui".to_string(),
+            ))
+            .await;
+
         Ok(())
     }
 
@@ -186,75 +216,87 @@ impl CouncilHandler {
             "memory_usage": "N/A",
             "cpu_usage": "N/A"
         });
-        
-        self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-            "council.response".to_string(),
-            serde_json::json!({
-                "advisor": advisor,
-                "response": "system_status",
-                "status": system_status,
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            }).to_string(),
-            "survon_tui".to_string(),
-        )).await;
-        
+
+        self.message_bus
+            .publish(crate::util::io::bus::BusMessage::new(
+                "council.response".to_string(),
+                serde_json::json!({
+                    "advisor": advisor,
+                    "response": "system_status",
+                    "status": system_status,
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                })
+                .to_string(),
+                "survon_tui".to_string(),
+            ))
+            .await;
+
         Ok(())
     }
 
     async fn handle_reboot_command(&self, advisor: &str) -> Result<(), color_eyre::Report> {
-        self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-            "council.response".to_string(),
-            serde_json::json!({
-                "advisor": advisor,
-                "response": "reboot_result",
-                "success": true,
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            }).to_string(),
-            "survon_tui".to_string(),
-        )).await;
-        
+        self.message_bus
+            .publish(crate::util::io::bus::BusMessage::new(
+                "council.response".to_string(),
+                serde_json::json!({
+                    "advisor": advisor,
+                    "response": "reboot_result",
+                    "success": true,
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                })
+                .to_string(),
+                "survon_tui".to_string(),
+            ))
+            .await;
+
         Ok(())
     }
 
     async fn handle_update_command(&self, advisor: &str) -> Result<(), color_eyre::Report> {
-        self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-            "council.response".to_string(),
-            serde_json::json!({
-                "advisor": advisor,
-                "response": "update_result",
-                "success": true,
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            }).to_string(),
-            "survon_tui".to_string(),
-        )).await;
-        
+        self.message_bus
+            .publish(crate::util::io::bus::BusMessage::new(
+                "council.response".to_string(),
+                serde_json::json!({
+                    "advisor": advisor,
+                    "response": "update_result",
+                    "success": true,
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                })
+                .to_string(),
+                "survon_tui".to_string(),
+            ))
+            .await;
+
         Ok(())
     }
 
     async fn handle_reset_command(&self, advisor: &str) -> Result<(), color_eyre::Report> {
-        self.message_bus.publish(crate::util::io::bus::BusMessage::new(
-            "council.response".to_string(),
-            serde_json::json!({
-                "advisor": advisor,
-                "response": "reset_result",
-                "success": true,
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            }).to_string(),
-            "survon_tui".to_string(),
-        )).await;
-        
+        self.message_bus
+            .publish(crate::util::io::bus::BusMessage::new(
+                "council.response".to_string(),
+                serde_json::json!({
+                    "advisor": advisor,
+                    "response": "reset_result",
+                    "success": true,
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                })
+                .to_string(),
+                "survon_tui".to_string(),
+            ))
+            .await;
+
         Ok(())
     }
 }
@@ -266,16 +308,26 @@ impl CouncilStrategy {
         Self
     }
 
-    pub async fn initialize(&self, message_bus: crate::util::io::bus::MessageBus, database: crate::util::database::Database, discovery_manager: Option<std::sync::Arc<crate::util::io::discovery::DiscoveryManager>>) -> Result<CouncilHandler, color_eyre::Report> {
+    pub async fn initialize(
+        &self,
+        message_bus: crate::util::io::bus::MessageBus,
+        database: crate::util::database::Database,
+        discovery_manager: Option<std::sync::Arc<crate::util::io::discovery::DiscoveryManager>>,
+    ) -> Result<CouncilHandler, color_eyre::Report> {
         log_info!("Initializing Council Strategy...");
-        
+
         let handler = CouncilHandler::new(message_bus, database, discovery_manager);
         handler.initialize_advisors().await?;
-        
+
         Ok(handler)
     }
 
-    pub async fn handle_event(&self, handler: &CouncilHandler, event: &str, payload: &str) -> Result<(), color_eyre::Report> {
+    pub async fn handle_event(
+        &self,
+        handler: &CouncilHandler,
+        event: &str,
+        payload: &str,
+    ) -> Result<(), color_eyre::Report> {
         match event {
             "council.message" => {
                 handler.handle_council_message(payload).await?;
@@ -287,24 +339,35 @@ impl CouncilStrategy {
                 log_info!("Unknown council event: {}", event);
             }
         }
-        
+
         Ok(())
     }
 
-    async fn handle_advisor_status(&self, handler: &CouncilHandler, payload: &str) -> Result<(), color_eyre::Report> {
+    async fn handle_advisor_status(
+        &self,
+        handler: &CouncilHandler,
+        payload: &str,
+    ) -> Result<(), color_eyre::Report> {
         let status: serde_json::Value = serde_json::from_str(payload)?;
         let advisor = status.get("advisor").and_then(|a| a.as_str()).unwrap_or("");
-        let online = status.get("online").and_then(|o| o.as_bool()).unwrap_or(false);
-        
-        log_info!("Advisor {} status: {}", advisor, if online { "online" } else { "offline" });
-        
+        let online = status
+            .get("online")
+            .and_then(|o| o.as_bool())
+            .unwrap_or(false);
+
+        log_info!(
+            "Advisor {} status: {}",
+            advisor,
+            if online { "online" } else { "offline" }
+        );
+
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::module::strategies::council::{CouncilConfig, CouncilBindings};
+    use crate::module::strategies::council::{CouncilBindings, CouncilConfig};
 
     #[test]
     fn test_council_config_creation() {
@@ -334,7 +397,7 @@ mod tests {
                 advisor_config: None,
             },
         };
-        
+
         assert_eq!(config.base.name, "council");
         assert_eq!(config.bindings.current_view, "overview");
     }
@@ -356,7 +419,7 @@ mod tests {
             is_blinkable: Some(true),
             advisor_config: Some("{}".to_string()),
         };
-        
+
         assert_eq!(bindings.current_view, "chat");
         assert_eq!(bindings.advisor_list.len(), 1);
         assert_eq!(bindings.status_message, Some("All good".to_string()));
@@ -369,9 +432,9 @@ mod tests {
             "query": "device_status",
             "advisor": "test_device"
         }"#;
-        
+
         let parsed: serde_json::Value = serde_json::from_str(message).unwrap();
-        
+
         assert_eq!(parsed["topic"], "council.query");
         assert_eq!(parsed["query"], "device_status");
         assert_eq!(parsed["advisor"], "test_device");
@@ -385,9 +448,9 @@ mod tests {
             "status": {"online": true},
             "timestamp": 1234567890
         }"#;
-        
+
         let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
-        
+
         assert_eq!(parsed["advisor"], "test_device");
         assert_eq!(parsed["response"], "device_status");
         assert!(parsed["status"]["online"].as_bool().unwrap());
@@ -400,9 +463,9 @@ mod tests {
             "command": "reboot_device",
             "advisor": "device_1"
         }"#;
-        
+
         let parsed: serde_json::Value = serde_json::from_str(command).unwrap();
-        
+
         assert_eq!(parsed["topic"], "council.command");
         assert_eq!(parsed["command"], "reboot_device");
     }
@@ -415,7 +478,7 @@ mod tests {
             "system_monitor".to_string(),
             "security_specialist".to_string(),
         ];
-        
+
         assert_eq!(advisors.len(), 4);
         assert!(advisors.contains(&"hardware_expert".to_string()));
     }

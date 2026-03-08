@@ -1,10 +1,7 @@
 use chrono::{DateTime, Utc};
 
+use crate::module::strategies::side_quest::{QuestUrgency, SideQuest};
 use crate::util::database::Database;
-use crate::module::strategies::side_quest::{
-    QuestUrgency,
-    SideQuest,
-};
 
 /// Trait to add Side Quest-specific database operations to Database
 pub trait SideQuestDatabase {
@@ -62,6 +59,6 @@ impl SideQuestDatabase for Database {
     }
 
     fn get_quests_with_deadlines(&self, days_ahead: i64) -> rusqlite::Result<Vec<SideQuest>> {
-       self._side_quest__get_quests_with_deadlines(days_ahead)
+        self._side_quest__get_quests_with_deadlines(days_ahead)
     }
 }

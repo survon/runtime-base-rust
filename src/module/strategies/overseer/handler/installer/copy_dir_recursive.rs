@@ -5,7 +5,11 @@ use super::ModuleInstaller;
 
 impl ModuleInstaller {
     // TODO move to util
-    pub(in crate::module) fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> color_eyre::Result<()> {
+    pub(in crate::module) fn copy_dir_recursive(
+        &self,
+        src: &Path,
+        dst: &Path,
+    ) -> color_eyre::Result<()> {
         fs::create_dir_all(dst)?;
 
         for entry in fs::read_dir(src)? {

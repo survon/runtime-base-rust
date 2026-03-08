@@ -1,7 +1,7 @@
 use std::fs;
 
-use crate::{log_debug, log_error, log_info};
 use super::{OverseerHandler, WastelandView};
+use crate::{log_debug, log_error, log_info};
 
 impl OverseerHandler {
     pub(in crate::module) fn handle_config_editor_save(&mut self) {

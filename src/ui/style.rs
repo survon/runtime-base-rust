@@ -1,7 +1,8 @@
-#[allow(unused_imports)] /// Needed for Stylize in this scope
+#[allow(unused_imports)]
+/// Needed for Stylize in this scope
 use ratatui::style::{Color, Style, Stylize};
-use std::env;
 use serde::{Deserialize, Serialize};
+use std::env;
 
 #[derive(Debug, Clone)]
 pub struct AdaptiveColors {
@@ -98,9 +99,7 @@ impl AdaptiveColors {
     pub fn map_rgb_to_term_color(&self, r: u8, g: u8, b: u8) -> Color {
         // If this AdaptiveColors is using truecolor palette, return Rgb directly.
         match (&self.background, &self.foreground) {
-            (Color::Rgb(_, _, _), _) | (_, Color::Rgb(_, _, _)) => {
-                Color::Rgb(r, g, b)
-            }
+            (Color::Rgb(_, _, _), _) | (_, Color::Rgb(_, _, _)) => Color::Rgb(r, g, b),
             _ => {
                 // Check if we are on 256 mode: many of the colors are indexed.
                 // We'll do a simple nearest mapping to xterm-256 palette.
@@ -142,7 +141,6 @@ fn rgb_to_256(r: u8, g: u8, b: u8) -> Option<u8> {
     }
 }
 
-
 // Quick test program to verify colors
 #[cfg(test)]
 mod tests {
@@ -154,19 +152,18 @@ mod tests {
 
         println!("Color test:");
         println!("TERM: {}", std::env::var("TERM").unwrap_or_default());
-        println!("COLORTERM: {}", std::env::var("COLORTERM").unwrap_or_default());
+        println!(
+            "COLORTERM: {}",
+            std::env::var("COLORTERM").unwrap_or_default()
+        );
         println!("Detected mode: {:?}", colors.primary);
     }
 }
 
 pub fn dim_unless_focused(is_focused: Option<bool>, style: Style) -> Style {
     match is_focused {
-        Some(true) => {
-            style.bold()
-        },
-        Some(false) => {
-            style.dim().italic()
-        }
-        None => style
+        Some(true) => style.bold(),
+        Some(false) => style.dim().italic(),
+        None => style,
     }
 }

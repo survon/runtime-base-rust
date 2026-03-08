@@ -3,7 +3,6 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     prelude::{Color, Modifier, Style, Widget},
     widgets::{Block, Borders},
-
 };
 
 use super::{ConfigEditor, FieldValue};
@@ -52,7 +51,9 @@ impl ConfigEditor {
             let is_editing_this = is_selected && self.is_editing;
 
             let style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -68,9 +69,11 @@ impl ConfigEditor {
             if is_editing_this {
                 // Show edit buffer with cursor
                 let display = if self.cursor_pos < self.edit_buffer.len() {
-                    format!("{}│{}",
-                            &self.edit_buffer[..self.cursor_pos],
-                            &self.edit_buffer[self.cursor_pos..])
+                    format!(
+                        "{}│{}",
+                        &self.edit_buffer[..self.cursor_pos],
+                        &self.edit_buffer[self.cursor_pos..]
+                    )
                 } else {
                     format!("{}│", self.edit_buffer)
                 };
@@ -78,7 +81,11 @@ impl ConfigEditor {
             } else {
                 let display = match value {
                     FieldValue::Bool(b) => {
-                        if *b { "[X] true" } else { "[ ] false" }
+                        if *b {
+                            "[X] true"
+                        } else {
+                            "[ ] false"
+                        }
                     }
                     FieldValue::Enum { options, selected } => {
                         &format!("< {} >", options.get(*selected).unwrap_or(&String::new()))

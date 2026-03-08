@@ -1,10 +1,10 @@
 use crossterm::event::KeyCode;
 
-use crate::util::io::event::AppEvent;
 use crate::module::strategies::side_quest::{
     database::SideQuestDatabase,
     handler::{SideQuestHandler, SideQuestView},
 };
+use crate::util::io::event::AppEvent;
 
 impl SideQuestHandler {
     pub(in crate::module) fn handle_detail_key(&mut self, key_code: KeyCode) -> Option<AppEvent> {

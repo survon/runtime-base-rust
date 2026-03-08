@@ -1,10 +1,4 @@
-use crate::module::strategies::llm::{
-    handler::{
-        LlmHandler,
-        chat_manager::ChatManager
-    },
-
-};
+use crate::module::strategies::llm::handler::{chat_manager::ChatManager, LlmHandler};
 use crate::util::llm::LlmService;
 
 impl LlmHandler {

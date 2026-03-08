@@ -1,10 +1,6 @@
 use crate::module::get_supported_templates;
 
-use super::{
-    ConfigEditor,
-    EditorField,
-    FieldValue,
-};
+use super::{ConfigEditor, EditorField, FieldValue};
 
 impl ConfigEditor {
     /// After module type is selected, expand fields for that type
@@ -40,14 +36,18 @@ impl ConfigEditor {
             "llm" => "chat_interface",
             _ => "gauge_card",
         };
-        let selected = template_options.iter()
+        let selected = template_options
+            .iter()
             .position(|t| t == default_template)
             .unwrap_or(0);
 
         self.fields.push((
             "Template".to_string(),
             EditorField::Template,
-            FieldValue::Enum { options: template_options, selected },
+            FieldValue::Enum {
+                options: template_options,
+                selected,
+            },
         ));
 
         // Add type-specific fields with default values

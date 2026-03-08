@@ -1,14 +1,14 @@
+use color_eyre::Result;
+use gag::Gag;
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
     DefaultTerminal,
 };
-use color_eyre::Result;
-use std::path::{Path, PathBuf};
-use tokio::time::{Duration, Instant};
-use std::sync::Arc;
-use gag::Gag;
-use std::collections::HashMap;
 use ratatui::{layout::Rect, Frame};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::time::{Duration, Instant};
 
 use crate::util::{
     database::Database,
@@ -20,25 +20,14 @@ use crate::util::{
         event::{AppEvent, Event, EventHandler},
         transport::TransportManager,
     },
-    knowledge::KnowledgeIngester
+    knowledge::KnowledgeIngester,
 };
 
-use crate::module::{
-    Module,
-    ModuleManager,
-    ModuleManagerView
-};
+use crate::module::{Module, ModuleManager, ModuleManagerView};
 
 use crate::ui::widgets::{
-    jukebox::{
-        actor::JukeboxActor,
-        ingester::JukeboxIngester,
-        widget::JukeboxWidget,
-    },
-    messages_window::{
-        actor::MessagesActor,
-        widget::MessagesWidget,
-    },
+    jukebox::{actor::JukeboxActor, ingester::JukeboxIngester, widget::JukeboxWidget},
+    messages_window::{actor::MessagesActor, widget::MessagesWidget},
     module_detail::widget::ModuleDetailWidget,
     modules_list::widget::ModulesListWidget,
 };
@@ -46,13 +35,13 @@ use crate::ui::widgets::{
 use crate::ui::{
     document::manager::DocumentManager,
     screens::council::{CouncilScreen, CouncilUiState},
-    screens::splash::SplashScreen,
     screens::overview::render_overview,
-    style::AdaptiveColors
+    screens::splash::SplashScreen,
+    style::AdaptiveColors,
 };
 
-use crate::{log_debug, log_error, log_info};
 use crate::module::strategies::llm::{database::ChatMessage, handler::LlmHandler};
+use crate::{log_debug, log_error, log_info};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ModuleSource {
@@ -122,20 +111,22 @@ pub struct App {
 impl App {
     /// Constructs a new instance of [`App`].
     pub async fn new() -> Result<Self> {
-
         let mut image_cache = ImageCache::new();
 
-        if let Err(e) = image_cache.load_overview_header("assets/images/homestead-scene-3-wide.png") {
+        if let Err(e) = image_cache.load_overview_header("assets/images/homestead-scene-3-wide.png")
+        {
             log_error!("Failed to load overview header image: {}", e);
         }
 
         let core_manifests_path = PathBuf::from("./manifests/core/");
-        let core_modules_namespace= "core".to_string();
-        let mut core_module_manager = ModuleManager::new(core_manifests_path, core_modules_namespace);
+        let core_modules_namespace = "core".to_string();
+        let mut core_module_manager =
+            ModuleManager::new(core_manifests_path, core_modules_namespace);
 
         let wasteland_manifests_path = PathBuf::from("./manifests/wasteland/");
-        let wasteland_modules_namespace= "wasteland".to_string();
-        let mut wasteland_module_manager = ModuleManager::new(wasteland_manifests_path, wasteland_modules_namespace);
+        let wasteland_modules_namespace = "wasteland".to_string();
+        let mut wasteland_module_manager =
+            ModuleManager::new(wasteland_manifests_path, wasteland_modules_namespace);
 
         let (message_bus, bus_receiver) = MessageBus::new();
         let database = Database::new_implied_all_schemas()?;
@@ -184,25 +175,33 @@ impl App {
         discovery_manager.clone().start_maintenance_task().await;
 
         // Subscribe module manager to events
-        wasteland_module_manager.subscribe_to_events(&message_bus).await;
+        wasteland_module_manager
+            .subscribe_to_events(&message_bus)
+            .await;
         core_module_manager.subscribe_to_events(&message_bus).await;
 
         // Initialize handlers for modules
-        if let Err(e) = wasteland_module_manager.initialize_module_handlers(
-            wasteland_manifests_path.clone(),
-            Some(discovery_manager.clone()),
-            &database,
-            &message_bus
-        ).await {
+        if let Err(e) = wasteland_module_manager
+            .initialize_module_handlers(
+                wasteland_manifests_path.clone(),
+                Some(discovery_manager.clone()),
+                &database,
+                &message_bus,
+            )
+            .await
+        {
             panic!("Failed to initialize wasteland module handlers: {}", e);
         }
 
-        if let Err(e) = core_module_manager.initialize_module_handlers(
-            wasteland_manifests_path.clone(),
-            Some(discovery_manager.clone()),
-            &database,
-            &message_bus
-        ).await {
+        if let Err(e) = core_module_manager
+            .initialize_module_handlers(
+                wasteland_manifests_path.clone(),
+                Some(discovery_manager.clone()),
+                &database,
+                &message_bus,
+            )
+            .await
+        {
             panic!("Failed to initialize core module handlers: {}", e);
         }
 
@@ -210,9 +209,15 @@ impl App {
         let transport_manager = TransportManager::new(message_bus.clone());
 
         // Add any custom outbound topics
-        transport_manager.add_outbound_topic("sensor_data".to_string()).await;
-        transport_manager.add_outbound_topic("arduino_ping".to_string()).await;
-        transport_manager.add_outbound_topic("device_registration".to_string()).await;
+        transport_manager
+            .add_outbound_topic("sensor_data".to_string())
+            .await;
+        transport_manager
+            .add_outbound_topic("arduino_ping".to_string())
+            .await;
+        transport_manager
+            .add_outbound_topic("device_registration".to_string())
+            .await;
 
         // Start the transport manager (spawns background tasks)
         let transport_clone = transport_manager.clone();
@@ -231,18 +236,21 @@ impl App {
             // 3. Broadcast registration request
             log_info!("Broadcasting device registration request to all field units...");
 
-            let _ = bus_for_broadcast.publish(BusMessage::new(
-                "device_registration".to_string(),
-                serde_json::json!({
-                "request": "capabilities",
-                "hub_id": "survon_hub",
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-                    }).to_string(),
-                "survon_hub".to_string(),
-            )).await;
+            let _ = bus_for_broadcast
+                .publish(BusMessage::new(
+                    "device_registration".to_string(),
+                    serde_json::json!({
+                    "request": "capabilities",
+                    "hub_id": "survon_hub",
+                    "timestamp": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                        })
+                    .to_string(),
+                    "survon_hub".to_string(),
+                ))
+                .await;
         });
 
         // Knowledge ingestion
@@ -263,11 +271,8 @@ impl App {
             jukebox_actor.run().await;
         });
 
-        let jukebox_widget = JukeboxWidget::new(
-            database.clone(),
-            &message_bus,
-            jukebox_intent_tx,
-        ).await?;
+        let jukebox_widget =
+            JukeboxWidget::new(database.clone(), &message_bus, jukebox_intent_tx).await?;
 
         // Initialize Messages Window
         let (messages_actor, messages_intent_tx) = MessagesActor::new(message_bus.clone());
@@ -275,10 +280,7 @@ impl App {
             messages_actor.run().await;
         });
 
-        let messages_widget = MessagesWidget::new(
-            &message_bus,
-            messages_intent_tx,
-        ).await?;
+        let messages_widget = MessagesWidget::new(&message_bus, messages_intent_tx).await?;
 
         Ok(Self {
             running: true,
@@ -317,12 +319,9 @@ impl App {
     ) -> Result<()> {
         if let Some(discovery) = &self.discovery_manager {
             let device_id_clone = device_id.clone();
-            discovery.send_command(
-                device_id,
-                action,
-                payload,
-                priority,
-            ).await?;
+            discovery
+                .send_command(device_id, action, payload, priority)
+                .await?;
 
             log_info!("✅ Command queued: {} -> {}", device_id_clone, action);
         } else {
@@ -333,7 +332,10 @@ impl App {
     }
 
     /// Get queue status for a device
-    pub async fn get_device_queue_status(&self, device_id: &str) -> Option<crate::util::io::ble_scheduler::QueueStatus> {
+    pub async fn get_device_queue_status(
+        &self,
+        device_id: &str,
+    ) -> Option<crate::util::io::ble_scheduler::QueueStatus> {
         if let Some(discovery) = &self.discovery_manager {
             let scheduler = discovery.get_scheduler();
             scheduler.get_queue_status(device_id).await
@@ -344,12 +346,8 @@ impl App {
 
     /// Send a ping to a device (normal priority)
     pub async fn ping_device(&self, device_id: String) -> Result<()> {
-        self.queue_device_command(
-            device_id,
-            "ping",
-            None,
-            CommandPriority::Normal,
-        ).await
+        self.queue_device_command(device_id, "ping", None, CommandPriority::Normal)
+            .await
     }
 
     /// Blink a device LED (high priority)
@@ -359,53 +357,41 @@ impl App {
             "duration_ms": 200
         });
 
-        self.queue_device_command(
-            device_id,
-            "blink",
-            Some(payload),
-            CommandPriority::High,
-        ).await
+        self.queue_device_command(device_id, "blink", Some(payload), CommandPriority::High)
+            .await
     }
 
     /// Emergency reset (critical priority - bypasses queue)
     pub async fn emergency_reset_device(&self, device_id: String) -> Result<()> {
-        self.queue_device_command(
-            device_id,
-            "reset",
-            None,
-            CommandPriority::Critical,
-        ).await
+        self.queue_device_command(device_id, "reset", None, CommandPriority::Critical)
+            .await
     }
 
     /// Get status from device (low priority)
     pub async fn request_device_status(&self, device_id: String) -> Result<()> {
-        self.queue_device_command(
-            device_id,
-            "status",
-            None,
-            CommandPriority::Low,
-        ).await
+        self.queue_device_command(device_id, "status", None, CommandPriority::Low)
+            .await
     }
 
     async fn publish_event(&self, topic: &str, payload: &str) {
         let msg = BusMessage::new(
             topic.to_string(),
             payload.to_string(),
-            "survon_tui".to_string()
+            "survon_tui".to_string(),
         );
         let _ = self.message_bus.publish(msg).await;
     }
 
     pub fn has_animating_child(&self) -> bool {
         self.wasteland_module_manager.has_active_blinks()
-          || self.core_module_manager.has_active_blinks()
-          || {
-            if let Some(jukebox) = &self.jukebox_widget {
-                jukebox.is_playing()
-            } else {
-                false
+            || self.core_module_manager.has_active_blinks()
+            || {
+                if let Some(jukebox) = &self.jukebox_widget {
+                    jukebox.is_playing()
+                } else {
+                    false
+                }
             }
-        }
     }
 
     pub fn request_redraw(&mut self) {
@@ -424,9 +410,7 @@ impl App {
         let should_animate: bool = {
             match self.mode {
                 AppMode::Splash => true,
-                AppMode::Council => {
-                    self.council_screen.is_some()
-                },
+                AppMode::Council => self.council_screen.is_some(),
                 _ => false,
             }
         };
@@ -443,7 +427,6 @@ impl App {
         match event {
             crossterm::event::Event::Key(key_event) => {
                 if matches!(self.mode, AppMode::Splash) {
-
                     // Try to bypass the splash screen
                     if let Some(splash) = &mut self.splash_screen {
                         let dismissed = splash.bypass_theme();
@@ -473,46 +456,18 @@ impl App {
     /// Publish an AppEvent to the message bus
     async fn publish_app_event(&self, event: &AppEvent) -> Result<()> {
         let (topic, payload): (Option<&str>, String) = match event {
-            AppEvent::Select => (
-                Some("select"),
-                String::new()
-            ),
-            AppEvent::Back => (
-                Some("back"),
-                String::new()
-            ),
-            AppEvent::RefreshModules => (
-                Some("refresh_modules"),
-                String::new()
-            ),
-            AppEvent::Quit => (
-                Some("quit"),
-                String::new()
-            ),
-            AppEvent::OpenDocument(path) => (
-                Some("open_document"),
-                path.clone()
-            ),
-            AppEvent::CloseDocument => (
-                Some("close_document"),
-                String::new()
-            ),
-            AppEvent::SendCommand(topic, cmd) => (
-                Some("send_command"),
-                format!("{}:{}", topic, cmd)
-            ),
-            AppEvent::ChatSubmit => (
-                Some("chat_submit"),
-                String::new()
-            ),
-            AppEvent::ShowOverview => (
-                Some("show_overview"),
-                String::new()
-            ),
-            AppEvent::NoOp => (
-                None,
-                String::new()
-            ),
+            AppEvent::Select => (Some("select"), String::new()),
+            AppEvent::Back => (Some("back"), String::new()),
+            AppEvent::RefreshModules => (Some("refresh_modules"), String::new()),
+            AppEvent::Quit => (Some("quit"), String::new()),
+            AppEvent::OpenDocument(path) => (Some("open_document"), path.clone()),
+            AppEvent::CloseDocument => (Some("close_document"), String::new()),
+            AppEvent::SendCommand(topic, cmd) => {
+                (Some("send_command"), format!("{}:{}", topic, cmd))
+            }
+            AppEvent::ChatSubmit => (Some("chat_submit"), String::new()),
+            AppEvent::ShowOverview => (Some("show_overview"), String::new()),
+            AppEvent::NoOp => (None, String::new()),
         };
 
         if let Some(topic) = topic {
@@ -580,22 +535,25 @@ impl App {
 
                 match self.wasteland_module_manager.select_current_module() {
                     Some(_) => {
-                        self.wasteland_module_manager.current_view = ModuleManagerView::ModuleDetail(source, module_index);
+                        self.wasteland_module_manager.current_view =
+                            ModuleManagerView::ModuleDetail(source, module_index);
                         true
                     }
                     None => {
-                        self.wasteland_module_manager.current_view = ModuleManagerView::ModuleListView;
+                        self.wasteland_module_manager.current_view =
+                            ModuleManagerView::ModuleListView;
                         true
                     }
                 }
-            },
+            }
             OverviewFocus::CoreModules => {
                 let source = ModuleSource::Core;
                 let module_index = self.core_module_manager.selected_module;
 
                 match self.core_module_manager.select_current_module() {
                     Some(_) => {
-                        self.core_module_manager.current_view = ModuleManagerView::ModuleDetail(source, module_index);
+                        self.core_module_manager.current_view =
+                            ModuleManagerView::ModuleDetail(source, module_index);
                         true
                     }
                     None => {
@@ -603,13 +561,13 @@ impl App {
                         true
                     }
                 }
-            },
+            }
             _ => {
                 // no handler yet for full-screen ModuleDetail
                 // (render is supported though at screen level)
                 // basically which module_manager gets bias here? might not make sense.
                 false
-            },
+            }
         }
     }
 
@@ -624,7 +582,8 @@ impl App {
         ];
 
         // Find current index
-        let current_index = screens.iter()
+        let current_index = screens
+            .iter()
             .position(|s| *s == self.overview_focus)
             .unwrap_or(0);
 
@@ -641,16 +600,19 @@ impl App {
 
         if let Some(discovery_manager) = self.discovery_manager.as_ref() {
             // Re-initialize handlers after refresh
-            if let Err(e) = self.wasteland_module_manager.initialize_module_handlers(
-                self.wasteland_module_manager.manifests_path.clone(),
-                Some(discovery_manager.clone()),
-                &self.database,
-                &self.message_bus
-            ).await {
+            if let Err(e) = self
+                .wasteland_module_manager
+                .initialize_module_handlers(
+                    self.wasteland_module_manager.manifests_path.clone(),
+                    Some(discovery_manager.clone()),
+                    &self.database,
+                    &self.message_bus,
+                )
+                .await
+            {
                 panic!("Failed to re-initialize handlers: {}", e);
             }
         }
-
     }
 
     fn render_current_mode(&mut self, frame: &mut Frame) {
@@ -660,12 +622,12 @@ impl App {
                 if let Some(ref council) = self.council_screen {
                     CouncilScreen::render(self, frame.area(), frame.buffer_mut());
                 }
-            },
+            }
             AppMode::Overview => render_overview(self, frame.area(), frame.buffer_mut()),
             AppMode::ModuleDetail(source, module_idx) => {
                 let is_focused = Some(true);
                 self.render_module_detail(frame, source.clone(), *module_idx, is_focused)
-            },
+            }
         }
     }
 
@@ -696,7 +658,13 @@ impl App {
             ModuleSource::Wasteland => &self.wasteland_module_manager,
             ModuleSource::Core => &self.core_module_manager,
         };
-        self.module_detail_widget.render_chrome(module_manager_ref, module_idx, is_focused, area, buf);
+        self.module_detail_widget.render_chrome(
+            module_manager_ref,
+            module_idx,
+            is_focused,
+            area,
+            buf,
+        );
 
         // Get content area and render template
         let content_area = self.module_detail_widget.get_content_area(area);
@@ -715,11 +683,16 @@ impl App {
         }
     }
 
-    fn render_template_error(&self, frame: &mut ratatui::Frame, area: ratatui::layout::Rect, error: String) {
-        use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
-        use ratatui::style::{Color, Style};
+    fn render_template_error(
+        &self,
+        frame: &mut ratatui::Frame,
+        area: ratatui::layout::Rect,
+        error: String,
+    ) {
         use ratatui::layout::Alignment;
+        use ratatui::style::{Color, Style};
         use ratatui::text::Line;
+        use ratatui::widgets::{Block, BorderType, Paragraph, Wrap};
 
         let error_lines = vec![
             Line::from(""),
@@ -728,8 +701,10 @@ impl App {
             Line::from(error.clone()).style(Style::default().fg(Color::Yellow)),
             Line::from(""),
             Line::from("Check your module's config.yml:").style(Style::default().fg(Color::Gray)),
-            Line::from("  - Is the 'template' field correct?").style(Style::default().fg(Color::Gray)),
-            Line::from("  - Are all required bindings present?").style(Style::default().fg(Color::Gray)),
+            Line::from("  - Is the 'template' field correct?")
+                .style(Style::default().fg(Color::Gray)),
+            Line::from("  - Are all required bindings present?")
+                .style(Style::default().fg(Color::Gray)),
         ];
 
         let error_widget = Paragraph::new(error_lines)
@@ -737,7 +712,7 @@ impl App {
                 Block::bordered()
                     .title(" Error ")
                     .border_type(BorderType::Rounded)
-                    .style(Style::default().fg(Color::Red))
+                    .style(Style::default().fg(Color::Red)),
             )
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
@@ -750,7 +725,6 @@ impl App {
         let mut needs_redraw = true;
 
         while self.running {
-
             if needs_redraw || self.needs_redraw {
                 terminal.draw(|frame| {
                     self.render_current_mode(frame);
@@ -789,7 +763,7 @@ impl App {
         let key_code = key_event.code;
 
         match &self.mode {
-            AppMode::Splash => {},
+            AppMode::Splash => {}
             AppMode::Overview => {
                 // Handle focused widget keys first (these can consume the event)
                 let event_handled = match self.overview_focus {
@@ -797,38 +771,72 @@ impl App {
                     OverviewFocus::Jukebox => {
                         if let Some(jukebox) = &mut self.jukebox_widget {
                             match key_code {
-                                KeyCode::Char(' ') => { jukebox.play_pause(); true },
-                                KeyCode::Char('m') => { jukebox.toggle_mode(); true },
-                                KeyCode::Right => { jukebox.next_track(); true },
-                                KeyCode::Left => { jukebox.previous_track(); true },
-                                KeyCode::Up => { jukebox.prev_item(); true },
-                                KeyCode::Down => { jukebox.next_item(); true },
-                                KeyCode::Enter => { jukebox.handle_enter(); true },
-                                KeyCode::Char('+') => { jukebox.volume_up(); true },
-                                KeyCode::Char('-') => { jukebox.volume_down(); true },
-                                _ => false
+                                KeyCode::Char(' ') => {
+                                    jukebox.play_pause();
+                                    true
+                                }
+                                KeyCode::Char('m') => {
+                                    jukebox.toggle_mode();
+                                    true
+                                }
+                                KeyCode::Right => {
+                                    jukebox.next_track();
+                                    true
+                                }
+                                KeyCode::Left => {
+                                    jukebox.previous_track();
+                                    true
+                                }
+                                KeyCode::Up => {
+                                    jukebox.prev_item();
+                                    true
+                                }
+                                KeyCode::Down => {
+                                    jukebox.next_item();
+                                    true
+                                }
+                                KeyCode::Enter => {
+                                    jukebox.handle_enter();
+                                    true
+                                }
+                                KeyCode::Char('+') => {
+                                    jukebox.volume_up();
+                                    true
+                                }
+                                KeyCode::Char('-') => {
+                                    jukebox.volume_down();
+                                    true
+                                }
+                                _ => false,
                             }
                         } else {
                             false
                         }
-                    },
+                    }
                     OverviewFocus::WastelandModules => {
-                        if !matches!(self.wasteland_module_manager.current_view, ModuleManagerView::ModuleListView) {
+                        if !matches!(
+                            self.wasteland_module_manager.current_view,
+                            ModuleManagerView::ModuleListView
+                        ) {
                             // In detail view - handle module-specific keys or back navigation
                             match key_code {
                                 _ => {
                                     let module_idx = self.wasteland_module_manager.selected_module;
-                                    if let Some(event) = self.wasteland_module_manager.handle_key_for_module(module_idx, key_code) {
+                                    if let Some(event) = self
+                                        .wasteland_module_manager
+                                        .handle_key_for_module(module_idx, key_code)
+                                    {
                                         self.events.send(event);
                                         true
                                     } else {
                                         match key_code {
                                             KeyCode::Esc => {
-                                                self.wasteland_module_manager.current_view = ModuleManagerView::ModuleListView;
+                                                self.wasteland_module_manager.current_view =
+                                                    ModuleManagerView::ModuleListView;
                                                 self.needs_redraw = true;
                                                 true
-                                            },
-                                            _ => false
+                                            }
+                                            _ => false,
                                         }
                                     }
                                 }
@@ -836,30 +844,43 @@ impl App {
                         } else {
                             // In list view - handle navigation
                             match key_code {
-                                KeyCode::Left => { self.wasteland_module_manager.prev_module(); true },
-                                KeyCode::Right => { self.wasteland_module_manager.next_module(); true },
-                                _ => false
+                                KeyCode::Left => {
+                                    self.wasteland_module_manager.prev_module();
+                                    true
+                                }
+                                KeyCode::Right => {
+                                    self.wasteland_module_manager.next_module();
+                                    true
+                                }
+                                _ => false,
                             }
                         }
-                    },
+                    }
                     OverviewFocus::CoreModules => {
-                        if !matches!(self.core_module_manager.current_view, ModuleManagerView::ModuleListView) {
+                        if !matches!(
+                            self.core_module_manager.current_view,
+                            ModuleManagerView::ModuleListView
+                        ) {
                             // In detail view - handle module-specific keys or back navigation
                             match key_code {
                                 _ => {
                                     // Let module handler process other keys
                                     let module_idx = self.core_module_manager.selected_module;
-                                    if let Some(event) = self.core_module_manager.handle_key_for_module(module_idx, key_code) {
+                                    if let Some(event) = self
+                                        .core_module_manager
+                                        .handle_key_for_module(module_idx, key_code)
+                                    {
                                         self.events.send(event);
                                         true
                                     } else {
                                         match key_code {
                                             KeyCode::Esc => {
-                                                self.core_module_manager.current_view = ModuleManagerView::ModuleListView;
+                                                self.core_module_manager.current_view =
+                                                    ModuleManagerView::ModuleListView;
                                                 self.needs_redraw = true;
                                                 true
-                                            },
-                                            _ => false
+                                            }
+                                            _ => false,
                                         }
                                     }
                                 }
@@ -867,12 +888,18 @@ impl App {
                         } else {
                             // In list view - handle navigation
                             match key_code {
-                                KeyCode::Left => { self.core_module_manager.prev_module(); true },
-                                KeyCode::Right => { self.core_module_manager.next_module(); true },
-                                _ => false
+                                KeyCode::Left => {
+                                    self.core_module_manager.prev_module();
+                                    true
+                                }
+                                KeyCode::Right => {
+                                    self.core_module_manager.next_module();
+                                    true
+                                }
+                                _ => false,
                             }
                         }
-                    },
+                    }
                     OverviewFocus::Council => {
                         if let Some(_council) = &self.council_screen {
                             CouncilScreen::handle_key_event(self, key_code);
@@ -880,18 +907,24 @@ impl App {
                         } else {
                             false
                         }
-                    },
+                    }
                     OverviewFocus::Messages => {
                         if let Some(messages) = &self.messages_widget {
                             match key_code {
-                                KeyCode::Up => { messages.scroll_up(); true },
-                                KeyCode::Down => { messages.scroll_down(); true },
-                                _ => false
+                                KeyCode::Up => {
+                                    messages.scroll_up();
+                                    true
+                                }
+                                KeyCode::Down => {
+                                    messages.scroll_down();
+                                    true
+                                }
+                                _ => false,
                             }
                         } else {
                             false
                         }
-                    },
+                    }
                 };
 
                 // Only process global keys if the focused widget didn't handle it
@@ -904,12 +937,12 @@ impl App {
                         _ => {}
                     }
                 }
-            },
+            }
             AppMode::Council => {
                 if let Some(_council) = &self.council_screen {
                     CouncilScreen::handle_key_event(self, key_code);
                 }
-            },
+            }
             AppMode::ModuleDetail(source, module_idx) => {
                 match key_code {
                     _ => {
@@ -918,7 +951,9 @@ impl App {
                             ModuleSource::Core => &mut self.core_module_manager,
                             ModuleSource::Wasteland => &mut self.wasteland_module_manager,
                         };
-                        if let Some(event) = module_manager.handle_key_for_module(*module_idx, key_code) {
+                        if let Some(event) =
+                            module_manager.handle_key_for_module(*module_idx, key_code)
+                        {
                             self.events.send(event);
                         }
                     }
@@ -935,14 +970,13 @@ impl App {
             ModuleSource::Wasteland => &self.wasteland_module_manager,
         };
 
-        module_manager.get_modules()
-            .get(module_idx)
-            .and_then(|m| {
-                m.config.bindings
-                    .get("device_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
+        module_manager.get_modules().get(module_idx).and_then(|m| {
+            m.config
+                .bindings
+                .get("device_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
     }
 
     /// Handles the tick event of the terminal.
@@ -958,7 +992,10 @@ impl App {
     }
 
     pub fn send_command(&self, topic: String, command: String) {
-        if let Err(e) = self.message_bus.send_command(topic, command, "survon_tui".to_string()) {
+        if let Err(e) = self
+            .message_bus
+            .send_command(topic, command, "survon_tui".to_string())
+        {
             panic!("Failed to send command: {}", e);
         }
     }
@@ -966,7 +1003,10 @@ impl App {
     pub fn handle_bus_message(&mut self, message: BusMessage) {
         log_debug!("App received bus message: {}", message.topic);
 
-        if let Err(e) = self.database.log_bus_message(&message.topic, &message.payload, &message.source) {
+        if let Err(e) =
+            self.database
+                .log_bus_message(&message.topic, &message.payload, &message.source)
+        {
             log_error!("Failed to log bus message: {}", e);
         }
 
@@ -987,22 +1027,27 @@ impl App {
 
         if let Some(module_name) = module_name {
             // Collect knowledge module names
-            let knowledge_module_names: Vec<String> = self.core_module_manager
+            let knowledge_module_names: Vec<String> = self
+                .core_module_manager
                 .get_knowledge_modules()
                 .iter()
                 .map(|m| m.config.name.clone())
                 .collect();
 
             // Get mutable access to the LLM handler
-            if let Some(llm_handler) = self.core_module_manager
-                .get_handler_mut("llm")
-                .and_then(|h| h.as_any_mut().downcast_mut::<crate::module::strategies::llm::LlmHandler>())
+            if let Some(llm_handler) =
+                self.core_module_manager
+                    .get_handler_mut("llm")
+                    .and_then(|h| {
+                        h.as_any_mut()
+                            .downcast_mut::<crate::module::strategies::llm::LlmHandler>()
+                    })
             {
                 // Submit the message - the handler now does all the work
-                if let Err(e) = llm_handler.submit_message(
-                    module_name,
-                    knowledge_module_names
-                ).await {
+                if let Err(e) = llm_handler
+                    .submit_message(module_name, knowledge_module_names)
+                    .await
+                {
                     log_error!("Failed to submit chat message: {}", e);
                 }
             }

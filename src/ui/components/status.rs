@@ -13,7 +13,7 @@ impl UiComponent {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Yellow))
-                    .title(" Status ")
+                    .title(" Status "),
             )
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center)

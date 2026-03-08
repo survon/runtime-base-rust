@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::module::get_supported_templates;
 
@@ -63,7 +63,11 @@ impl ConfigEditor {
 
                 // Add model field from base_config (special case for LLM)
                 if let Some(model) = base_config.get("model").and_then(|v| v.as_str()) {
-                    let options = vec!["search".to_string(), "summarizer".to_string(), "council".to_string()];
+                    let options = vec![
+                        "search".to_string(),
+                        "summarizer".to_string(),
+                        "council".to_string(),
+                    ];
                     let selected = options.iter().position(|o| o == model).unwrap_or(0);
 
                     fields.push((
@@ -82,25 +86,24 @@ impl ConfigEditor {
         }
 
         // === SECTION 3: Custom bindings (any not yet added) ===
-        let existing_keys: std::collections::HashSet<String> = fields.iter()
-            .filter_map(|(label, field, _)| {
-                match field {
-                    EditorField::DeviceId => Some("device_id".to_string()),
-                    EditorField::DisplayName => Some("display_name".to_string()),
-                    EditorField::UnitLabel => Some("unit_of_measure_label".to_string()),
-                    EditorField::MaxValue => Some("max_value".to_string()),
-                    EditorField::WarnThreshold => Some("warn_threshold".to_string()),
-                    EditorField::DangerThreshold => Some("danger_threshold".to_string()),
-                    EditorField::ChartType => Some("chart_type".to_string()),
-                    EditorField::IsBlinkable => Some("is_blinkable".to_string()),
-                    EditorField::Label => Some("label".to_string()),
-                    EditorField::ToggleOnLabel => Some("toggle_on_label".to_string()),
-                    EditorField::ToggleOffLabel => Some("toggle_off_label".to_string()),
-                    EditorField::Description => Some("description".to_string()),
-                    EditorField::Model => Some("model".to_string()),
-                    EditorField::CustomBinding { key } => Some(key.clone()),
-                    _ => None,
-                }
+        let existing_keys: std::collections::HashSet<String> = fields
+            .iter()
+            .filter_map(|(label, field, _)| match field {
+                EditorField::DeviceId => Some("device_id".to_string()),
+                EditorField::DisplayName => Some("display_name".to_string()),
+                EditorField::UnitLabel => Some("unit_of_measure_label".to_string()),
+                EditorField::MaxValue => Some("max_value".to_string()),
+                EditorField::WarnThreshold => Some("warn_threshold".to_string()),
+                EditorField::DangerThreshold => Some("danger_threshold".to_string()),
+                EditorField::ChartType => Some("chart_type".to_string()),
+                EditorField::IsBlinkable => Some("is_blinkable".to_string()),
+                EditorField::Label => Some("label".to_string()),
+                EditorField::ToggleOnLabel => Some("toggle_on_label".to_string()),
+                EditorField::ToggleOffLabel => Some("toggle_off_label".to_string()),
+                EditorField::Description => Some("description".to_string()),
+                EditorField::Model => Some("model".to_string()),
+                EditorField::CustomBinding { key } => Some(key.clone()),
+                _ => None,
             })
             .collect();
 

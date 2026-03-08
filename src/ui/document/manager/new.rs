@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use crate::ui::document::{
     manager::DocumentManager,
-    viewer::{
-        DocumentViewer,
-        external::ExternalViewer,
-    },
+    viewer::{external::ExternalViewer, DocumentViewer},
 };
 
 impl DocumentManager {

@@ -3,10 +3,10 @@
 
 use crate::module::Module;
 use crate::ui::template::UiTemplate;
-use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Widget};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+use ratatui::prelude::*;
+use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Widget};
 
 #[derive(Debug)]
 pub struct GaugeCard;
@@ -33,13 +33,13 @@ impl GaugeCard {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &'a mut Module
+        module: &'a mut Module,
     ) -> ViewData<'a> {
         // Existing gauge value
         let value = module
             .config
             .bindings
-            .get("a")  // Primary sensor value
+            .get("a") // Primary sensor value
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0);
 
@@ -121,7 +121,11 @@ impl GaugeCard {
             Color::Cyan
         };
 
-        let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+        let connected_icon = if is_connected {
+            "🔗"
+        } else {
+            "⛓️‍💥"
+        };
 
         ViewData {
             value,
@@ -142,7 +146,13 @@ impl GaugeCard {
 }
 
 impl UiTemplate for GaugeCard {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         let ViewData {
             value,
             unit_label,
@@ -168,9 +178,9 @@ impl UiTemplate for GaugeCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1),  // Label
-                Constraint::Length(1),  // Switch visual
-                Constraint::Length(3),  // Status text
+                Constraint::Length(1), // Label
+                Constraint::Length(1), // Switch visual
+                Constraint::Length(3), // Status text
             ])
             .split(inner);
 
@@ -180,7 +190,7 @@ impl UiTemplate for GaugeCard {
             .block(
                 Block::default()
                     .borders(Borders::NONE)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
             .gauge_style(Style::default().fg(gauge_color))
             .percent(percentage)
@@ -189,9 +199,9 @@ impl UiTemplate for GaugeCard {
 
         // NEW: CMD Window Status Indicator
         let cmd_color = match device_mode {
-            "cmd" => Color::Green,      // In CMD window
-            "data" => Color::Yellow,    // In DATA mode
-            _ => Color::Gray,           // Unknown
+            "cmd" => Color::Green,   // In CMD window
+            "data" => Color::Yellow, // In DATA mode
+            _ => Color::Gray,        // Unknown
         };
 
         let cmd_widget = Paragraph::new(cmd_status)
@@ -199,7 +209,7 @@ impl UiTemplate for GaugeCard {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(cmd_color))
-                    .title(" CMD Window ")
+                    .title(" CMD Window "),
             )
             .style(Style::default().fg(cmd_color).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center);
@@ -232,9 +242,9 @@ impl UiTemplate for GaugeCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1),  // Label
-                Constraint::Length(1),  // Switch visual
-                Constraint::Length(3),  // Status text
+                Constraint::Length(1), // Label
+                Constraint::Length(1), // Switch visual
+                Constraint::Length(3), // Status text
             ])
             .split(inner);
 
@@ -244,7 +254,7 @@ impl UiTemplate for GaugeCard {
             .block(
                 Block::default()
                     .borders(Borders::NONE)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
             .gauge_style(Style::default().fg(gauge_color))
             .percent(percentage)
@@ -253,9 +263,9 @@ impl UiTemplate for GaugeCard {
 
         // NEW: CMD Window Status Indicator
         let cmd_color = match device_mode {
-            "cmd" => Color::Green,      // In CMD window
-            "data" => Color::Yellow,    // In DATA mode
-            _ => Color::Gray,           // Unknown
+            "cmd" => Color::Green,   // In CMD window
+            "data" => Color::Yellow, // In DATA mode
+            _ => Color::Gray,        // Unknown
         };
 
         let cmd_widget = Paragraph::new(cmd_status)
@@ -263,7 +273,7 @@ impl UiTemplate for GaugeCard {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(cmd_color))
-                    .title(" CMD Window ")
+                    .title(" CMD Window "),
             )
             .style(Style::default().fg(cmd_color).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center);
@@ -271,7 +281,7 @@ impl UiTemplate for GaugeCard {
     }
 
     fn required_bindings(&self) -> &'static [&'static str] {
-        &["a", "max_value"]  // Minimum required bindings
+        &["a", "max_value"] // Minimum required bindings
     }
 
     fn docs(&self) -> &'static str {

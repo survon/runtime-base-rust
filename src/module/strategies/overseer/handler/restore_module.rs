@@ -3,7 +3,11 @@ use std::fs;
 use super::OverseerHandler;
 
 impl OverseerHandler {
-    pub(in crate::module) fn restore_module(&self, archive_name: &str, new_name: Option<String>) -> color_eyre::Result<()> {
+    pub(in crate::module) fn restore_module(
+        &self,
+        archive_name: &str,
+        new_name: Option<String>,
+    ) -> color_eyre::Result<()> {
         let archive_source = self.archive_path.join(archive_name);
 
         if !archive_source.exists() {

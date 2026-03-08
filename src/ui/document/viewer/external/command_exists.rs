@@ -1,6 +1,4 @@
-use std::{
-    process::Stdio,
-};
+use std::process::Stdio;
 use tokio::process::Command as AsyncCommand;
 
 use super::ExternalViewer;

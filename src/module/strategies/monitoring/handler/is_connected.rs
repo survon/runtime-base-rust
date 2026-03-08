@@ -1,7 +1,4 @@
-use crate::module::strategies::monitoring::handler::{
-    CONNECTION_TIMEOUT,
-    MonitoringHandler
-};
+use crate::module::strategies::monitoring::handler::{MonitoringHandler, CONNECTION_TIMEOUT};
 
 impl MonitoringHandler {
     pub(in crate::module) fn is_connected(&self) -> bool {

@@ -7,7 +7,10 @@ impl ModuleManager {
             return;
         }
 
-        if let Some(current_pos) = displayable_indices.iter().position(|&idx| idx == self.selected_module) {
+        if let Some(current_pos) = displayable_indices
+            .iter()
+            .position(|&idx| idx == self.selected_module)
+        {
             let new_pos = (current_pos + 1) % displayable_indices.len();
             self.selected_module = displayable_indices[new_pos];
         } else {

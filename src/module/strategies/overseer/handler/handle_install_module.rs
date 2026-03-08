@@ -1,9 +1,4 @@
-use super::{
-    installer::ModuleInstaller,
-    HandlerMessage,
-    InstallSource,
-    OverseerHandler,
-};
+use super::{installer::ModuleInstaller, HandlerMessage, InstallSource, OverseerHandler};
 
 impl OverseerHandler {
     pub(in crate::module) fn handle_install_module(&mut self) {

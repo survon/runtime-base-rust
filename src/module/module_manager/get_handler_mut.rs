@@ -1,7 +1,10 @@
 use crate::module::{ModuleHandler, ModuleManager};
 
 impl ModuleManager {
-    pub fn get_handler_mut(&mut self, module_type: &str) -> Option<&mut (dyn ModuleHandler + 'static)> {
+    pub fn get_handler_mut(
+        &mut self,
+        module_type: &str,
+    ) -> Option<&mut (dyn ModuleHandler + 'static)> {
         // First try direct module type lookup
         if let Some(handler) = self.handlers.get_mut(module_type) {
             return Some(&mut **handler);

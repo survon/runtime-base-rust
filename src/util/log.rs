@@ -1,21 +1,19 @@
 // src/util/log.rs
 
 //! Logger Utility - Provides file-based logging for TUI applications
-use std::fs::{File, create_dir_all};
+use chrono::Local;
+use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::{LazyLock,OnceLock};
-use chrono::Local;
+use std::sync::{LazyLock, OnceLock};
 
 pub static DEBUG_ENABLED: OnceLock<bool> = OnceLock::new();
 
 /// Global logger instance
 
-
-pub static LOGGER: LazyLock<Logger> = LazyLock::new(|| {
-    Logger::new("./logs").expect("Failed to initialize logger")
-});
+pub static LOGGER: LazyLock<Logger> =
+    LazyLock::new(|| Logger::new("./logs").expect("Failed to initialize logger"));
 
 /// Log severity levels
 #[derive(Debug, Clone, Copy)]
@@ -58,9 +56,7 @@ pub struct Logger {
 impl Logger {
     /// Create a new logger with the specified directory
     pub fn new(log_dir: &str) -> std::io::Result<Self> {
-        DEBUG_ENABLED.get_or_init(|| {
-            std::env::var("DEBUG").unwrap_or_default() == "true"
-        });
+        DEBUG_ENABLED.get_or_init(|| std::env::var("DEBUG").unwrap_or_default() == "true");
 
         let log_dir = PathBuf::from(log_dir);
 

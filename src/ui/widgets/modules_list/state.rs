@@ -63,51 +63,81 @@ impl ModulesListStateMachine {
         }
     }
 
-    fn handle_select_next(mut state: ModulesListState, module_count: usize) -> (ModulesListState, Vec<ModulesListEvent>) {
+    fn handle_select_next(
+        mut state: ModulesListState,
+        module_count: usize,
+    ) -> (ModulesListState, Vec<ModulesListEvent>) {
         if module_count > 0 {
             state.selected_index = (state.selected_index + 1) % module_count;
-            (state.clone(), vec![
-                ModulesListEvent::ModuleSelected { index: state.selected_index },
-                ModulesListEvent::StateChanged(state),
-            ])
+            (
+                state.clone(),
+                vec![
+                    ModulesListEvent::ModuleSelected {
+                        index: state.selected_index,
+                    },
+                    ModulesListEvent::StateChanged(state),
+                ],
+            )
         } else {
             (state, vec![])
         }
     }
 
-    fn handle_select_previous(mut state: ModulesListState, module_count: usize) -> (ModulesListState, Vec<ModulesListEvent>) {
+    fn handle_select_previous(
+        mut state: ModulesListState,
+        module_count: usize,
+    ) -> (ModulesListState, Vec<ModulesListEvent>) {
         if module_count > 0 {
             state.selected_index = if state.selected_index == 0 {
                 module_count - 1
             } else {
                 state.selected_index - 1
             };
-            (state.clone(), vec![
-                ModulesListEvent::ModuleSelected { index: state.selected_index },
-                ModulesListEvent::StateChanged(state),
-            ])
+            (
+                state.clone(),
+                vec![
+                    ModulesListEvent::ModuleSelected {
+                        index: state.selected_index,
+                    },
+                    ModulesListEvent::StateChanged(state),
+                ],
+            )
         } else {
             (state, vec![])
         }
     }
 
-    fn handle_select_module(mut state: ModulesListState, index: usize, module_count: usize) -> (ModulesListState, Vec<ModulesListEvent>) {
+    fn handle_select_module(
+        mut state: ModulesListState,
+        index: usize,
+        module_count: usize,
+    ) -> (ModulesListState, Vec<ModulesListEvent>) {
         if index < module_count {
             state.selected_index = index;
-            (state.clone(), vec![
-                ModulesListEvent::ModuleSelected { index },
-                ModulesListEvent::StateChanged(state),
-            ])
+            (
+                state.clone(),
+                vec![
+                    ModulesListEvent::ModuleSelected { index },
+                    ModulesListEvent::StateChanged(state),
+                ],
+            )
         } else {
             (state, vec![])
         }
     }
 
-    fn handle_toggle_template(mut state: ModulesListState) -> (ModulesListState, Vec<ModulesListEvent>) {
+    fn handle_toggle_template(
+        mut state: ModulesListState,
+    ) -> (ModulesListState, Vec<ModulesListEvent>) {
         state.use_template = !state.use_template;
-        (state.clone(), vec![
-            ModulesListEvent::TemplateModeChanged { enabled: state.use_template },
-            ModulesListEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                ModulesListEvent::TemplateModeChanged {
+                    enabled: state.use_template,
+                },
+                ModulesListEvent::StateChanged(state),
+            ],
+        )
     }
 }

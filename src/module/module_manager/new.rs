@@ -1,13 +1,6 @@
-use std::{
-    collections::HashMap,
-    path::PathBuf,
+use std::{collections::HashMap, path::PathBuf};
 
-};
-
-use crate::module::{
-    ModuleManagerView,
-    ModuleManager
-};
+use crate::module::{ModuleManager, ModuleManagerView};
 
 impl ModuleManager {
     pub fn new(manifests_path: PathBuf, namespace: String) -> Self {

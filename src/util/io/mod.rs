@@ -1,9 +1,9 @@
+pub mod ble_scheduler;
 pub mod bus;
+pub mod discovery;
 pub mod event;
 pub mod serial;
 pub mod transport;
-pub mod discovery;
-pub mod ble_scheduler;
 
 pub fn get_all_event_message_topics() -> Vec<String> {
     vec![
@@ -19,7 +19,6 @@ pub fn get_all_event_message_topics() -> Vec<String> {
         "device_discovered".to_string(),
         "device_registration".to_string(),
         "device_registered".to_string(),
-
         // static for now... code smell! TODO FIX AND INFER
         "arduino_sensor_001".to_string(),
         "a01".to_string(),

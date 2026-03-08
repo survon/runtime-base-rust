@@ -1,16 +1,16 @@
-mod trait_side_quest_database;
-mod init_schema;
-mod create_side_quest;
-mod get_active_side_quests;
 mod complete_side_quest;
+mod create_side_quest;
 mod delete_side_quest;
+mod get_active_side_quests;
 mod get_quests_by_topic;
 mod get_quests_with_deadlines;
+mod init_schema;
+mod trait_side_quest_database;
 
 use chrono::{DateTime, Utc};
 
+use super::{QuestUrgency, SideQuest};
 use crate::util::database::Database;
-use super::{SideQuest, QuestUrgency};
 
 pub use trait_side_quest_database::SideQuestDatabase;
 
@@ -27,7 +27,8 @@ fn parse_quest_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SideQuest> {
     };
 
     let trigger_date: Option<String> = row.get(5)?;
-    let trigger_parsed = trigger_date.and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+    let trigger_parsed = trigger_date
+        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
         .map(|dt| dt.with_timezone(&Utc));
 
     let created_at: String = row.get(6)?;
@@ -36,7 +37,8 @@ fn parse_quest_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SideQuest> {
         .unwrap_or_else(|_| Utc::now());
 
     let completed_at: Option<String> = row.get(7)?;
-    let completed_parsed = completed_at.and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+    let completed_parsed = completed_at
+        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
         .map(|dt| dt.with_timezone(&Utc));
 
     Ok(SideQuest {

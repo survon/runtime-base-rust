@@ -6,7 +6,8 @@ impl ChartCard {
     pub(super) fn get_history(module: &Module) -> Vec<(f64, f64, i64)> {
         if let Some(history_json) = module.config.bindings.get("_chart_history") {
             if let Some(arr) = history_json.as_array() {
-                return arr.iter()
+                return arr
+                    .iter()
                     .filter_map(|v| {
                         let obj = v.as_object()?;
                         let a = obj.get("a")?.as_f64()?;

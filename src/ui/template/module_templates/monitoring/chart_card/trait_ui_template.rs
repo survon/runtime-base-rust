@@ -1,17 +1,17 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
+use ratatui::{buffer::Buffer, layout::Rect};
 
-use crate::{
-    module::Module,
-    ui::template::UiTemplate,
-};
+use crate::{module::Module, ui::template::UiTemplate};
 
 use super::ChartCard;
 
 impl UiTemplate for ChartCard {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         self._render_overview_cta(is_selected, area, buf, module)
     }
 

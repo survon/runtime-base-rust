@@ -1,11 +1,8 @@
-use crate::util::{
-    database::Database,
-    io::bus::MessageBus,
-};
 use crate::module::strategies::side_quest::{
     handler::{CreateStep, SideQuestHandler, SideQuestView},
-    QuestUrgency
+    QuestUrgency,
 };
+use crate::util::{database::Database, io::bus::MessageBus};
 
 impl SideQuestHandler {
     pub fn new(database: Database, message_bus: MessageBus) -> Self {

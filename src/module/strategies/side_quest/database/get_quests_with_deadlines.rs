@@ -1,13 +1,13 @@
 use chrono::Utc;
 
+use crate::module::strategies::side_quest::{database::parse_quest_row, SideQuest};
 use crate::util::database::Database;
-use crate::module::strategies::side_quest::{
-    database::parse_quest_row,
-    SideQuest,
-};
 
 impl Database {
-    pub(in crate::module) fn _side_quest__get_quests_with_deadlines(&self, days_ahead: i64) -> rusqlite::Result<Vec<SideQuest>> {
+    pub(in crate::module) fn _side_quest__get_quests_with_deadlines(
+        &self,
+        days_ahead: i64,
+    ) -> rusqlite::Result<Vec<SideQuest>> {
         let cutoff = (Utc::now() + chrono::Duration::days(days_ahead)).to_rfc3339();
         let conn = self.app_conn.lock().unwrap();
 
@@ -20,9 +20,7 @@ impl Database {
              ORDER BY trigger_date ASC"
         )?;
 
-        let quests = stmt.query_map([cutoff], |row| {
-            parse_quest_row(row)
-        })?;
+        let quests = stmt.query_map([cutoff], |row| parse_quest_row(row))?;
 
         quests.collect()
     }

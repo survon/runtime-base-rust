@@ -1,28 +1,28 @@
 mod base_module_config;
-mod service_discovery_config;
 mod generic_config;
-mod typed_module_config;
 mod is_blinkable;
+mod service_discovery_config;
+mod typed_module_config;
 mod validation;
 
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub use crate::module::strategies::{
-    album::{AlbumConfig, AlbumBindings, Track},
-    com::{ComConfig, ComBindings},
-    knowledge::{KnowledgeConfig, KnowledgeBindings},
-    llm::{LlmConfig, LlmBindings},
-    monitoring::{MonitoringConfig, MonitoringBindings},
-    overseer::{OverseerConfig, OverseerBindings},
-    side_quest::{SideQuestConfig, SideQuestBindings},
-    valve_control::{ValveControlConfig, ValveControlBindings},
+    album::{AlbumBindings, AlbumConfig, Track},
+    com::{ComBindings, ComConfig},
+    knowledge::{KnowledgeBindings, KnowledgeConfig},
+    llm::{LlmBindings, LlmConfig},
+    monitoring::{MonitoringBindings, MonitoringConfig},
+    overseer::{OverseerBindings, OverseerConfig},
+    side_quest::{SideQuestBindings, SideQuestConfig},
+    valve_control::{ValveControlBindings, ValveControlConfig},
 };
 
 pub use base_module_config::BaseModuleConfig;
 pub use generic_config::GenericConfig;
-pub use typed_module_config::TypedModuleConfig;
 pub use service_discovery_config::ServiceDiscoveryConfig;
+pub use typed_module_config::TypedModuleConfig;
 pub use validation::{ConfigValidator, ValidationError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +43,6 @@ pub struct ModuleConfig {
     pub rules: Option<HashMap<String, String>>,
 }
 
-
 /// Supported template list
 pub fn get_supported_templates() -> Vec<&'static str> {
     vec![
@@ -55,7 +54,7 @@ pub fn get_supported_templates() -> Vec<&'static str> {
         "llm_card",
         "side_quest_card",
         "overseer_card",
-        "",  // Empty template for hidden modules
+        "", // Empty template for hidden modules
     ]
 }
 

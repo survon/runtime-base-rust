@@ -1,7 +1,7 @@
 // src/widgets/jukebox/database.rs
+use crate::util::database::Database;
 use rusqlite::{params, Result};
 use serde::{Deserialize, Serialize};
-use crate::util::database::Database;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Album {
@@ -94,7 +94,7 @@ impl JukeboxDatabase for Database {
         let conn = self.app_conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, module_name, title, artist, year, genre, credits
-             FROM albums ORDER BY artist, title"
+             FROM albums ORDER BY artist, title",
         )?;
 
         let albums = stmt.query_map([], |row| {
@@ -140,7 +140,7 @@ impl JukeboxDatabase for Database {
         let conn = self.app_conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, album_id, track_number, title, duration_seconds, file_path, artist
-             FROM tracks WHERE album_id = ?1 ORDER BY track_number"
+             FROM tracks WHERE album_id = ?1 ORDER BY track_number",
         )?;
 
         let tracks = stmt.query_map([album_id], |row| {

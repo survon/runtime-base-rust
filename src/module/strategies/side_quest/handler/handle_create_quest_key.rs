@@ -1,59 +1,59 @@
 use chrono::{Duration, Utc};
 use crossterm::event::KeyCode;
 
-use crate::util::io::event::AppEvent;
 use crate::module::strategies::side_quest::{
     handler::{CreateStep, SideQuestHandler, SideQuestView},
-    QuestUrgency
+    QuestUrgency,
 };
+use crate::util::io::event::AppEvent;
 
 impl SideQuestHandler {
-    pub(in crate::module) fn handle_create_quest_key(&mut self, key_code: KeyCode) -> Option<AppEvent> {
+    pub(in crate::module) fn handle_create_quest_key(
+        &mut self,
+        key_code: KeyCode,
+    ) -> Option<AppEvent> {
         match self.create_step {
-            CreateStep::Title => {
-                match key_code {
-                    KeyCode::Char(c) => {
-                        self.form_title.push(c);
-                        None
-                    }
-                    KeyCode::Backspace => {
-                        self.form_title.pop();
-                        None
-                    }
-                    KeyCode::Enter if !self.form_title.is_empty() => {
-                        self.create_step = CreateStep::Description;
-                        self.status_message = Some("Enter description (optional, Enter to skip)...".to_string());
-                        None
-                    }
-                    KeyCode::Esc => {
-                        self.current_view = SideQuestView::QuestList;
-                        Some(AppEvent::NoOp)
-                    }
-                    _ => None,
+            CreateStep::Title => match key_code {
+                KeyCode::Char(c) => {
+                    self.form_title.push(c);
+                    None
                 }
-            }
-            CreateStep::Description => {
-                match key_code {
-                    KeyCode::Char(c) => {
-                        self.form_description.push(c);
-                        None
-                    }
-                    KeyCode::Backspace => {
-                        self.form_description.pop();
-                        None
-                    }
-                    KeyCode::Enter => {
-                        self.create_step = CreateStep::Topic;
-                        self.status_message = Some("Select topic...".to_string());
-                        None
-                    }
-                    KeyCode::Esc => {
-                        self.current_view = SideQuestView::QuestList;
-                        Some(AppEvent::NoOp)
-                    }
-                    _ => None,
+                KeyCode::Backspace => {
+                    self.form_title.pop();
+                    None
                 }
-            }
+                KeyCode::Enter if !self.form_title.is_empty() => {
+                    self.create_step = CreateStep::Description;
+                    self.status_message =
+                        Some("Enter description (optional, Enter to skip)...".to_string());
+                    None
+                }
+                KeyCode::Esc => {
+                    self.current_view = SideQuestView::QuestList;
+                    Some(AppEvent::NoOp)
+                }
+                _ => None,
+            },
+            CreateStep::Description => match key_code {
+                KeyCode::Char(c) => {
+                    self.form_description.push(c);
+                    None
+                }
+                KeyCode::Backspace => {
+                    self.form_description.pop();
+                    None
+                }
+                KeyCode::Enter => {
+                    self.create_step = CreateStep::Topic;
+                    self.status_message = Some("Select topic...".to_string());
+                    None
+                }
+                KeyCode::Esc => {
+                    self.current_view = SideQuestView::QuestList;
+                    Some(AppEvent::NoOp)
+                }
+                _ => None,
+            },
             CreateStep::Topic => {
                 match key_code {
                     KeyCode::Up => {
@@ -103,7 +103,8 @@ impl SideQuestHandler {
                         if let Some(urgency) = urgencies.get(self.selected_index) {
                             self.form_urgency = urgency.clone();
                             self.create_step = CreateStep::TriggerDate;
-                            self.status_message = Some("Set trigger date (Enter to skip)...".to_string());
+                            self.status_message =
+                                Some("Set trigger date (Enter to skip)...".to_string());
                         }
                         None
                     }
@@ -147,19 +148,17 @@ impl SideQuestHandler {
                     _ => None,
                 }
             }
-            CreateStep::Confirm => {
-                match key_code {
-                    KeyCode::Char('y') | KeyCode::Enter => {
-                        self.save_quest();
-                        None
-                    }
-                    KeyCode::Char('n') | KeyCode::Esc => {
-                        self.current_view = SideQuestView::QuestList;
-                        Some(AppEvent::NoOp)
-                    }
-                    _ => None,
+            CreateStep::Confirm => match key_code {
+                KeyCode::Char('y') | KeyCode::Enter => {
+                    self.save_quest();
+                    None
                 }
-            }
+                KeyCode::Char('n') | KeyCode::Esc => {
+                    self.current_view = SideQuestView::QuestList;
+                    Some(AppEvent::NoOp)
+                }
+                _ => None,
+            },
         }
     }
 }

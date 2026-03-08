@@ -1,15 +1,8 @@
 use std::collections::HashMap;
 
-use crate::ui::document::{
-    viewer::{
-        DocumentViewer,
-        DocumentViewStrategy,
-        strategies::{
-            MediaViewStrategy,
-            PdfViewStrategy,
-            TextViewStrategy,
-        }
-    }
+use crate::ui::document::viewer::{
+    strategies::{MediaViewStrategy, PdfViewStrategy, TextViewStrategy},
+    DocumentViewStrategy, DocumentViewer,
 };
 
 impl DocumentViewer {

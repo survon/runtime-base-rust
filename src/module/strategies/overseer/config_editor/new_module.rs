@@ -1,8 +1,4 @@
-use super::{
-    ConfigEditor,
-    EditorField,
-    FieldValue,
-};
+use super::{ConfigEditor, EditorField, FieldValue};
 
 impl ConfigEditor {
     /// Create a new module from scratch - starts with module type selection
@@ -27,8 +23,13 @@ impl ConfigEditor {
         // Second field: Module Type (enum)
         fields.push((
             "Module Type".to_string(),
-            EditorField::CustomBinding { key: "module_type".to_string() },
-            FieldValue::Enum { options: module_types, selected: 0 },
+            EditorField::CustomBinding {
+                key: "module_type".to_string(),
+            },
+            FieldValue::Enum {
+                options: module_types,
+                selected: 0,
+            },
         ));
 
         Self {

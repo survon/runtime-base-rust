@@ -1,18 +1,22 @@
+use ratatui::{buffer::Buffer, layout::Rect};
 use std::time::{Duration, Instant};
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
 
 use crate::module::Module;
 
 impl Module {
-    pub fn render_overview_cta(&mut self, is_selected: bool, area: Rect, buf: &mut Buffer) -> std::result::Result<(), String> {
+    pub fn render_overview_cta(
+        &mut self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+    ) -> std::result::Result<(), String> {
         self.get_template()?;
 
         if self.config.is_blinkable() {
             // Get blink interval from bindings (default 500ms)
-            let blink_interval_ms = self.config.bindings
+            let blink_interval_ms = self
+                .config
+                .bindings
                 .get("blink_interval_ms")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(500);
@@ -25,7 +29,9 @@ impl Module {
             }
         }
 
-        let mut template = self.cached_template.take()
+        let mut template = self
+            .cached_template
+            .take()
             .ok_or_else(|| "Template not loaded".to_string())?;
 
         template.render_overview_cta(is_selected, area, buf, self);

@@ -1,20 +1,17 @@
 mod get_view_data;
-mod render_overview_cta;
-mod render_main_menu;
-mod render_pending_trust;
 mod render_all_devices;
-mod render_install_registry;
-mod render_manage_modules;
 mod render_archived_modules;
 mod render_config_editor;
-mod trait_ui_template;
+mod render_install_registry;
+mod render_main_menu;
+mod render_manage_modules;
+mod render_overview_cta;
+mod render_pending_trust;
 mod trait_default;
+mod trait_ui_template;
 
 use color_eyre::owo_colors::OwoColorize;
-use ratatui::{
-    prelude::*,
-    widgets::Widget,
-};
+use ratatui::{prelude::*, widgets::Widget};
 
 use crate::ui::template::UiTemplate;
 

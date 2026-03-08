@@ -11,7 +11,8 @@ impl ConfigValidator {
             return Err(ValidationError {
                 field: "bindings".to_string(),
                 error: "Must have either toggle switch fields or activity_log".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         Ok(())

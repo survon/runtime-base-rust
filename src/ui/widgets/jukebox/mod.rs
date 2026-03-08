@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
 use crate::module::BaseModuleConfig;
+use serde::{Deserialize, Serialize};
 
-pub mod state;
 pub mod actor;
-pub mod widget; 
-pub mod ingester;
 pub mod database;
+pub mod ingester;
+pub mod state;
+pub mod widget;

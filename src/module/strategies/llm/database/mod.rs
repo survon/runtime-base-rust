@@ -1,10 +1,10 @@
 mod chat_message;
+mod clear_knowledge;
+mod get_chat_history;
 mod init_llm_schema;
 mod insert_chat_message;
-mod get_chat_history;
 mod insert_knowledge_chunk;
 mod search_knowledge;
-mod clear_knowledge;
 mod trait_llm_database;
 
 use rusqlite::{params, Result};
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::log_debug;
 use crate::util::database::Database;
 
-pub use chat_message::{ChatMessage};
+pub use chat_message::ChatMessage;
 pub use trait_llm_database::LlmDatabase;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,12 +39,18 @@ fn sanitize_fts5_query(query: &str) -> String {
         .join(" ")
 }
 
-fn execute_search(db: &Database, search_query: &str, domains: &[String], limit: usize) -> Result<Vec<KnowledgeChunk>> {
+fn execute_search(
+    db: &Database,
+    search_query: &str,
+    domains: &[String],
+    limit: usize,
+) -> Result<Vec<KnowledgeChunk>> {
     let conn = db.knowledge_conn.lock().unwrap();
 
     let sql = if domains.is_empty() {
         "SELECT rowid, source_file, domain, category, title, body, chunk_index, metadata
-         FROM knowledge WHERE knowledge MATCH ?1 ORDER BY rank LIMIT ?2".to_string()
+         FROM knowledge WHERE knowledge MATCH ?1 ORDER BY rank LIMIT ?2"
+            .to_string()
     } else {
         let domain_placeholders = domains.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         format!(

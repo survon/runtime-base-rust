@@ -1,7 +1,7 @@
 use std::fs;
 
-use crate::module::strategies::overseer::config_editor::ConfigEditor;
 use super::{OverseerHandler, WastelandView};
+use crate::module::strategies::overseer::config_editor::ConfigEditor;
 
 impl OverseerHandler {
     pub(in crate::module) fn handle_manage_modules_enter(&mut self) {

@@ -5,9 +5,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem},
 };
 
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
     pub(super) fn render_main_menu(
@@ -45,14 +45,14 @@ impl OverseerCard {
             .direction(Direction::Vertical)
             .constraints(if has_status {
                 vec![
-                    Constraint::Min(1),     // Menu
-                    Constraint::Length(3),  // Status/Scan
-                    Constraint::Length(3),  // Help
+                    Constraint::Min(1),    // Menu
+                    Constraint::Length(3), // Status/Scan
+                    Constraint::Length(3), // Help
                 ]
             } else {
                 vec![
-                    Constraint::Min(1),     // Menu
-                    Constraint::Length(3),  // Help
+                    Constraint::Min(1),    // Menu
+                    Constraint::Length(3), // Help
                 ]
             })
             .split(area);
@@ -76,13 +76,12 @@ impl OverseerCard {
             })
             .collect();
 
-        let list = List::new(list_items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-                    .title(" Main Menu ")
-            );
+        let list = List::new(list_items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+                .title(" Main Menu "),
+        );
         Widget::render(list, chunks[0], buf);
 
         // Status message if present

@@ -3,8 +3,12 @@ use crate::ui::document::content::DocumentContent;
 use super::ExternalViewer;
 
 impl ExternalViewer {
-    pub(super) fn create_document_html(&self, content: &DocumentContent) -> color_eyre::Result<String> {
-        let mut html = String::from(r#"
+    pub(super) fn create_document_html(
+        &self,
+        content: &DocumentContent,
+    ) -> color_eyre::Result<String> {
+        let mut html = String::from(
+            r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -39,15 +43,18 @@ impl ExternalViewer {
 <body>
     <button class="close-btn" onclick="window.close()">Close</button>
     <div id="content">
-"#);
+"#,
+        );
 
         // Process text content and replace image placeholders
         let mut processed_text = content.text.clone();
 
         for (image_id, image_path) in &content.image_mappings {
             let placeholder = format!("{{{{IMAGE_{}}}}}", image_id);
-            let img_tag = format!(r#"<img src="file://{}" alt="{}" title="{}" />"#,
-                                  image_path, image_id, image_id);
+            let img_tag = format!(
+                r#"<img src="file://{}" alt="{}" title="{}" />"#,
+                image_path, image_id, image_id
+            );
             processed_text = processed_text.replace(&placeholder, &img_tag);
         }
 

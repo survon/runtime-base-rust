@@ -9,7 +9,7 @@ use crate::module::Module;
 use crate::ui::components::UiComponent;
 use crate::util::string::StringUtils;
 
-use super::{ViewData, OverseerCard};
+use super::{OverseerCard, ViewData};
 
 impl OverseerCard {
     pub(super) fn render_overview_cta(
@@ -46,14 +46,9 @@ impl OverseerCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(if has_status || is_scanning {
-                vec![
-                    Constraint::Min(1),
-                    Constraint::Length(3),
-                ]
+                vec![Constraint::Min(1), Constraint::Length(3)]
             } else {
-                vec![
-                    Constraint::Min(1),
-                ]
+                vec![Constraint::Min(1)]
             })
             .split(inner_area);
 

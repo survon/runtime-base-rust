@@ -2,16 +2,17 @@ mod parse_content;
 
 use std::path::Path;
 
-use crate::ui::document::{
-    content::DocumentContent,
-    viewer::DocumentViewStrategy,
-};
+use crate::ui::document::{content::DocumentContent, viewer::DocumentViewStrategy};
 
 #[derive(Debug)]
 pub struct PdfViewStrategy;
 
 impl DocumentViewStrategy for PdfViewStrategy {
-    fn parse_content(&self, file_path: &Path, cache_dir: &Path) -> color_eyre::Result<DocumentContent> {
+    fn parse_content(
+        &self,
+        file_path: &Path,
+        cache_dir: &Path,
+    ) -> color_eyre::Result<DocumentContent> {
         self._parse_content(file_path, cache_dir)
     }
 

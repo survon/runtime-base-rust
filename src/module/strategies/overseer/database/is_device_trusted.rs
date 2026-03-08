@@ -1,8 +1,11 @@
-use rusqlite::params;
 use crate::util::database::Database;
+use rusqlite::params;
 
 impl Database {
-    pub(in crate::module) fn _overseer__is_device_trusted(&self, mac_address: &str) -> rusqlite::Result<bool> {
+    pub(in crate::module) fn _overseer__is_device_trusted(
+        &self,
+        mac_address: &str,
+    ) -> rusqlite::Result<bool> {
         let conn = self.app_conn.lock().unwrap();
 
         let trusted: rusqlite::Result<i64, _> = conn.query_row(

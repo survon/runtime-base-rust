@@ -2,23 +2,20 @@
 //! LLM Module - UI and handler for LLM interactions
 //! Core LLM logic is now in util::llm
 
-pub mod handler;
 pub mod database;
+pub mod handler;
 mod validation;
 
-pub use database::{LlmDatabase};
-pub use handler::{LlmHandler};
+pub use database::LlmDatabase;
+pub use handler::LlmHandler;
 
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     log_debug,
-    util::{
-        database::Database,
-        llm::{LlmService}
-    },
     module::{BaseModuleConfig, ModuleManager, ServiceDiscoveryConfig},
+    util::{database::Database, llm::LlmService},
 };
 
 /// LLM module (chat interfaces)
@@ -57,7 +54,9 @@ pub async fn create_llm_service_if_available(
     let llm_modules = module_manager.get_modules_by_type("llm");
 
     if let Some(llm_module) = llm_modules.first() {
-        let model = llm_module.config.bindings
+        let model = llm_module
+            .config
+            .bindings
             .get("model")
             .and_then(|v| v.as_str())
             .unwrap_or("search");
@@ -67,7 +66,7 @@ pub async fn create_llm_service_if_available(
                 // Council mode - service will be created per-advisor dynamically
                 log_debug!("Council mode: services created on-demand");
                 Ok(Some(LlmService::new(database.clone())))
-            },
+            }
             _ => {
                 // Existing local search/summarizer mode
                 log_debug!("Creating search-powered knowledge service");
@@ -79,4 +78,3 @@ pub async fn create_llm_service_if_available(
         Ok(None)
     }
 }
-

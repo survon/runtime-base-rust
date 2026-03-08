@@ -1,6 +1,6 @@
 // src/widgets/messages_window/state.rs
-use serde::{Deserialize, Serialize};
 use crate::util::io::bus::BusMessage;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessagesState {
@@ -70,10 +70,15 @@ impl MessagesStateMachine {
     fn handle_scroll_up(mut state: MessagesState) -> (MessagesState, Vec<MessagesEvent>) {
         if state.scroll_offset > 0 {
             state.scroll_offset -= 1;
-            (state.clone(), vec![
-                MessagesEvent::Scrolled { offset: state.scroll_offset },
-                MessagesEvent::StateChanged(state),
-            ])
+            (
+                state.clone(),
+                vec![
+                    MessagesEvent::Scrolled {
+                        offset: state.scroll_offset,
+                    },
+                    MessagesEvent::StateChanged(state),
+                ],
+            )
         } else {
             (state, vec![])
         }
@@ -83,22 +88,35 @@ impl MessagesStateMachine {
         // Note: max scroll is calculated based on visible_lines which isn't in state
         // We'll need to pass this contextually or store it
         state.scroll_offset += 1;
-        (state.clone(), vec![
-            MessagesEvent::Scrolled { offset: state.scroll_offset },
-            MessagesEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                MessagesEvent::Scrolled {
+                    offset: state.scroll_offset,
+                },
+                MessagesEvent::StateChanged(state),
+            ],
+        )
     }
 
     fn handle_scroll_to_bottom(mut state: MessagesState) -> (MessagesState, Vec<MessagesEvent>) {
         // This will be clamped by the widget based on visible lines
         state.scroll_offset = state.messages.len();
-        (state.clone(), vec![
-            MessagesEvent::Scrolled { offset: state.scroll_offset },
-            MessagesEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                MessagesEvent::Scrolled {
+                    offset: state.scroll_offset,
+                },
+                MessagesEvent::StateChanged(state),
+            ],
+        )
     }
 
-    fn handle_add_message(mut state: MessagesState, message: BusMessage) -> (MessagesState, Vec<MessagesEvent>) {
+    fn handle_add_message(
+        mut state: MessagesState,
+        message: BusMessage,
+    ) -> (MessagesState, Vec<MessagesEvent>) {
         state.messages.push(message.clone());
 
         // Trim old messages
@@ -111,13 +129,19 @@ impl MessagesStateMachine {
 
         let total = state.messages.len();
 
-        (state.clone(), vec![
-            MessagesEvent::MessageAdded { message, total },
-            MessagesEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                MessagesEvent::MessageAdded { message, total },
+                MessagesEvent::StateChanged(state),
+            ],
+        )
     }
 
-    fn handle_set_visible_lines(state: MessagesState, _lines: usize) -> (MessagesState, Vec<MessagesEvent>) {
+    fn handle_set_visible_lines(
+        state: MessagesState,
+        _lines: usize,
+    ) -> (MessagesState, Vec<MessagesEvent>) {
         // This doesn't change state, just used for rendering calculations
         (state, vec![])
     }

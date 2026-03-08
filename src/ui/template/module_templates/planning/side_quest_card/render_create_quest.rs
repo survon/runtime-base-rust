@@ -5,17 +5,12 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
 };
 
+use super::{SideQuestCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{SideQuestCard, ViewData};
 
 impl SideQuestCard {
-    pub(super) fn render_create_quest(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        module: &mut Module,
-    ) {
+    pub(super) fn render_create_quest(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let ViewData {
             border_color,
             selected_index,
@@ -32,9 +27,9 @@ impl SideQuestCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // Form content
-                Constraint::Length(3),  // Help
+                Constraint::Length(3), // Title
+                Constraint::Min(1),    // Form content
+                Constraint::Length(3), // Help
             ])
             .split(area);
 
@@ -43,9 +38,13 @@ impl SideQuestCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Green))
+                    .border_style(Style::default().fg(Color::Green)),
             )
-            .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
@@ -56,22 +55,25 @@ impl SideQuestCard {
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .border_style(Style::default().fg(border_color))
+                            .border_style(Style::default().fg(border_color)),
                     )
                     .style(Style::default().fg(Color::White))
                     .alignment(Alignment::Left);
                 Widget::render(content, chunks[1], buf);
             }
             "Description" => {
-                let content = Paragraph::new(format!("\nDescription (optional):\n\n{}_", form_description))
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .border_style(Style::default().fg(border_color))
-                    )
-                    .style(Style::default().fg(Color::White))
-                    .alignment(Alignment::Left)
-                    .wrap(Wrap { trim: true });
+                let content = Paragraph::new(format!(
+                    "\nDescription (optional):\n\n{}_",
+                    form_description
+                ))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(border_color)),
+                )
+                .style(Style::default().fg(Color::White))
+                .alignment(Alignment::Left)
+                .wrap(Wrap { trim: true });
                 Widget::render(content, chunks[1], buf);
             }
             "Topic" => {
@@ -93,13 +95,12 @@ impl SideQuestCard {
                     })
                     .collect();
 
-                let list = List::new(list_items)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .border_style(Style::default().fg(border_color))
-                            .title(" Select Topic ")
-                    );
+                let list = List::new(list_items).block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(border_color))
+                        .title(" Select Topic "),
+                );
                 Widget::render(list, chunks[1], buf);
             }
             "Urgency" => {
@@ -130,28 +131,29 @@ impl SideQuestCard {
                     })
                     .collect();
 
-                let list = List::new(list_items)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .border_style(Style::default().fg(border_color))
-                            .title(" Select Urgency ")
-                    );
+                let list = List::new(list_items).block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(border_color))
+                        .title(" Select Urgency "),
+                );
                 Widget::render(list, chunks[1], buf);
             }
             "TriggerDate" => {
-                let content = Paragraph::new("\nOptional: Set a trigger date\n\n\
+                let content = Paragraph::new(
+                    "\nOptional: Set a trigger date\n\n\
                     [1] One week from now\n\
                     [2] One month from now\n\
                     [3] Three months from now\n\n\
-                    [Ent] Skip (no deadline)")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .border_style(Style::default().fg(border_color))
-                    )
-                    .style(Style::default().fg(Color::White))
-                    .alignment(Alignment::Left);
+                    [Ent] Skip (no deadline)",
+                )
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(border_color)),
+                )
+                .style(Style::default().fg(Color::White))
+                .alignment(Alignment::Left);
                 Widget::render(content, chunks[1], buf);
             }
             "Confirm" => {
@@ -169,7 +171,7 @@ impl SideQuestCard {
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
-                            .border_style(Style::default().fg(Color::Green))
+                            .border_style(Style::default().fg(Color::Green)),
                     )
                     .style(Style::default().fg(Color::White))
                     .alignment(Alignment::Left)

@@ -1,7 +1,7 @@
 // src/widgets/modules_list/widget.rs
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Constraint, Rect, Layout, Direction},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, Paragraph, Widget, Wrap},
@@ -63,7 +63,10 @@ impl ModulesListWidget {
 
         // Create main container
         let container = Block::bordered()
-            .title(format!(" {}Modules ({}/{} 👁️) ", title_namespace_prefix, displayable_count, modules_count))
+            .title(format!(
+                " {}Modules ({}/{} 👁️) ",
+                title_namespace_prefix, displayable_count, modules_count
+            ))
             .style(border_style)
             .border_type(BorderType::Rounded);
         let inner_area = container.inner(area);
@@ -71,9 +74,8 @@ impl ModulesListWidget {
 
         // Calculate grid layout
         let num_rows = (displayable_count + MODULES_PER_ROW - 1) / MODULES_PER_ROW;
-        let row_constraints: Vec<Constraint> = (0..num_rows)
-            .map(|_| Constraint::Length(8))
-            .collect();
+        let row_constraints: Vec<Constraint> =
+            (0..num_rows).map(|_| Constraint::Length(8)).collect();
 
         let rows = Layout::default()
             .direction(Direction::Vertical)
@@ -102,7 +104,9 @@ impl ModulesListWidget {
 
             for col_idx in 0..3 {
                 let displayable_idx = start_idx + col_idx;
-                if displayable_idx >= displayable_count { break; }
+                if displayable_idx >= displayable_count {
+                    break;
+                }
 
                 let actual_module_idx = displayable_to_actual[displayable_idx];
                 let col_area = cols[col_idx];
@@ -114,7 +118,8 @@ impl ModulesListWidget {
                 let needs_redraw = {
                     let modules = module_manager.get_modules_mut();
                     if let Some(module) = modules.get_mut(actual_module_idx) {
-                        module.config.is_blinkable() && module.render_state.update_blink(blink_interval)
+                        module.config.is_blinkable()
+                            && module.render_state.update_blink(blink_interval)
                     } else {
                         false
                     }
@@ -129,18 +134,19 @@ impl ModulesListWidget {
                 // Render the module
                 let modules = module_manager.get_modules_mut();
                 if let Some(module) = modules.get_mut(actual_module_idx) {
-                    self.render_module_box(
-                        module,
-                        is_selected,
-                        col_area,
-                        buf,
-                    );
+                    self.render_module_box(module, is_selected, col_area, buf);
                 }
             }
         }
     }
 
-    fn render_module_box(&self, module: &mut Module, is_selected: bool, area: Rect, buf: &mut Buffer) {
+    fn render_module_box(
+        &self,
+        module: &mut Module,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         // If module has a template, render it directly
         if ModuleManager::is_displayable_module(module) {
             if let Err(e) = module.render_overview_cta(is_selected, area, buf) {
@@ -155,9 +161,17 @@ impl ModulesListWidget {
         self.render_metadata_card(module, is_selected, area, buf);
     }
 
-    fn render_metadata_card(&self, module: &Module, is_selected: bool, area: Rect, buf: &mut Buffer) {
+    fn render_metadata_card(
+        &self,
+        module: &Module,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         let border_style = if is_selected {
-            Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::Gray)
         };
@@ -172,7 +186,11 @@ impl ModulesListWidget {
         };
 
         let block = Block::bordered()
-            .border_type(if is_selected { BorderType::Double } else { BorderType::Rounded })
+            .border_type(if is_selected {
+                BorderType::Double
+            } else {
+                BorderType::Rounded
+            })
             .style(border_style);
 
         let inner_area = block.inner(area);
@@ -188,12 +206,14 @@ impl ModulesListWidget {
                 Constraint::Length(1), // Icon and title
                 Constraint::Length(1), // Module type
                 Constraint::Length(1), // Template name
-                Constraint::Min(1),     // Additional metadata
+                Constraint::Min(1),    // Additional metadata
             ])
             .split(inner_area);
 
         let title_style = if is_selected {
-            Style::default().add_modifier(Modifier::BOLD).fg(Color::White)
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::White)
         } else {
             Style::default()
         };
@@ -206,22 +226,18 @@ impl ModulesListWidget {
             .alignment(Alignment::Center)
             .render(sections[0], buf);
 
-        let type_line = Line::from(vec![
-            Span::styled(
-                format!("({})", module.config.module_type),
-                Style::default().fg(Color::DarkGray)
-            ),
-        ]);
+        let type_line = Line::from(vec![Span::styled(
+            format!("({})", module.config.module_type),
+            Style::default().fg(Color::DarkGray),
+        )]);
         Paragraph::new(type_line)
             .alignment(Alignment::Center)
             .render(sections[1], buf);
 
-        let template_line = Line::from(vec![
-            Span::styled(
-                format!("[{}]", module.config.template),
-                Style::default().fg(Color::Cyan)
-            ),
-        ]);
+        let template_line = Line::from(vec![Span::styled(
+            format!("[{}]", module.config.template),
+            Style::default().fg(Color::Cyan),
+        )]);
         Paragraph::new(template_line)
             .alignment(Alignment::Center)
             .render(sections[2], buf);
@@ -231,7 +247,7 @@ impl ModulesListWidget {
             let metadata_text = format!("{} bindings", binding_count);
             let metadata_line = Line::from(Span::styled(
                 metadata_text,
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::DarkGray),
             ));
             Paragraph::new(metadata_line)
                 .alignment(Alignment::Center)

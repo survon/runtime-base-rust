@@ -1,7 +1,4 @@
-use crate::module::strategies::side_quest::{
-    QuestUrgency,
-    handler::SideQuestHandler
-};
+use crate::module::strategies::side_quest::{handler::SideQuestHandler, QuestUrgency};
 
 impl SideQuestHandler {
     pub(in crate::module) fn reset_form(&mut self) {

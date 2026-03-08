@@ -1,4 +1,4 @@
-use super::{SideQuest, QuestUrgency};
+use super::{QuestUrgency, SideQuest};
 
 impl SideQuest {
     pub(in crate::module) fn display_summary(&self) -> String {
@@ -18,10 +18,7 @@ impl SideQuest {
 
         format!(
             "{} {} - {}{}",
-            urgency_icon,
-            self.title,
-            self.topic,
-            date_str
+            urgency_icon, self.title, self.topic, date_str
         )
     }
 }

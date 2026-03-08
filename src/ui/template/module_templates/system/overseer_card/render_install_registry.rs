@@ -5,9 +5,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
     pub(super) fn render_install_registry(
@@ -26,9 +26,9 @@ impl OverseerCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // Module list
-                Constraint::Length(3),  // Help
+                Constraint::Length(3), // Title
+                Constraint::Min(1),    // Module list
+                Constraint::Length(3), // Help
             ])
             .split(area);
 
@@ -37,9 +37,13 @@ impl OverseerCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
@@ -62,13 +66,12 @@ impl OverseerCard {
             })
             .collect();
 
-        let list = List::new(list_items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
-                    .title(" Select module to install ")
-            );
+        let list = List::new(list_items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+                .title(" Select module to install "),
+        );
         Widget::render(list, chunks[1], buf);
 
         // Help

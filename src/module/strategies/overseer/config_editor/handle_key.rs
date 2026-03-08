@@ -23,7 +23,9 @@ impl ConfigEditor {
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if self.selected_field == 1 {
                         // User is on Module Type field - expand with that type
-                        if let Some((_, _, FieldValue::Enum { options, selected })) = self.fields.get(1) {
+                        if let Some((_, _, FieldValue::Enum { options, selected })) =
+                            self.fields.get(1)
+                        {
                             let module_type = options[*selected].clone();
                             self.expand_fields_for_type(&module_type);
                             self.selected_field = 0;
@@ -69,9 +71,8 @@ impl ConfigEditor {
 
                     // Update module_name if we edited the name field
                     if let Some((_, EditorField::Name, value)) = self.fields.get(0) {
-                        self.module_name = value.as_display_string()
-                            .to_lowercase()
-                            .replace(" ", "_");
+                        self.module_name =
+                            value.as_display_string().to_lowercase().replace(" ", "_");
                     }
 
                     EditorAction::ValueChanged

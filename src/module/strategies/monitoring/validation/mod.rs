@@ -1,8 +1,4 @@
-use crate::module::{
-    ValidationError,
-    ConfigValidator,
-    MonitoringConfig,
-};
+use crate::module::{ConfigValidator, MonitoringConfig, ValidationError};
 
 impl ConfigValidator {
     pub fn validate_monitoring(cfg: &MonitoringConfig) -> color_eyre::Result<()> {
@@ -13,14 +9,16 @@ impl ConfigValidator {
             return Err(ValidationError {
                 field: "bindings.device_id".to_string(),
                 error: "Cannot be empty".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         if b.display_name.is_empty() {
             return Err(ValidationError {
                 field: "bindings.display_name".to_string(),
                 error: "Cannot be empty".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         // Validate thresholds if present
@@ -29,7 +27,8 @@ impl ConfigValidator {
                 return Err(ValidationError {
                     field: "bindings.warn_threshold".to_string(),
                     error: format!("Cannot exceed max_value ({})", max),
-                }.into());
+                }
+                .into());
             }
         }
 
@@ -38,7 +37,8 @@ impl ConfigValidator {
                 return Err(ValidationError {
                     field: "bindings.danger_threshold".to_string(),
                     error: format!("Should be >= warn_threshold ({})", warn),
-                }.into());
+                }
+                .into());
             }
         }
 
@@ -49,7 +49,8 @@ impl ConfigValidator {
                 return Err(ValidationError {
                     field: "bindings.chart_type".to_string(),
                     error: format!("Must be one of: {:?}", valid_types),
-                }.into());
+                }
+                .into());
             }
         }
 

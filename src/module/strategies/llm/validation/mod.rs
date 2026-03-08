@@ -7,7 +7,8 @@ impl ConfigValidator {
             return Err(ValidationError {
                 field: "model".to_string(),
                 error: format!("Must be one of: {:?}", valid_models),
-            }.into());
+            }
+            .into());
         }
 
         // If council model, service_discovery should be configured
@@ -15,7 +16,8 @@ impl ConfigValidator {
             return Err(ValidationError {
                 field: "service_discovery".to_string(),
                 error: "Required for council model".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         Ok(())

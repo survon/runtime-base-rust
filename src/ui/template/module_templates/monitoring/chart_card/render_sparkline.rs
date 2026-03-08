@@ -3,7 +3,6 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     prelude::{Color, Style, Widget},
     widgets::{Block, Borders, Padding, Paragraph, Sparkline},
-
 };
 
 use crate::module::Module;
@@ -36,19 +35,18 @@ impl ChartCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(3),      // Sparkline
-                Constraint::Length(2),   // Current value
+                Constraint::Min(3),    // Sparkline
+                Constraint::Length(2), // Current value
             ])
             .split(area);
 
         // Calculate how many points fit in sparkline width
-        let sparkline_area = Block::default()
-            .borders(Borders::ALL)
-            .inner(chunks[0]);
+        let sparkline_area = Block::default().borders(Borders::ALL).inner(chunks[0]);
         let max_visible = sparkline_area.width.saturating_sub(1) as usize;
 
         // Get sliding window of most recent data
-        let spark_data: Vec<u64> = history.iter()
+        let spark_data: Vec<u64> = history
+            .iter()
             .rev()
             .take(max_visible.max(1))
             .rev()
@@ -61,7 +59,10 @@ impl ChartCard {
                 .padding(Padding::symmetric(1, 1))
         } else {
             Block::default()
-                .title(format!(" {}{}{} ", connected_icon, module_name, status_suffix))
+                .title(format!(
+                    " {}{}{} ",
+                    connected_icon, module_name, status_suffix
+                ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color))
         };
@@ -69,23 +70,40 @@ impl ChartCard {
         let sparkline = Sparkline::default()
             .block(container)
             .data(&spark_data)
-            .style(Style::default().fg(if is_connected { Color::Yellow } else { Color::DarkGray }))
+            .style(Style::default().fg(if is_connected {
+                Color::Yellow
+            } else {
+                Color::DarkGray
+            }))
             .max(max_value as u64);
 
         Widget::render(sparkline, chunks[0], buf);
 
         // Current value
-        let min_val = history.iter().map(|(val_a, _, _)| val_a).fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_val = history.iter().map(|(val_a, _, _)| val_a).fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let min_val = history
+            .iter()
+            .map(|(val_a, _, _)| val_a)
+            .fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_val = history
+            .iter()
+            .map(|(val_a, _, _)| val_a)
+            .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
 
         let value_text = if history.is_empty() {
             format!("Cur: {:.1} {}", a, unit)
         } else {
-            format!("Cur: {:.1} {} | Min: {:.1} | Max: {:.1}", a, unit, min_val, max_val)
+            format!(
+                "Cur: {:.1} {} | Min: {:.1} | Max: {:.1}",
+                a, unit, min_val, max_val
+            )
         };
 
         let value_widget = Paragraph::new(value_text)
-            .style(Style::default().fg(if is_connected { Color::White } else { Color::Red }))
+            .style(Style::default().fg(if is_connected {
+                Color::White
+            } else {
+                Color::Red
+            }))
             .alignment(Alignment::Center);
         value_widget.render(chunks[1], buf);
     }

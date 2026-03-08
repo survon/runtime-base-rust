@@ -1,5 +1,5 @@
-mod error;
 mod config_validator;
+mod error;
 
 use crate::module::config::*;
 

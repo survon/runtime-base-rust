@@ -1,11 +1,11 @@
-mod install_module;
-mod install_from_registry;
-mod install_from_file;
-mod list_registry_modules;
-mod create_module_config;
 mod copy_dir_recursive;
+mod create_module_config;
+mod install_from_file;
+mod install_from_registry;
+mod install_module;
+mod list_registry_modules;
 
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 pub struct ModuleInstaller {
     pub wasteland_path: PathBuf,

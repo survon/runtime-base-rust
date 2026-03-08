@@ -1,17 +1,18 @@
-use crossterm::event::KeyCode;
 use crate::log_debug;
-use crate::module::{
-    trait_module_handler::ModuleHandler,
-    Module,
-};
 use crate::module::strategies::overseer::{
     config_editor::EditorAction,
-    handler::{OverseerHandler, WastelandView}
+    handler::{OverseerHandler, WastelandView},
 };
+use crate::module::{trait_module_handler::ModuleHandler, Module};
 use crate::util::io::event::AppEvent;
+use crossterm::event::KeyCode;
 
 impl OverseerHandler {
-    pub(in crate::module) fn _handle_key(&mut self, key_code: KeyCode, _module: &mut Module) -> Option<AppEvent> {
+    pub(in crate::module) fn _handle_key(
+        &mut self,
+        key_code: KeyCode,
+        _module: &mut Module,
+    ) -> Option<AppEvent> {
         log_debug!("handle_key: {:?}", key_code);
         match self.current_view {
             WastelandView::Main => {

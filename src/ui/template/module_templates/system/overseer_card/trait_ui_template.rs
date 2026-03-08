@@ -1,14 +1,17 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
+use ratatui::{buffer::Buffer, layout::Rect};
 
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
 use crate::ui::template::UiTemplate;
-use super::{ViewData, OverseerCard};
 
 impl UiTemplate for OverseerCard {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         self.render_overview_cta(is_selected, area, buf, module)
     }
 

@@ -1,15 +1,25 @@
-use rusqlite::params;
 use crate::log_info;
 use crate::module::strategies::overseer::database::KnownDevice;
 use crate::util::database::Database;
+use rusqlite::params;
 
 /// Trait to add Overseer-specific database operations to Database
 pub trait OverseerDatabase {
     fn init_overseer_schema(&self) -> rusqlite::Result<()>;
 
     // Device discovery and tracking
-    fn record_device_discovery(&self, mac_address: &str, device_name: &str, rssi: i16) -> rusqlite::Result<bool>;
-    fn update_device_metadata(&self, mac_address: &str, device_type: &str, firmware_version: &str) -> rusqlite::Result<()>;
+    fn record_device_discovery(
+        &self,
+        mac_address: &str,
+        device_name: &str,
+        rssi: i16,
+    ) -> rusqlite::Result<bool>;
+    fn update_device_metadata(
+        &self,
+        mac_address: &str,
+        device_type: &str,
+        firmware_version: &str,
+    ) -> rusqlite::Result<()>;
 
     // Device trust management
     fn is_device_trusted(&self, mac_address: &str) -> rusqlite::Result<bool>;
@@ -55,7 +65,7 @@ impl OverseerDatabase for Database {
     }
 
     fn trust_device(&self, mac_address: &str, device_name: &str) -> rusqlite::Result<()> {
-       self._overseer__trust_device(mac_address, device_name)
+        self._overseer__trust_device(mac_address, device_name)
     }
 
     fn untrust_device(&self, mac_address: &str) -> rusqlite::Result<()> {

@@ -1,8 +1,5 @@
+use crate::module::strategies::overseer::{config_editor::FieldValue, handler::OverseerHandler};
 use crate::module::Module;
-use crate::module::strategies::overseer::{
-    config_editor::FieldValue,
-    handler::OverseerHandler,
-};
 
 impl OverseerHandler {
     pub(in crate::module) fn _update_bindings(&mut self, module: &mut Module) {

@@ -5,40 +5,45 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use crate::module::Module;
 use super::OverseerCard;
+use crate::module::Module;
 
 impl OverseerCard {
-    pub(super) fn render_config_editor(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        module: &mut Module,
-    ) {
+    pub(super) fn render_config_editor(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
         // Extract editor state from bindings
-        let module_name = module.config.bindings
+        let module_name = module
+            .config
+            .bindings
             .get("editor_module_name")
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown");
 
-        let selected_field = module.config.bindings
+        let selected_field = module
+            .config
+            .bindings
             .get("editor_selected_field")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as usize;
 
-        let is_editing = module.config.bindings
+        let is_editing = module
+            .config
+            .bindings
             .get("editor_is_editing")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let fields = module.config.bindings
+        let fields = module
+            .config
+            .bindings
             .get("editor_fields")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
 
         let edit_buffer = if is_editing {
-            module.config.bindings
+            module
+                .config
+                .bindings
                 .get("editor_edit_buffer")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
@@ -46,7 +51,9 @@ impl OverseerCard {
             ""
         };
 
-        let cursor_pos = module.config.bindings
+        let cursor_pos = module
+            .config
+            .bindings
             .get("editor_cursor_pos")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as usize;
@@ -84,11 +91,19 @@ impl OverseerCard {
             let is_editing_this = is_selected && is_editing;
 
             let label = field.get("label").and_then(|v| v.as_str()).unwrap_or("");
-            let display_value = field.get("display_value").and_then(|v| v.as_str()).unwrap_or("");
-            let value_type = field.get("value_type").and_then(|v| v.as_str()).unwrap_or("text");
+            let display_value = field
+                .get("display_value")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let value_type = field
+                .get("value_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("text");
 
             let style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -103,9 +118,11 @@ impl OverseerCard {
             if is_editing_this {
                 // Show edit buffer with cursor
                 let display = if cursor_pos < edit_buffer.len() {
-                    format!("{}│{}",
-                            &edit_buffer[..cursor_pos],
-                            &edit_buffer[cursor_pos..])
+                    format!(
+                        "{}│{}",
+                        &edit_buffer[..cursor_pos],
+                        &edit_buffer[cursor_pos..]
+                    )
                 } else {
                     format!("{}│", edit_buffer)
                 };
@@ -113,12 +130,17 @@ impl OverseerCard {
             } else {
                 let display = match value_type {
                     "bool" => {
-                        let bool_val = field.get("bool_value").and_then(|v| v.as_bool()).unwrap_or(false);
-                        if bool_val { "[X] true" } else { "[ ] false" }
+                        let bool_val = field
+                            .get("bool_value")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        if bool_val {
+                            "[X] true"
+                        } else {
+                            "[ ] false"
+                        }
                     }
-                    "enum" => {
-                        &format!("< {} >", display_value)
-                    }
+                    "enum" => &format!("< {} >", display_value),
                     _ => display_value,
                 };
 

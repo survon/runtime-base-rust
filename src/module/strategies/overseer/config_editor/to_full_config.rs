@@ -48,7 +48,10 @@ impl ConfigEditor {
         // Update bindings
         let bindings = self.to_bindings();
         if let Some(obj) = config.as_object_mut() {
-            obj.insert("bindings".to_string(), serde_json::to_value(bindings).unwrap());
+            obj.insert(
+                "bindings".to_string(),
+                serde_json::to_value(bindings).unwrap(),
+            );
         }
 
         config

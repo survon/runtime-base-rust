@@ -1,5 +1,5 @@
 // src/widgets/messages_window/actor.rs
-use super::state::{MessagesState, MessagesIntent, MessagesEvent, MessagesStateMachine};
+use super::state::{MessagesEvent, MessagesIntent, MessagesState, MessagesStateMachine};
 use crate::util::io::bus::{BusMessage, MessageBus};
 use tokio::sync::mpsc;
 
@@ -30,10 +30,7 @@ impl MessagesActor {
 
     async fn process_intent(&mut self, intent: MessagesIntent) {
         // Pure state transition
-        let (new_state, events) = MessagesStateMachine::transition(
-            self.state.clone(),
-            intent,
-        );
+        let (new_state, events) = MessagesStateMachine::transition(self.state.clone(), intent);
 
         // Update internal state
         self.state = new_state;
@@ -53,10 +50,13 @@ impl MessagesActor {
 
         let payload = serde_json::to_string(&event).unwrap();
 
-        let _ = self.message_bus.publish(BusMessage::new(
-            topic.to_string(),
-            payload,
-            "messages_window".to_string(),
-        )).await;
+        let _ = self
+            .message_bus
+            .publish(BusMessage::new(
+                topic.to_string(),
+                payload,
+                "messages_window".to_string(),
+            ))
+            .await;
     }
 }

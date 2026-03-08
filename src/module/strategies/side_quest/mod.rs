@@ -1,15 +1,15 @@
-pub mod handler;
-pub mod database;
-mod quest_urgency;
-mod new;
 mod complete;
+pub mod database;
 mod display_summary;
+pub mod handler;
+mod new;
+mod quest_urgency;
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
-use quest_urgency::*;
 use crate::module::BaseModuleConfig;
+use quest_urgency::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SideQuest {

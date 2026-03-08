@@ -1,10 +1,11 @@
-use crate::module::Module;
 use super::LlmHandler;
+use crate::module::Module;
 
 impl LlmHandler {
     pub(in crate::module) fn _update_bindings(&mut self, module: &mut Module) {
         // Update model info
-        let model_info = self.llm_service
+        let model_info = self
+            .llm_service
             .as_ref()
             .map(|s| s.get_model_info())
             .unwrap_or_else(|| "No model loaded".to_string());
@@ -19,9 +20,10 @@ impl LlmHandler {
         module.config.bindings.insert(
             "chat_history".to_string(),
             serde_json::Value::Array(
-                chat_history.iter()
+                chat_history
+                    .iter()
                     .map(|s| serde_json::Value::String(s.clone()))
-                    .collect()
+                    .collect(),
             ),
         );
 

@@ -40,7 +40,7 @@ pub enum AppEvent {
 
     // Module-specific events that need to be handled by App
     // (Most module interaction is now handled by the module handlers directly)
-    ChatSubmit,  // Keep this one because it needs async processing
+    ChatSubmit, // Keep this one because it needs async processing
 }
 
 /// Terminal event handler.
@@ -89,10 +89,8 @@ impl EventTask {
 
     /// Runs the event thread.
     async fn run(self) -> color_eyre::Result<()> {
-
         // let tick_rate = Duration::from_millis(50); // claude claims this is smoother..
         let tick_rate = Duration::from_secs_f64(1.0 / TICK_FPS); // but this is working soo..
-
 
         let mut reader = crossterm::event::EventStream::new();
         let mut tick = tokio::time::interval(tick_rate);

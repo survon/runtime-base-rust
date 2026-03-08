@@ -29,14 +29,17 @@ impl LlmHandler {
         self.chat_manager.current_link_index = None;
 
         // Process the query
-        let _response = service.process_query(
-            &self.session_id,
-            &module_name,
-            &query,
-            &knowledge_module_names,
-        ).await?;
+        let _response = service
+            .process_query(
+                &self.session_id,
+                &module_name,
+                &query,
+                &knowledge_module_names,
+            )
+            .await?;
 
-        self.chat_manager.update_available_links(service, &self.session_id);
+        self.chat_manager
+            .update_available_links(service, &self.session_id);
 
         Ok(())
     }

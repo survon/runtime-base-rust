@@ -1,17 +1,16 @@
 use crossterm::event::KeyCode;
 
-use crate::util::io::event::AppEvent;
 use crate::module::strategies::side_quest::{
     database::SideQuestDatabase,
-    handler::{
-        CreateStep,
-        SideQuestHandler,
-        SideQuestView
-    }
+    handler::{CreateStep, SideQuestHandler, SideQuestView},
 };
+use crate::util::io::event::AppEvent;
 
 impl SideQuestHandler {
-    pub(in crate::module) fn handle_quest_list_key(&mut self, key_code: KeyCode) -> Option<AppEvent> {
+    pub(in crate::module) fn handle_quest_list_key(
+        &mut self,
+        key_code: KeyCode,
+    ) -> Option<AppEvent> {
         match key_code {
             KeyCode::Up => {
                 if self.selected_index > 0 {

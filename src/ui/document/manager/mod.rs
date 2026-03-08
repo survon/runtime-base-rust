@@ -4,12 +4,7 @@ mod open_document;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
-use crate::ui::document::{
-    viewer::{
-        DocumentViewer,
-        external::ExternalViewer,
-    },
-};
+use crate::ui::document::viewer::{external::ExternalViewer, DocumentViewer};
 
 #[derive(Debug)]
 pub struct DocumentManager {

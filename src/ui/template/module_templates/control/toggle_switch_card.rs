@@ -1,8 +1,8 @@
 // src/ui/module_templates/control/toggle_switch.rs
-use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, ListItem, Paragraph, Widget};
-use ratatui::layout::{Alignment, Layout, Constraint, Direction};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ struct ViewData<'a> {
     switch_visual: &'a str,
     border_color: Color,
     block: Block<'a>,
-    inner: Rect
+    inner: Rect,
 }
 
 fn get_str<'a>(bindings: &'a HashMap<String, Value>, key: &str, default: &'a str) -> &'a str {
@@ -58,7 +58,7 @@ impl ToggleSwitch {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &'a mut Module
+        module: &'a mut Module,
     ) -> ViewData<'a> {
         // Get the state from module bindings
         let state = module
@@ -94,7 +94,11 @@ impl ToggleSwitch {
             (Color::Red, toggle_off_label, "[ ● ────── ]")
         };
 
-        let border_color = if is_selected { Color:: White } else { status_color };
+        let border_color = if is_selected {
+            Color::White
+        } else {
+            status_color
+        };
 
         // Create main container
         let block = Block::default()
@@ -113,13 +117,19 @@ impl ToggleSwitch {
             switch_visual,
             border_color,
             block,
-            inner
+            inner,
         }
     }
 }
 
 impl UiTemplate for ToggleSwitch {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         let ViewData {
             label,
             description,
@@ -137,10 +147,10 @@ impl UiTemplate for ToggleSwitch {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(2),  // Label
-                Constraint::Length(3),  // Switch visual
-                Constraint::Length(2),  // Status text
-                Constraint::Min(1),     // Description
+                Constraint::Length(2), // Label
+                Constraint::Length(3), // Switch visual
+                Constraint::Length(2), // Status text
+                Constraint::Min(1),    // Description
             ])
             .split(inner);
 
@@ -154,15 +164,21 @@ impl UiTemplate for ToggleSwitch {
 
         // Render switch visual
         let switch_widget = Paragraph::new(switch_visual)
-            .style(Style::default().fg(status_color).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(switch_widget, chunks[1], buf);
 
         // Render status text
         let status_widget = Paragraph::new(status_text)
-            .style(Style::default()
-                .fg(status_color)
-                .add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(status_widget, chunks[2], buf);
 
@@ -193,10 +209,10 @@ impl UiTemplate for ToggleSwitch {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(2),  // Label
-                Constraint::Length(3),  // Switch visual
-                Constraint::Length(2),  // Status text
-                Constraint::Min(1),     // Description
+                Constraint::Length(2), // Label
+                Constraint::Length(3), // Switch visual
+                Constraint::Length(2), // Status text
+                Constraint::Min(1),    // Description
             ])
             .split(inner);
 
@@ -210,15 +226,21 @@ impl UiTemplate for ToggleSwitch {
 
         // Render switch visual
         let switch_widget = Paragraph::new(switch_visual)
-            .style(Style::default().fg(status_color).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(switch_widget, chunks[1], buf);
 
         // Render status text
         let status_widget = Paragraph::new(status_text)
-            .style(Style::default()
-                .fg(status_color)
-                .add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(status_widget, chunks[2], buf);
 

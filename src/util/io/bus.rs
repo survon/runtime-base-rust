@@ -1,9 +1,9 @@
+use crate::log_debug;
+use color_eyre::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use std::collections::HashMap;
-use color_eyre::Result;
-use crate::log_debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusMessage {

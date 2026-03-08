@@ -1,14 +1,14 @@
 mod backspace;
-mod trait_default;
-mod handle_input;
-mod new;
-mod clear_input;
-mod get_input;
-mod scroll_up;
-mod scroll_down;
 mod calculate_max_scroll;
+mod clear_input;
 mod cycle_links;
 mod get_current_link;
+mod get_input;
+mod handle_input;
+mod new;
+mod scroll_down;
+mod scroll_up;
+mod trait_default;
 mod update_available_links;
 
 /// Manages chat UI state

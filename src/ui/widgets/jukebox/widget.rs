@@ -1,21 +1,21 @@
 // src/widgets/jukebox/widget.rs
+use color_eyre::Result;
 use ratatui::{
     buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, BorderType, List, ListItem, ListState, Paragraph, Widget},
-    layout::{Constraint, Direction, Layout, Rect},
 };
 use tokio::sync::mpsc;
-use color_eyre::Result;
 
 use super::database::{Album, JukeboxDatabase, Track};
-use super::state::{JukeboxState, JukeboxIntent, JukeboxEvent};
+use super::state::{JukeboxEvent, JukeboxIntent, JukeboxState};
+use crate::ui::style::dim_unless_focused;
 use crate::util::{
     database::Database,
-    io::bus::{MessageBus,BusMessage}
+    io::bus::{BusMessage, MessageBus},
 };
-use crate::ui::style::dim_unless_focused;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum JukeboxMode {
@@ -244,8 +244,8 @@ impl JukeboxWidget {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(8),  // Track info
-                Constraint::Length(3),  // Controls
+                Constraint::Length(8), // Track info
+                Constraint::Length(3), // Controls
             ])
             .split(area);
 
@@ -263,12 +263,10 @@ impl JukeboxWidget {
                 ]
             } else {
                 // Build lines conditionally based on what we have
-                let mut lines = vec![
-                    Line::from(vec![
-                        Span::raw("♪ ").fg(Color::Cyan),
-                        Span::raw(track.title.clone()).fg(Color::White).bold(),
-                    ]),
-                ];
+                let mut lines = vec![Line::from(vec![
+                    Span::raw("♪ ").fg(Color::Cyan),
+                    Span::raw(track.title.clone()).fg(Color::White).bold(),
+                ])];
 
                 // Add album info if available
                 if let Some(album) = album {
@@ -299,7 +297,7 @@ impl JukeboxWidget {
                 Block::bordered()
                     .title(" 🎵 Jukebox ")
                     .border_type(BorderType::Rounded)
-                    .style(border_style)
+                    .style(border_style),
             )
             .render(chunks[0], buf);
 
@@ -317,18 +315,15 @@ impl JukeboxWidget {
             Line::from(controls_text).fg(Color::Gray),
             Line::from(volume_display).fg(Color::Yellow),
         ])
-            .block(Block::bordered().border_type(BorderType::Rounded))
-            .render(chunks[1], buf);
+        .block(Block::bordered().border_type(BorderType::Rounded))
+        .render(chunks[1], buf);
     }
 
     fn get_eq_visualizer(&self) -> Line {
         const BLOCKS: [&str; 8] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
 
         // Build EQ display as a single line of block characters
-        let eq_display: String = self.eq_bars
-            .iter()
-            .map(|&level| BLOCKS[level])
-            .collect();
+        let eq_display: String = self.eq_bars.iter().map(|&level| BLOCKS[level]).collect();
 
         // Determine color based on average level
         let avg_level = self.eq_bars.iter().sum::<usize>() as f32 / self.eq_bars.len() as f32;
@@ -353,13 +348,16 @@ impl JukeboxWidget {
     fn render_album_list(&mut self, area: Rect, buf: &mut Buffer, is_focused: Option<bool>) {
         let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Cyan));
 
-        let items: Vec<ListItem> = self.albums
+        let items: Vec<ListItem> = self
+            .albums
             .iter()
             .enumerate()
             .map(|(i, album)| {
                 let is_selected = i == self.selected_album_index;
                 let style = if is_selected {
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -369,21 +367,25 @@ impl JukeboxWidget {
                     if is_selected { "▶" } else { " " },
                     album.artist,
                     album.title,
-                    album.year.map(|y| y.to_string()).unwrap_or_else(|| "Unknown".to_string())
+                    album
+                        .year
+                        .map(|y| y.to_string())
+                        .unwrap_or_else(|| "Unknown".to_string())
                 );
 
                 ListItem::new(content).style(style)
             })
             .collect();
 
-        self.album_list_state.select(Some(self.selected_album_index));
+        self.album_list_state
+            .select(Some(self.selected_album_index));
 
         let list = List::new(items)
             .block(
                 Block::bordered()
                     .title(" 🎵 Album Library (Enter: View Tracks | Esc: Back) ")
                     .border_type(BorderType::Rounded)
-                    .style(border_style)
+                    .style(border_style),
             )
             .highlight_style(Style::default().bg(Color::DarkGray));
 
@@ -393,12 +395,14 @@ impl JukeboxWidget {
     fn render_track_list(&mut self, area: Rect, buf: &mut Buffer, is_focused: Option<bool>) {
         let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Cyan));
 
-        let album_title = self.albums
+        let album_title = self
+            .albums
             .get(self.selected_album_index)
             .map(|a| format!("{} - {}", a.artist, a.title))
             .unwrap_or_else(|| "Unknown Album".to_string());
 
-        let items: Vec<ListItem> = self.tracks
+        let items: Vec<ListItem> = self
+            .tracks
             .iter()
             .enumerate()
             .map(|(i, track)| {
@@ -408,12 +412,15 @@ impl JukeboxWidget {
                 let style = if !file_exists {
                     Style::default().fg(Color::Red)
                 } else if is_selected {
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
 
-                let duration = track.duration_seconds
+                let duration = track
+                    .duration_seconds
                     .map(|s| format!("{}:{:02}", s / 60, s % 60))
                     .unwrap_or_else(|| "?:??".to_string());
 
@@ -427,24 +434,22 @@ impl JukeboxWidget {
 
                 let content = format!(
                     "{} {}. {} [{}]",
-                    status_icon,
-                    track.track_number,
-                    track.title,
-                    duration
+                    status_icon, track.track_number, track.title, duration
                 );
 
                 ListItem::new(content).style(style)
             })
             .collect();
 
-        self.track_list_state.select(Some(self.selected_track_index));
+        self.track_list_state
+            .select(Some(self.selected_track_index));
 
         let list = List::new(items)
             .block(
                 Block::bordered()
                     .title(format!("🎵 {} (Enter: Play | Esc: Back)", album_title))
                     .border_type(BorderType::Rounded)
-                    .style(border_style)
+                    .style(border_style),
             )
             .highlight_style(Style::default().bg(Color::DarkGray));
 

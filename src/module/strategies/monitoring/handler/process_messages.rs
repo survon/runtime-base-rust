@@ -1,8 +1,6 @@
 use crate::log_info;
 use crate::module::strategies::monitoring::handler::{
-    HandlerMessage,
-    MonitoringHandler,
-    MAX_HISTORY,
+    HandlerMessage, MonitoringHandler, MAX_HISTORY,
 };
 
 impl MonitoringHandler {
@@ -11,7 +9,12 @@ impl MonitoringHandler {
         while let Ok(msg) = self.message_rx.try_recv() {
             message_count += 1;
             match msg {
-                HandlerMessage::TelemetryReceived { value_a, value_b, value_c, timestamp } => {
+                HandlerMessage::TelemetryReceived {
+                    value_a,
+                    value_b,
+                    value_c,
+                    timestamp,
+                } => {
                     self.current_values = (value_a, value_b, value_c);
                     self.last_update = Some(timestamp);
 
@@ -21,24 +24,42 @@ impl MonitoringHandler {
                         self.history.pop_front();
                     }
 
-                    log_info!("🟢 Updated values for {}: a={}, b={}, c={}, history_size={}",
-                        self.device_id, value_a, value_b, value_c, self.history.len());
+                    log_info!(
+                        "🟢 Updated values for {}: a={}, b={}, c={}, history_size={}",
+                        self.device_id,
+                        value_a,
+                        value_b,
+                        value_c,
+                        self.history.len()
+                    );
                 }
 
                 // NEW: Handle schedule updates
-                HandlerMessage::ScheduleUpdate { mode, cmd_in, cmd_dur } => {
+                HandlerMessage::ScheduleUpdate {
+                    mode,
+                    cmd_in,
+                    cmd_dur,
+                } => {
                     self.current_mode = Some(mode.clone());
                     self.cmd_window_opens_in = Some(cmd_in);
                     self.cmd_window_duration = Some(cmd_dur);
 
-                    log_info!("📅 [{}] Schedule updated: mode={}, window_in={}s",
-                        self.device_id, mode, cmd_in);
+                    log_info!(
+                        "📅 [{}] Schedule updated: mode={}, window_in={}s",
+                        self.device_id,
+                        mode,
+                        cmd_in
+                    );
                 }
             }
         }
 
         if message_count > 0 {
-            log_info!("🟢 Processed {} messages for {}", message_count, self.device_id);
+            log_info!(
+                "🟢 Processed {} messages for {}",
+                message_count,
+                self.device_id
+            );
         }
     }
 }

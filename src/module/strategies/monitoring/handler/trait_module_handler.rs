@@ -1,15 +1,12 @@
-use std::any::Any;
 use crossterm::event::KeyCode;
+use std::any::Any;
 
+use crate::module::strategies::monitoring::handler::MonitoringHandler;
 use crate::{
     log_info,
-    module::{
-        trait_module_handler::ModuleHandler,
-        Module,
-    },
+    module::{trait_module_handler::ModuleHandler, Module},
     util::io::event::AppEvent,
 };
-use crate::module::strategies::monitoring::handler::MonitoringHandler;
 
 impl ModuleHandler for MonitoringHandler {
     fn handle_key(&mut self, key_code: KeyCode, _module: &mut Module) -> Option<AppEvent> {
@@ -22,7 +19,11 @@ impl ModuleHandler for MonitoringHandler {
         }
     }
 
-    fn handle_event(&mut self, _event: &AppEvent, _module: &mut Module) -> color_eyre::Result<bool> {
+    fn handle_event(
+        &mut self,
+        _event: &AppEvent,
+        _module: &mut Module,
+    ) -> color_eyre::Result<bool> {
         Ok(false)
     }
 

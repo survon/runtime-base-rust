@@ -1,8 +1,5 @@
-use crate::{
-    log_warn,
-    module::Module
-};
 use crate::module::strategies::monitoring::handler::MonitoringHandler;
+use crate::{log_warn, module::Module};
 
 impl MonitoringHandler {
     pub(in crate::module) fn _update_bindings(&mut self, module: &mut Module) {
@@ -12,23 +9,25 @@ impl MonitoringHandler {
         let (value_a, value_b, value_c) = self.current_values;
 
         // Update the SSP compact keys that the gauge template reads
-        module.config.bindings.insert(
-            "a".to_string(),
-            serde_json::json!(value_a),
-        );
+        module
+            .config
+            .bindings
+            .insert("a".to_string(), serde_json::json!(value_a));
 
-        module.config.bindings.insert(
-            "b".to_string(),
-            serde_json::json!(value_b),
-        );
+        module
+            .config
+            .bindings
+            .insert("b".to_string(), serde_json::json!(value_b));
 
-        module.config.bindings.insert(
-            "c".to_string(),
-            serde_json::json!(value_c),
-        );
+        module
+            .config
+            .bindings
+            .insert("c".to_string(), serde_json::json!(value_c));
 
         // Export history to bindings for chart templates
-        let history_json: Vec<serde_json::Value> = self.history.iter()
+        let history_json: Vec<serde_json::Value> = self
+            .history
+            .iter()
             .map(|(a, b, c)| {
                 serde_json::json!({
                     "a": a,
@@ -45,23 +44,23 @@ impl MonitoringHandler {
 
         // Add connection status
         let is_connected = self.is_connected();
-        module.config.bindings.insert(
-            "is_connected".to_string(),
-            serde_json::json!(is_connected),
-        );
+        module
+            .config
+            .bindings
+            .insert("is_connected".to_string(), serde_json::json!(is_connected));
 
         if let Some(mode) = &self.current_mode {
-            module.config.bindings.insert(
-                "device_mode".to_string(),
-                serde_json::json!(mode),
-            );
+            module
+                .config
+                .bindings
+                .insert("device_mode".to_string(), serde_json::json!(mode));
         }
 
         if let Some(cmd_in) = self.cmd_window_opens_in {
-            module.config.bindings.insert(
-                "cmd_window_in".to_string(),
-                serde_json::json!(cmd_in),
-            );
+            module
+                .config
+                .bindings
+                .insert("cmd_window_in".to_string(), serde_json::json!(cmd_in));
         }
 
         if let Some(cmd_dur) = self.cmd_window_duration {
@@ -109,16 +108,17 @@ impl MonitoringHandler {
             if self.last_update.is_none() {
                 log_warn!("Device {} has never sent telemetry", self.device_id);
             } else {
-                log_warn!("Device {} connection lost ({}s since last update)",
+                log_warn!(
+                    "Device {} connection lost ({}s since last update)",
                     self.device_id,
                     self.time_since_last_update().unwrap().as_secs()
                 );
             }
         } else {
-            module.config.bindings.insert(
-                "status_suffix".to_string(),
-                serde_json::json!(""),
-            );
+            module
+                .config
+                .bindings
+                .insert("status_suffix".to_string(), serde_json::json!(""));
         }
     }
 }

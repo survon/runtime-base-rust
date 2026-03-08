@@ -1,8 +1,8 @@
-use super::state::{JukeboxState, JukeboxIntent, JukeboxEvent, JukeboxStateMachine};
-use crate::util::io::bus::{BusMessage, MessageBus};
+use super::state::{JukeboxEvent, JukeboxIntent, JukeboxState, JukeboxStateMachine};
 use crate::util::audio::SurvonAudioPlayer;
-use tokio::sync::mpsc;
+use crate::util::io::bus::{BusMessage, MessageBus};
 use std::time::Duration;
+use tokio::sync::mpsc;
 
 pub struct JukeboxActor {
     state: JukeboxState,
@@ -38,10 +38,7 @@ impl JukeboxActor {
 
     async fn process_intent(&mut self, intent: JukeboxIntent) {
         // Pure state transition
-        let (new_state, events) = JukeboxStateMachine::transition(
-            self.state.clone(),
-            intent,
-        );
+        let (new_state, events) = JukeboxStateMachine::transition(self.state.clone(), intent);
 
         // Update internal state
         self.state = new_state;
@@ -65,10 +62,8 @@ impl JukeboxActor {
                     }
 
                     // Start new player
-                    let mut player = SurvonAudioPlayer::new_with_audio_jack(
-                        &track.file_path,
-                        self.state.volume,
-                    );
+                    let mut player =
+                        SurvonAudioPlayer::new_with_audio_jack(&track.file_path, self.state.volume);
 
                     if let Ok(_) = player.play() {
                         self.audio_player = Some(player);
@@ -128,10 +123,13 @@ impl JukeboxActor {
 
         let payload = serde_json::to_string(&event).unwrap();
 
-        let _ = self.message_bus.publish(BusMessage::new(
-            topic.to_string(),
-            payload,
-            "jukebox".to_string(),
-        )).await;
+        let _ = self
+            .message_bus
+            .publish(BusMessage::new(
+                topic.to_string(),
+                payload,
+                "jukebox".to_string(),
+            ))
+            .await;
     }
 }

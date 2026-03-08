@@ -5,9 +5,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
     pub(super) fn render_archived_modules(
@@ -38,9 +38,9 @@ impl OverseerCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // Module list
-                Constraint::Length(3),  // Help
+                Constraint::Length(3), // Title
+                Constraint::Min(1),    // Module list
+                Constraint::Length(3), // Help
             ])
             .split(area);
 
@@ -49,16 +49,21 @@ impl OverseerCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
         // Module list
         if archived_modules.is_empty() {
             let empty_message = "No archived modules.";
-            let empty_message_component = UiComponent::empty_message(empty_message, Some(border_color));
+            let empty_message_component =
+                UiComponent::empty_message(empty_message, Some(border_color));
             Widget::render(empty_message_component, chunks[1], buf);
         } else {
             let list_items: Vec<ListItem> = archived_modules
@@ -79,13 +84,12 @@ impl OverseerCard {
                 })
                 .collect();
 
-            let list = List::new(list_items)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(border_color))
-                        .title(" Select module to restore ")
-                );
+            let list = List::new(list_items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color))
+                    .title(" Select module to restore "),
+            );
             Widget::render(list, chunks[1], buf);
         }
 

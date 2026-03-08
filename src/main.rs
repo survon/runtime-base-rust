@@ -1,8 +1,8 @@
 use crate::app::App;
 
 pub mod app;
-pub mod ui;
 pub mod module;
+pub mod ui;
 pub mod util;
 
 #[tokio::main]

@@ -1,9 +1,6 @@
 use tokio::sync::mpsc;
 
-use crate::util::io::{
-    bus::MessageBus,
-    discovery::DiscoveryManager,
-};
+use crate::util::io::{bus::MessageBus, discovery::DiscoveryManager};
 
 use super::ValveControlHandler;
 

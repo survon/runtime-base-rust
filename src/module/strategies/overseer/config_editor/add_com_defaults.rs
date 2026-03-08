@@ -28,7 +28,9 @@ impl ConfigEditor {
 
         self.fields.push((
             "State".to_string(),
-            EditorField::CustomBinding { key: "state".to_string() },
+            EditorField::CustomBinding {
+                key: "state".to_string(),
+            },
             FieldValue::Bool(false),
         ));
     }

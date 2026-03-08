@@ -1,7 +1,7 @@
-mod update_blink;
 mod start_blinking;
 mod stop_blinking;
 mod trait_default;
+mod update_blink;
 
 use std::time::Instant;
 

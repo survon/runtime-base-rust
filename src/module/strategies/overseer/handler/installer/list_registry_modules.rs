@@ -1,11 +1,11 @@
-use crate::module::strategies::overseer::handler::{
-    RegistryManifest,
-};
+use crate::module::strategies::overseer::handler::RegistryManifest;
 
 use super::ModuleInstaller;
 
 impl ModuleInstaller {
-    pub(in crate::module) async fn list_registry_manifests(&self) -> color_eyre::Result<Vec<RegistryManifest>> {
+    pub(in crate::module) async fn list_registry_manifests(
+        &self,
+    ) -> color_eyre::Result<Vec<RegistryManifest>> {
         // Mock - same as in handler for now
         // TODO wire up
         Ok(vec![
@@ -28,7 +28,10 @@ impl ModuleInstaller {
                 author: "Survon Core".to_string(),
                 module_type: "monitoring".to_string(),
                 template: "gauge_card".to_string(),
-                download_url: format!("{}/manifests/temperature_sensor/download", self.registry_url),
+                download_url: format!(
+                    "{}/manifests/temperature_sensor/download",
+                    self.registry_url
+                ),
                 checksum: "def456".to_string(),
             },
             RegistryManifest {

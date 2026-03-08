@@ -1,12 +1,8 @@
 use std::time::Instant;
 
+use crate::module::strategies::monitoring::handler::{HandlerMessage, MonitoringHandler};
 use crate::{
-    log_debug, log_error, log_info, log_warn,
-    util::io::ble_scheduler::extract_schedule_metadata
-};
-use crate::module::strategies::monitoring::handler::{
-    HandlerMessage,
-    MonitoringHandler,
+    log_debug, log_error, log_info, log_warn, util::io::ble_scheduler::extract_schedule_metadata,
 };
 
 impl MonitoringHandler {
@@ -16,7 +12,11 @@ impl MonitoringHandler {
         let device_id = self.device_id.clone();
 
         tokio::spawn(async move {
-            log_info!("📻 Starting monitoring telemetry listener for device: {} on topic: {}", device_id, bus_topic);
+            log_info!(
+                "📻 Starting monitoring telemetry listener for device: {} on topic: {}",
+                device_id,
+                bus_topic
+            );
             let mut receiver = bus.subscribe(bus_topic.clone()).await;
             log_info!("📻 Subscribed to topic: {}", bus_topic);
 
@@ -28,21 +28,26 @@ impl MonitoringHandler {
                     if let Some(metadata) = extract_schedule_metadata(&data) {
                         log_info!("📅 [{}] Schedule metadata found!", device_id);
 
-                        let mode = metadata.get("mode")
+                        let mode = metadata
+                            .get("mode")
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string();
 
-                        let cmd_in = metadata.get("cmd_in")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(0);
+                        let cmd_in = metadata.get("cmd_in").and_then(|v| v.as_u64()).unwrap_or(0);
 
-                        let cmd_dur = metadata.get("cmd_dur")
+                        let cmd_dur = metadata
+                            .get("cmd_dur")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(10);
 
-                        log_info!("📅 [{}] Mode: {}, CMD window in: {}s, Duration: {}s",
-                            device_id, mode, cmd_in, cmd_dur);
+                        log_info!(
+                            "📅 [{}] Mode: {}, CMD window in: {}s, Duration: {}s",
+                            device_id,
+                            mode,
+                            cmd_in,
+                            cmd_dur
+                        );
 
                         let _ = tx.send(HandlerMessage::ScheduleUpdate {
                             mode,
@@ -57,7 +62,7 @@ impl MonitoringHandler {
                         Some((
                             d.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0),
                             d.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            d.get("c").and_then(|v| v.as_i64()).unwrap_or(0)
+                            d.get("c").and_then(|v| v.as_i64()).unwrap_or(0),
                         ))
                     } else if data.is_object() {
                         // Direct payload format: {"a":72,"b":45,"c":335}
@@ -65,7 +70,7 @@ impl MonitoringHandler {
                         Some((
                             data.get("a").and_then(|v| v.as_f64()).unwrap_or(0.0),
                             data.get("b").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            data.get("c").and_then(|v| v.as_i64()).unwrap_or(0)
+                            data.get("c").and_then(|v| v.as_i64()).unwrap_or(0),
                         ))
                     } else {
                         log_warn!("📻 [{}] Unrecognized message format", device_id);
@@ -73,8 +78,13 @@ impl MonitoringHandler {
                     };
 
                     if let Some((value_a, value_b, value_c)) = values {
-                        log_info!("📻 Monitoring telemetry [{}]: a={}, b={}, c={}",
-                            device_id, value_a, value_b, value_c);
+                        log_info!(
+                            "📻 Monitoring telemetry [{}]: a={}, b={}, c={}",
+                            device_id,
+                            value_a,
+                            value_b,
+                            value_c
+                        );
 
                         let _ = tx.send(HandlerMessage::TelemetryReceived {
                             value_a,

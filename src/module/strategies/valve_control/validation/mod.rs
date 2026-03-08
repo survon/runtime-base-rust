@@ -8,14 +8,16 @@ impl ConfigValidator {
             return Err(ValidationError {
                 field: "bindings.device_id".to_string(),
                 error: "Cannot be empty".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         if b.label.is_empty() {
             return Err(ValidationError {
                 field: "bindings.label".to_string(),
                 error: "Cannot be empty".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         // Validate position is in range
@@ -23,7 +25,8 @@ impl ConfigValidator {
             return Err(ValidationError {
                 field: "bindings.b".to_string(),
                 error: "Position must be 0-100".to_string(),
-            }.into());
+            }
+            .into());
         }
 
         Ok(())

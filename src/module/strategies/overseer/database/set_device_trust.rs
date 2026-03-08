@@ -1,8 +1,12 @@
-use rusqlite::params;
 use crate::util::database::Database;
+use rusqlite::params;
 
 impl Database {
-    pub(in crate::module) fn _overseer__set_device_trust(&self, mac_address: &str, trusted: bool) -> rusqlite::Result<()> {
+    pub(in crate::module) fn _overseer__set_device_trust(
+        &self,
+        mac_address: &str,
+        trusted: bool,
+    ) -> rusqlite::Result<()> {
         let conn = self.app_conn.lock().unwrap();
         let rows_affected = conn.execute(
             "UPDATE known_devices SET is_trusted = ?1 WHERE mac_address = ?2",

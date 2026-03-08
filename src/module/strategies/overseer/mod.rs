@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::module::BaseModuleConfig;
+use serde::{Deserialize, Serialize};
 
 pub mod config_editor;
 pub mod database;

@@ -8,11 +8,13 @@ impl ModuleManager {
             // For monitoring modules, use device_id for handler key (NOT module_idx!)
             // TODO again don't couple this to monitoring..
             let handler_key = if module_type == "monitoring" {
-                let device_id = module.config.bindings
+                let device_id = module
+                    .config
+                    .bindings
                     .get("device_id")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("monitoring_{}", device_id)  // ← Must match registration! TODO scale this..
+                format!("monitoring_{}", device_id) // ← Must match registration! TODO scale this..
             } else {
                 module_type.clone()
             };

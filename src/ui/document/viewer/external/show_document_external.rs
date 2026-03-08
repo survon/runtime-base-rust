@@ -4,9 +4,14 @@ use super::ExternalViewer;
 
 impl ExternalViewer {
     /// Launch external viewer for documents with images
-    pub async fn show_document_external(&self, document_path: &str, content: &DocumentContent) -> color_eyre::Result<()> {
+    pub async fn show_document_external(
+        &self,
+        document_path: &str,
+        content: &DocumentContent,
+    ) -> color_eyre::Result<()> {
         let path = std::path::Path::new(document_path);
-        let extension = path.extension()
+        let extension = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or("")
             .to_lowercase();
@@ -20,7 +25,8 @@ impl ExternalViewer {
             // Video files - create simple HTML5 video player
             "mp4" | "webm" | "ogg" | "ogv" | "avi" | "mov" | "mkv" => {
                 let html_path = self.temp_dir.join("video.html");
-                let html_content = format!(r#"
+                let html_content = format!(
+                    r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -38,7 +44,9 @@ impl ExternalViewer {
     </video>
 </body>
 </html>
-"#, document_path, extension);
+"#,
+                    document_path, extension
+                );
                 tokio::fs::write(&html_path, html_content).await?;
                 self.launch_browser(&html_path).await?;
             }
@@ -46,7 +54,8 @@ impl ExternalViewer {
             // Audio files - create simple HTML5 audio player
             "mp3" | "wav" | "ogg" | "oga" | "flac" | "m4a" | "aac" => {
                 let html_path = self.temp_dir.join("audio.html");
-                let html_content = format!(r#"
+                let html_content = format!(
+                    r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -79,7 +88,11 @@ impl ExternalViewer {
     </audio>
 </body>
 </html>
-"#, path.file_name().unwrap_or_default().to_string_lossy(), document_path, extension);
+"#,
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    document_path,
+                    extension
+                );
                 tokio::fs::write(&html_path, html_content).await?;
                 self.launch_browser(&html_path).await?;
             }
@@ -95,7 +108,8 @@ impl ExternalViewer {
             // Images - create simple HTML image viewer
             "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" => {
                 let html_path = self.temp_dir.join("image.html");
-                let html_content = format!(r#"
+                let html_content = format!(
+                    r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -117,7 +131,9 @@ impl ExternalViewer {
     <img src="file://{}" alt="Image">
 </body>
 </html>
-"#, document_path);
+"#,
+                    document_path
+                );
                 tokio::fs::write(&html_path, html_content).await?;
                 self.launch_browser(&html_path).await?;
             }

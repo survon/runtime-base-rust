@@ -4,7 +4,9 @@ use crate::module::strategies::side_quest::{
 };
 
 impl Database {
-    pub(in crate::module) fn _side_quest__get_active_side_quests(&self) -> rusqlite::Result<Vec<SideQuest>> {
+    pub(in crate::module) fn _side_quest__get_active_side_quests(
+        &self,
+    ) -> rusqlite::Result<Vec<SideQuest>> {
         let conn = self.app_conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, title, description, topic, urgency, trigger_date, created_at, completed_at, is_active
@@ -21,9 +23,7 @@ impl Database {
                 created_at DESC"
         )?;
 
-        let quests = stmt.query_map([], |row| {
-            parse_quest_row(row)
-        })?;
+        let quests = stmt.query_map([], |row| parse_quest_row(row))?;
 
         quests.collect()
     }

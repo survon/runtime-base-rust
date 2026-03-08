@@ -38,11 +38,18 @@ impl ConfigEditor {
             FieldValue::Number(90.0),
         ));
 
-        let chart_options = vec!["line".to_string(), "bar".to_string(), "sparkline".to_string()];
+        let chart_options = vec![
+            "line".to_string(),
+            "bar".to_string(),
+            "sparkline".to_string(),
+        ];
         self.fields.push((
             "Chart Type".to_string(),
             EditorField::ChartType,
-            FieldValue::Enum { options: chart_options, selected: 0 },
+            FieldValue::Enum {
+                options: chart_options,
+                selected: 0,
+            },
         ));
 
         self.fields.push((

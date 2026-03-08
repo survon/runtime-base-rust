@@ -1,16 +1,13 @@
+use crate::log_error;
+use crate::util::{audio::SurvonAudioPlayer, image::ImageRenderer};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Paragraph, Widget},
     text::Line,
+    widgets::{Block, BorderType, Paragraph, Widget},
 };
 use std::time::{Duration, Instant};
-use crate::log_error;
-use crate::util::{
-    audio::SurvonAudioPlayer,
-    image::ImageRenderer,
-};
 
 #[derive(Debug)]
 pub struct SplashScreen {
@@ -24,18 +21,16 @@ pub struct SplashScreen {
 
 impl SplashScreen {
     pub fn new() -> Self {
-        let mut player = SurvonAudioPlayer::new_with_audio_jack(
-            "assets/audio/theme_compressed.wav",
-            0.1
-        );
+        let mut player =
+            SurvonAudioPlayer::new_with_audio_jack("assets/audio/theme_compressed.wav", 0.1);
 
         if let Err(e) = player.play_looped() {
             log_error!("Failed to play theme: {}", e);
         }
 
         // Load background image
-        let background_image = ImageRenderer::from_path("assets/images/homestead-scene-3-wide.png")
-            .ok();
+        let background_image =
+            ImageRenderer::from_path("assets/images/homestead-scene-3-wide.png").ok();
 
         if background_image.is_none() {
             log_error!("Failed to load splash background image");
@@ -97,8 +92,7 @@ impl SplashScreen {
         }
 
         // Create a semi-transparent overlay for better text visibility
-        let overlay = Block::default()
-            .style(Style::default().bg(Color::Rgb(0, 0, 0))); // We'll layer text on top
+        let overlay = Block::default().style(Style::default().bg(Color::Rgb(0, 0, 0))); // We'll layer text on top
 
         let logo = vec![
             "███████╗██╗   ██╗██████╗ ██╗   ██╗ ██████╗ ███╗   ██╗",
@@ -123,14 +117,10 @@ impl SplashScreen {
             }
 
             let color = self.get_rainbow_color(i as f64 * 60.0);
-            let styled_line = Line::from(line.to_string()).style(
-                Style::default()
-                    .fg(color)
-                    .add_modifier(Modifier::BOLD)
-            );
+            let styled_line = Line::from(line.to_string())
+                .style(Style::default().fg(color).add_modifier(Modifier::BOLD));
 
-            let paragraph = Paragraph::new(styled_line)
-                .alignment(Alignment::Center);
+            let paragraph = Paragraph::new(styled_line).alignment(Alignment::Center);
 
             let line_area = Rect {
                 x: area.x,
@@ -150,11 +140,10 @@ impl SplashScreen {
                 Style::default()
                     .fg(tagline_color)
                     .add_modifier(Modifier::ITALIC | Modifier::BOLD)
-                    .bg(Color::Rgb(0, 0, 0)) // Dark background for readability
+                    .bg(Color::Rgb(0, 0, 0)), // Dark background for readability
             );
 
-            let tagline_paragraph = Paragraph::new(tagline_line)
-                .alignment(Alignment::Center);
+            let tagline_paragraph = Paragraph::new(tagline_line).alignment(Alignment::Center);
 
             let tagline_area = Rect {
                 x: area.x,
@@ -180,13 +169,10 @@ impl SplashScreen {
             let loading_color = self.get_rainbow_color(180.0);
 
             let loading_line = Line::from(message).style(
-                Style::default()
-                    .fg(loading_color)
-                    .bg(Color::Rgb(0, 0, 0)) // Dark background for readability
+                Style::default().fg(loading_color).bg(Color::Rgb(0, 0, 0)), // Dark background for readability
             );
 
-            let loading_paragraph = Paragraph::new(loading_line)
-                .alignment(Alignment::Center);
+            let loading_paragraph = Paragraph::new(loading_line).alignment(Alignment::Center);
 
             let loading_area = Rect {
                 x: area.x,

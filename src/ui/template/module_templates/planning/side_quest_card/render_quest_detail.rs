@@ -5,17 +5,12 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
+use super::{SideQuestCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{SideQuestCard, ViewData};
 
 impl SideQuestCard {
-    pub(super) fn render_quest_detail(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        module: &mut Module,
-    ) {
+    pub(super) fn render_quest_detail(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let ViewData {
             selected_quest_title,
             selected_quest_description,
@@ -29,9 +24,9 @@ impl SideQuestCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // Quest details
-                Constraint::Length(3),  // Help
+                Constraint::Length(3), // Title
+                Constraint::Min(1),    // Quest details
+                Constraint::Length(3), // Help
             ])
             .split(area);
 
@@ -40,9 +35,13 @@ impl SideQuestCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(title_widget, chunks[0], buf);
 
@@ -59,7 +58,7 @@ impl SideQuestCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
             .style(Style::default().fg(Color::White))
             .wrap(Wrap { trim: true });

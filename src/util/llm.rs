@@ -2,17 +2,17 @@
 //! Hybrid approach: Smart search + tiny LLM for humanizing output
 
 use color_eyre::Result;
+use gag::Gag;
+use llama_cpp::standard_sampler::StandardSampler;
+use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use llama_cpp::{LlamaModel, LlamaParams, SessionParams};
-use llama_cpp::standard_sampler::StandardSampler;
-use gag::Gag;
 use tokio::time::Duration;
-use serde::{Deserialize, Serialize};
 
+use crate::module::strategies::llm::database::{ChatMessage, KnowledgeChunk, LlmDatabase};
 use crate::util::database::Database;
-use crate::module::strategies::llm::database::{LlmDatabase, ChatMessage, KnowledgeChunk};
-use crate::{log_error, log_debug};
+use crate::{log_debug, log_error};
 
 /// LLM service with optional lightweight summarizer
 #[derive(Clone)]
@@ -80,7 +80,9 @@ impl LlmService {
     ) -> Result<String> {
         // Check if using remote endpoint
         if let (Some(endpoint), Some(model)) = (&self.remote_endpoint, &self.remote_model) {
-            return self.query_remote_llm(session_id, module_name, query, endpoint, model).await;
+            return self
+                .query_remote_llm(session_id, module_name, query, endpoint, model)
+                .await;
         }
 
         // Store user message
@@ -95,14 +97,16 @@ impl LlmService {
         let search_terms = self.extract_search_terms(query);
         log_debug!("Search terms: {:?}", search_terms);
 
-        let knowledge_context = self.search_knowledge_smart(&search_terms, knowledge_module_names)?;
+        let knowledge_context =
+            self.search_knowledge_smart(&search_terms, knowledge_module_names)?;
 
         // Generate response
         let response = if knowledge_context.is_empty() {
             self.generate_no_results_response(query)
         } else if self.use_summarizer && self.model_path.is_some() {
             // Use tiny LLM to humanize the search results
-            self.summarize_with_tiny_llm(query, &knowledge_context).await?
+            self.summarize_with_tiny_llm(query, &knowledge_context)
+                .await?
         } else {
             // Direct search results
             self.generate_answer_from_chunks(query, &knowledge_context)
@@ -149,11 +153,7 @@ impl LlmService {
             .timeout(Duration::from_secs(30))
             .build()?;
 
-        let response = client
-            .post(&url)
-            .json(&payload)
-            .send()
-            .await?;
+        let response = client.post(&url).json(&payload).send().await?;
 
         #[derive(Deserialize)]
         struct OllamaResponse {
@@ -191,8 +191,7 @@ impl LlmService {
         };
 
         // Suppress llama.cpp output
-        let print_gag = Gag::stdout()
-            .map_err(|e| color_eyre::eyre::eyre!("Gag error: {}", e))?;
+        let print_gag = Gag::stdout().map_err(|e| color_eyre::eyre::eyre!("Gag error: {}", e))?;
 
         // Load model with minimal settings for fast inference
         let params = LlamaParams::default();
@@ -201,25 +200,27 @@ impl LlmService {
 
         // Tiny context window - we only need to summarize short excerpts
         let session_params = SessionParams {
-            n_ctx: 1024,      // Small context = faster
-            n_batch: 32,      // Small batch = less memory
-            n_threads: 2,     // Only 2 threads
+            n_ctx: 1024,  // Small context = faster
+            n_batch: 32,  // Small batch = less memory
+            n_threads: 2, // Only 2 threads
             n_threads_batch: 1,
             ..Default::default()
         };
 
-        let mut session = model.create_session(session_params)
+        let mut session = model
+            .create_session(session_params)
             .map_err(|e| color_eyre::eyre::eyre!("Failed to create session: {}", e))?;
 
         // Build a MINIMAL prompt
         let prompt = self.build_summarizer_prompt(query, chunks);
         log_debug!("Prompt length: {} chars", prompt.len());
 
-        session.advance_context(&prompt)
+        session
+            .advance_context(&prompt)
             .map_err(|e| color_eyre::eyre::eyre!("Failed to advance context: {}", e))?;
 
         let sampler = StandardSampler::default();
-        let max_tokens = 200;  // Short summary only!
+        let max_tokens = 200; // Short summary only!
 
         let mut response = String::new();
         let completion_result = session.start_completing_with(sampler, max_tokens);
@@ -230,12 +231,14 @@ impl LlmService {
 
         let start_time = std::time::Instant::now();
         while let Some(token) = completion_handle.next() {
-            if start_time.elapsed() > Duration::from_secs(15) {  // Quick timeout
+            if start_time.elapsed() > Duration::from_secs(15) {
+                // Quick timeout
                 break;
             }
             response.push_str(&token);
 
-            if response.len() > 1000 {  // Cap response length
+            if response.len() > 1000 {
+                // Cap response length
                 break;
             }
 
@@ -286,7 +289,7 @@ impl LlmService {
             } else {
                 &chunk.body
             };
-            prompt.push_str(&format!("[{}] {}\n\n", i+1, snippet));
+            prompt.push_str(&format!("[{}] {}\n\n", i + 1, snippet));
         }
 
         prompt.push_str("<|user|>\n");
@@ -310,13 +313,13 @@ impl LlmService {
     /// Extract search terms from query
     fn extract_search_terms(&self, query: &str) -> Vec<String> {
         let stopwords = [
-            "how", "do", "i", "a", "the", "is", "to", "can", "you", "what", "when",
-            "where", "why", "does", "will", "would", "could", "should", "make",
-            "build", "create", "get", "find", "tell", "me", "about", "my", "your",
-            "explain", "show", "help", "with", "from"
+            "how", "do", "i", "a", "the", "is", "to", "can", "you", "what", "when", "where", "why",
+            "does", "will", "would", "could", "should", "make", "build", "create", "get", "find",
+            "tell", "me", "about", "my", "your", "explain", "show", "help", "with", "from",
         ];
 
-        query.to_lowercase()
+        query
+            .to_lowercase()
             .split_whitespace()
             .filter(|word| {
                 let clean = word.trim_matches(|c: char| !c.is_alphanumeric());
@@ -349,7 +352,9 @@ impl LlmService {
 
         // Strategy 1: Phrase search
         let phrase_query = search_terms.join(" ");
-        let mut results = self.database.search_knowledge(&phrase_query, &domains, 15)?;
+        let mut results = self
+            .database
+            .search_knowledge(&phrase_query, &domains, 15)?;
         log_debug!("Phrase search: {} results", results.len());
 
         // Strategy 2: OR search if needed
@@ -423,11 +428,7 @@ impl LlmService {
     }
 
     /// Generate answer from chunks (fallback for non-summarizer mode)
-    fn generate_answer_from_chunks(
-        &self,
-        query: &str,
-        chunks: &[KnowledgeChunk],
-    ) -> String {
+    fn generate_answer_from_chunks(&self, query: &str, chunks: &[KnowledgeChunk]) -> String {
         let topic = self.extract_topic(query);
         let mut response = format!("**Regarding {}:**\n\n", topic);
 
@@ -456,7 +457,8 @@ impl LlmService {
         let mut snippets = Vec::new();
 
         for chunk in chunks.iter().take(max * 2) {
-            let sentences: Vec<&str> = chunk.body
+            let sentences: Vec<&str> = chunk
+                .body
                 .split('.')
                 .map(|s| s.trim())
                 .filter(|s| s.len() > 30 && s.len() < 300)
@@ -482,15 +484,16 @@ impl LlmService {
         let mut seen = std::collections::HashSet::new();
 
         for chunk in chunks {
-            let source_path = if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&chunk.metadata) {
-                if let Some(page_num) = metadata.get("page_number").and_then(|v| v.as_u64()) {
-                    format!("{}#page={}", chunk.source_file, page_num)
+            let source_path =
+                if let Ok(metadata) = serde_json::from_str::<serde_json::Value>(&chunk.metadata) {
+                    if let Some(page_num) = metadata.get("page_number").and_then(|v| v.as_u64()) {
+                        format!("{}#page={}", chunk.source_file, page_num)
+                    } else {
+                        chunk.source_file.clone()
+                    }
                 } else {
                     chunk.source_file.clone()
-                }
-            } else {
-                chunk.source_file.clone()
-            };
+                };
 
             let filename = std::path::Path::new(&chunk.source_file)
                 .file_name()
@@ -560,7 +563,14 @@ impl LlmService {
 impl std::fmt::Debug for LlmService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlmService")
-            .field("mode", &if self.use_summarizer { "hybrid" } else { "search" })
+            .field(
+                "mode",
+                &if self.use_summarizer {
+                    "hybrid"
+                } else {
+                    "search"
+                },
+            )
             .finish()
     }
 }

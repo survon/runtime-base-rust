@@ -1,16 +1,7 @@
 // src/util/image.rs
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    Frame,
-};
-use ratatui_image::{
-    picker::Picker,
-    StatefulImage,
-    protocol::StatefulProtocol,
-    Resize,
-};
 use image::DynamicImage;
+use ratatui::{buffer::Buffer, layout::Rect, Frame};
+use ratatui_image::{picker::Picker, protocol::StatefulProtocol, Resize, StatefulImage};
 use std::path::Path;
 
 pub struct ImageRenderer {
@@ -85,7 +76,9 @@ impl ImageRenderer {
                 let scaled_width = (scaled_height as f32 * img_aspect) as u16;
 
                 // Center horizontally
-                let offset_x = area.x.saturating_sub((scaled_width.saturating_sub(area.width)) / 2);
+                let offset_x = area
+                    .x
+                    .saturating_sub((scaled_width.saturating_sub(area.width)) / 2);
 
                 (
                     Rect {
@@ -94,7 +87,7 @@ impl ImageRenderer {
                         width: scaled_width,
                         height: scaled_height,
                     },
-                    Resize::Fit(None)
+                    Resize::Fit(None),
                 )
             } else {
                 // Image is taller - fill WIDTH, let height overflow
@@ -102,7 +95,9 @@ impl ImageRenderer {
                 let scaled_height = (scaled_width as f32 / img_aspect) as u16;
 
                 // Center vertically
-                let offset_y = area.y.saturating_sub((scaled_height.saturating_sub(area.height)) / 2);
+                let offset_y = area
+                    .y
+                    .saturating_sub((scaled_height.saturating_sub(area.height)) / 2);
 
                 (
                     Rect {
@@ -111,7 +106,7 @@ impl ImageRenderer {
                         width: scaled_width,
                         height: scaled_height,
                     },
-                    Resize::Fit(None)
+                    Resize::Fit(None),
                 )
             };
 
@@ -144,8 +139,14 @@ pub struct ImageCache {
 impl std::fmt::Debug for ImageCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ImageCache")
-            .field("splash_bg", &self.splash_bg.as_ref().map(|_| "<ImageRenderer>"))
-            .field("overview_header_bg", &self.overview_header_bg.as_ref().map(|_| "<ImageRenderer>"))
+            .field(
+                "splash_bg",
+                &self.splash_bg.as_ref().map(|_| "<ImageRenderer>"),
+            )
+            .field(
+                "overview_header_bg",
+                &self.overview_header_bg.as_ref().map(|_| "<ImageRenderer>"),
+            )
             .finish()
     }
 }
@@ -158,12 +159,18 @@ impl ImageCache {
         }
     }
 
-    pub fn load_splash(&mut self, path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_splash(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.splash_bg = Some(ImageRenderer::from_path(path)?);
         Ok(())
     }
 
-    pub fn load_overview_header(&mut self, path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_overview_header(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.overview_header_bg = Some(ImageRenderer::from_path(path)?);
         Ok(())
     }

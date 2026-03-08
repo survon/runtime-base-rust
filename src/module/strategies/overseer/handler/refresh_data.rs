@@ -1,5 +1,5 @@
-use crate::module::strategies::overseer::database::OverseerDatabase;
 use super::{HandlerMessage, OverseerHandler};
+use crate::module::strategies::overseer::database::OverseerDatabase;
 
 impl OverseerHandler {
     pub(in crate::module) fn refresh_async_data_only(&mut self) {

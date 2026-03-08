@@ -5,17 +5,12 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
-    pub(super) fn render_pending_trust(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        module: &mut Module,
-    ) {
+    pub(super) fn render_pending_trust(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let ViewData {
             border_color,
             selected_index,
@@ -31,35 +26,43 @@ impl OverseerCard {
             .direction(Direction::Vertical)
             .constraints(if has_status {
                 vec![
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(1),     // Device list
-                    Constraint::Length(3),  // Status/Scan
-                    Constraint::Length(3),  // Help
+                    Constraint::Length(3), // Title
+                    Constraint::Min(1),    // Device list
+                    Constraint::Length(3), // Status/Scan
+                    Constraint::Length(3), // Help
                 ]
             } else {
                 vec![
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(1),     // Device list
-                    Constraint::Length(3),  // Help
+                    Constraint::Length(3), // Title
+                    Constraint::Min(1),    // Device list
+                    Constraint::Length(3), // Help
                 ]
             })
             .split(area);
 
         // Title with alert styling
-        let title = Paragraph::new(format!("⚠️  New Devices Discovered ({})", pending_devices.len()))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow))
-            )
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-            .alignment(Alignment::Center);
+        let title = Paragraph::new(format!(
+            "⚠️  New Devices Discovered ({})",
+            pending_devices.len()
+        ))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
         // Device list
         if pending_devices.is_empty() {
             let empty_message = "No pending devices.\n\nNew devices will appear here when discovered.\n\nThey need to be trusted before registration.";
-            let empty_message_component = UiComponent::empty_message(empty_message, Some(border_color.clone()));
+            let empty_message_component =
+                UiComponent::empty_message(empty_message, Some(border_color.clone()));
             Widget::render(empty_message_component, chunks[1], buf);
         } else {
             let list_items: Vec<ListItem> = pending_devices
@@ -80,13 +83,12 @@ impl OverseerCard {
                 })
                 .collect();
 
-            let list = List::new(list_items)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Yellow))
-                        .title(" Select device to trust ")
-                );
+            let list = List::new(list_items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow))
+                    .title(" Select device to trust "),
+            );
             Widget::render(list, chunks[1], buf);
         }
 

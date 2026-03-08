@@ -6,5 +6,8 @@ pub enum FieldValue {
     Text(String),
     Number(f64),
     Bool(bool),
-    Enum { options: Vec<String>, selected: usize },
+    Enum {
+        options: Vec<String>,
+        selected: usize,
+    },
 }

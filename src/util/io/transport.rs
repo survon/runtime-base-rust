@@ -4,17 +4,17 @@
 use color_eyre::Result;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::RwLock;
 use tokio_serial::SerialPortBuilderExt;
-use std::time::{Duration};
 
 use crate::util::io::{
-    get_all_event_message_topics,
     bus::{BusMessage, BusReceiver, MessageBus},
-    serial::{SspMessage, SourceInfo, Transport, MessageType},
+    get_all_event_message_topics,
+    serial::{MessageType, SourceInfo, SspMessage, Transport},
 };
-use crate::{log_info, log_warn, log_error};
+use crate::{log_error, log_info, log_warn};
 
 /// Manages all transport connections and message routing
 #[derive(Clone)]
@@ -98,7 +98,11 @@ impl TransportManager {
             // Poll all receivers
             for receiver in &mut receivers {
                 while let Ok(bus_msg) = receiver.try_recv() {
-                    log_info!("Outbound message on topic '{}': {}", bus_msg.topic, bus_msg.payload);
+                    log_info!(
+                        "Outbound message on topic '{}': {}",
+                        bus_msg.topic,
+                        bus_msg.payload
+                    );
 
                     // Parse payload to determine target device
                     if let Err(e) = self.route_outbound_message(&bus_msg).await {
@@ -123,7 +127,11 @@ impl TransportManager {
         log_info!("Outbound message routing table: {:?}", routing_table);
 
         if let Some(target_source) = routing_table.get(&target_device_id) {
-            log_info!("Routing message to device '{}' via {:?}", target_device_id, target_source.transport);
+            log_info!(
+                "Routing message to device '{}' via {:?}",
+                target_device_id,
+                target_source.transport
+            );
 
             // Convert to SSP format
             let ssp_msg = SspMessage::from_bus_message(
@@ -135,7 +143,10 @@ impl TransportManager {
             // Send via appropriate transport
             self.send_via_transport(&ssp_msg, target_source).await?;
         } else {
-            log_warn!("No routing info for device '{}', broadcasting to all transports", target_device_id);
+            log_warn!(
+                "No routing info for device '{}', broadcasting to all transports",
+                target_device_id
+            );
         }
 
         Ok(())
@@ -181,8 +192,7 @@ impl TransportManager {
         log_info!("Sending to serial port {}: {}", port_path, data.trim());
 
         // Open serial port
-        let mut port = tokio_serial::new(port_path, 115200)
-            .open_native_async()?;
+        let mut port = tokio_serial::new(port_path, 115200).open_native_async()?;
 
         // Write data
         port.write_all(data.as_bytes()).await?;
@@ -282,19 +292,25 @@ impl TransportManager {
         log_info!("Starting serial listener on {}", port_path);
 
         // Open serial port
-        let port = tokio_serial::new(&port_path, 115200)
-            .open_native_async()?;
+        let port = tokio_serial::new(&port_path, 115200).open_native_async()?;
 
         let reader = BufReader::new(port);
         let mut lines = reader.lines();
 
-        log_info!("Serial port {} opened successfully, listening for SSP messages...", port_path);
+        log_info!(
+            "Serial port {} opened successfully, listening for SSP messages...",
+            port_path
+        );
 
         while let Some(line) = lines.next_line().await? {
             // Skip empty lines and AT command responses
             let trimmed = line.trim();
 
-            log_info!("🔵 RAW BYTES RECEIVED (len={}): '{}'", trimmed.len(), trimmed);
+            log_info!(
+                "🔵 RAW BYTES RECEIVED (len={}): '{}'",
+                trimmed.len(),
+                trimmed
+            );
 
             // Skip obvious AT commands and empty lines
             if trimmed.is_empty() ||
@@ -303,15 +319,22 @@ impl TransportManager {
                 trimmed.starts_with("ERROR") ||
                 trimmed.starts_with("+") ||  // AT+ responses
                 trimmed.contains("Bluefruit") ||
-                trimmed.len() < 50  // too short to be real SSP
+                trimmed.len() < 50
+            // too short to be real SSP
             {
                 continue;
             }
             // Clean trailing garbage from BLE UART
-            let cleaned = trimmed.trim_end_matches(|c: char| !c.is_ascii_alphanumeric() && c != '{' && c != '}' && c != '"');
+            let cleaned = trimmed.trim_end_matches(|c: char| {
+                !c.is_ascii_alphanumeric() && c != '{' && c != '}' && c != '"'
+            });
             let final_line = if cleaned != trimmed { cleaned } else { trimmed };
 
-            log_info!("Attempting to parse SSP ({} bytes): {}", final_line.len(), final_line);
+            log_info!(
+                "Attempting to parse SSP ({} bytes): {}",
+                final_line.len(),
+                final_line
+            );
 
             // Only log raw if it's likely real data
             log_info!("Received raw line ({} bytes): {}", trimmed.len(), trimmed);
@@ -319,8 +342,8 @@ impl TransportManager {
             // Try to parse as SSP message
             match SspMessage::parse_flexible(trimmed) {
                 Ok(ssp_msg) => {
-
-                    log_info!("PARSED SSP from {}: topic={}, type={:?}, payload={}",
+                    log_info!(
+                        "PARSED SSP from {}: topic={}, type={:?}, payload={}",
                         ssp_msg.source.id,
                         ssp_msg.topic,
                         ssp_msg.msg_type,
@@ -330,11 +353,11 @@ impl TransportManager {
                     // Store routing info for this device
                     {
                         let mut routing_table = self.routing_table.write().await;
-                        routing_table.insert(
-                            ssp_msg.source.id.clone(),
-                            ssp_msg.source.clone(),
+                        routing_table.insert(ssp_msg.source.id.clone(), ssp_msg.source.clone());
+                        log_info!(
+                            "Updated routing table: {} devices known",
+                            routing_table.len()
                         );
-                        log_info!("Updated routing table: {} devices known", routing_table.len());
                     }
 
                     // Convert to bus message and publish
@@ -402,7 +425,7 @@ mod tests {
         let ssp_back = SspMessage::from_bus_message(
             &bus_msg,
             ssp_msg.source.transport.clone(),
-            ssp_msg.source.address.clone()
+            ssp_msg.source.address.clone(),
         );
         assert_eq!(ssp_back.topic, "pressure_sensor");
     }

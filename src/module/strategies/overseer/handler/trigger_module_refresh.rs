@@ -1,5 +1,5 @@
-use crate::log_debug;
 use super::OverseerHandler;
+use crate::log_debug;
 
 impl OverseerHandler {
     pub(in crate::module) fn trigger_module_refresh(&self) {

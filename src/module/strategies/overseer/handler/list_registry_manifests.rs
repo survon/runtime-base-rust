@@ -1,7 +1,9 @@
-use super::{RegistryManifest, OverseerHandler};
+use super::{OverseerHandler, RegistryManifest};
 
 impl OverseerHandler {
-    pub(in crate::module) async fn list_registry_manifests(&self) -> color_eyre::Result<Vec<RegistryManifest>> {
+    pub(in crate::module) async fn list_registry_manifests(
+        &self,
+    ) -> color_eyre::Result<Vec<RegistryManifest>> {
         // Mock implementation - in production, this would be:
         // let response = reqwest::get(format!("{}/manifests", self.registry_url)).await?;
         // let registry: RegistryResponse = response.json().await?;
@@ -28,7 +30,10 @@ impl OverseerHandler {
                 author: "Survon Core".to_string(),
                 module_type: "monitoring".to_string(),
                 template: "gauge_card".to_string(),
-                download_url: format!("{}/manifests/temperature_sensor/download", self.registry_url),
+                download_url: format!(
+                    "{}/manifests/temperature_sensor/download",
+                    self.registry_url
+                ),
                 checksum: "def456".to_string(),
             },
             RegistryManifest {

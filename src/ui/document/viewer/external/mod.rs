@@ -1,10 +1,10 @@
-mod new;
 mod can_launch_external;
-mod show_document_external;
-mod launch_browser_with_file;
+mod command_exists;
 mod create_document_html;
 mod launch_browser;
-mod command_exists;
+mod launch_browser_with_file;
+mod new;
+mod show_document_external;
 
 #[derive(Debug)]
 pub struct ExternalViewer {

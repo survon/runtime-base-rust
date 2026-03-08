@@ -1,12 +1,7 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    prelude::Color,
+use ratatui::{buffer::Buffer, layout::Rect, prelude::Color};
 
-};
-
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
-use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
     pub(super) fn get_view_data<'a>(
@@ -14,7 +9,7 @@ impl OverseerCard {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &'a mut Module
+        module: &'a mut Module,
     ) -> ViewData<'a> {
         let current_view = module
             .config
@@ -102,9 +97,7 @@ impl OverseerCard {
             .get("pending_devices")
             .and_then(|v| v.as_array());
 
-        let pending_count = _pending_devices_arr
-            .map(|arr| arr.len())
-            .unwrap_or(0);
+        let pending_count = _pending_devices_arr.map(|arr| arr.len()).unwrap_or(0);
 
         let pending_devices = _pending_devices_arr
             .map(|arr| {
@@ -143,7 +136,11 @@ impl OverseerCard {
 
         let has_status = status_message.is_some();
 
-        let border_color = if is_selected { Color::White } else { Color::Cyan };
+        let border_color = if is_selected {
+            Color::White
+        } else {
+            Color::Cyan
+        };
 
         ViewData {
             current_view,

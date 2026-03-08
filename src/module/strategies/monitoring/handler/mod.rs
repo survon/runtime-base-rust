@@ -1,10 +1,10 @@
-mod trait_module_handler;
-mod new;
-mod start_telemetry_listener;
-mod process_messages;
 mod is_connected;
-mod time_since_last_update;
 mod is_in_cmd_window;
+mod new;
+mod process_messages;
+mod start_telemetry_listener;
+mod time_since_last_update;
+mod trait_module_handler;
 mod update_bindings;
 
 use std::{
@@ -15,10 +15,7 @@ use std::{
 
 use tokio::sync::mpsc;
 
-use crate::{
-    module::trait_module_handler::ModuleHandler,
-    util::io::bus::MessageBus,
-};
+use crate::{module::trait_module_handler::ModuleHandler, util::io::bus::MessageBus};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_HISTORY: usize = 50;
@@ -49,7 +46,7 @@ pub struct MonitoringHandler {
     message_bus: MessageBus,
     message_tx: mpsc::UnboundedSender<HandlerMessage>,
     message_rx: mpsc::UnboundedReceiver<HandlerMessage>,
-    current_mode: Option<String>,        // "data" or "cmd"
-    cmd_window_opens_in: Option<u64>,    // seconds until CMD window
-    cmd_window_duration: Option<u64>,    // duration of CMD window
+    current_mode: Option<String>,     // "data" or "cmd"
+    cmd_window_opens_in: Option<u64>, // seconds until CMD window
+    cmd_window_duration: Option<u64>, // duration of CMD window
 }

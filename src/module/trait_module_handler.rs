@@ -2,15 +2,9 @@
 
 use color_eyre::Result;
 use ratatui::crossterm::event::KeyCode;
-use std::{
-    any::Any,
-    fmt::Debug,
-};
+use std::{any::Any, fmt::Debug};
 
-use crate::{
-    util::io::event::AppEvent,
-    module::Module
-};
+use crate::{module::Module, util::io::event::AppEvent};
 
 /// Trait for handling module-specific logic
 pub trait ModuleHandler: Send + Sync + Debug {

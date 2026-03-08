@@ -10,22 +10,25 @@ impl ConfigValidator {
     ) -> color_eyre::Result<()> {
         let required = match template {
             "gauge_card" => vec![
-                "a", "device_id", "display_name", "unit_of_measure_label",
-                "max_value", "warn_threshold", "danger_threshold",
+                "a",
+                "device_id",
+                "display_name",
+                "unit_of_measure_label",
+                "max_value",
+                "warn_threshold",
+                "danger_threshold",
             ],
             "chart_card" => vec![
-                "a", "device_id", "display_name", "unit_of_measure_label",
-                "chart_type", "max_value",
+                "a",
+                "device_id",
+                "display_name",
+                "unit_of_measure_label",
+                "chart_type",
+                "max_value",
             ],
-            "status_badge_card" => vec![
-                "a", "device_id", "is_blinkable",
-            ],
-            "toggle_switch" => vec![
-                "state", "label", "toggle_on_label", "toggle_off_label",
-            ],
-            "llm_card" => vec![
-                "model_info", "chat_history", "chat_input",
-            ],
+            "status_badge_card" => vec!["a", "device_id", "is_blinkable"],
+            "toggle_switch" => vec!["state", "label", "toggle_on_label", "toggle_off_label"],
+            "llm_card" => vec!["model_info", "chat_history", "chat_input"],
             _ => vec![],
         };
 
@@ -34,7 +37,8 @@ impl ConfigValidator {
                 return Err(ValidationError {
                     field: format!("bindings.{}", field),
                     error: format!("Required by template '{}'", template),
-                }.into());
+                }
+                .into());
             }
         }
 

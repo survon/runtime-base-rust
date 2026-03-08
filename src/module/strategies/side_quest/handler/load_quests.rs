@@ -1,6 +1,6 @@
 use crate::{log_error, log_info};
 
-use super::{SideQuestHandler,SideQuestDatabase};
+use super::{SideQuestDatabase, SideQuestHandler};
 
 impl SideQuestHandler {
     pub(in crate::module) fn load_quests(&mut self) {

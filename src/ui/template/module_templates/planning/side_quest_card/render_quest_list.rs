@@ -5,9 +5,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
 };
 
+use super::{SideQuestCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{SideQuestCard, ViewData};
 
 impl SideQuestCard {
     pub(super) fn render_quest_list(
@@ -31,16 +31,16 @@ impl SideQuestCard {
             .direction(Direction::Vertical)
             .constraints(if has_status {
                 vec![
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(1),     // Quest list
-                    Constraint::Length(3),  // Status
-                    Constraint::Length(3),  // Help
+                    Constraint::Length(3), // Title
+                    Constraint::Min(1),    // Quest list
+                    Constraint::Length(3), // Status
+                    Constraint::Length(3), // Help
                 ]
             } else {
                 vec![
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(1),     // Quest list
-                    Constraint::Length(3),  // Help
+                    Constraint::Length(3), // Title
+                    Constraint::Min(1),    // Quest list
+                    Constraint::Length(3), // Help
                 ]
             })
             .split(area);
@@ -50,9 +50,13 @@ impl SideQuestCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
@@ -87,13 +91,12 @@ impl SideQuestCard {
                 })
                 .collect();
 
-            let list = List::new(list_items)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(border_color))
-                        .title(" Your Quests ")
-                );
+            let list = List::new(list_items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color))
+                    .title(" Your Quests "),
+            );
             Widget::render(list, chunks[1], buf);
         }
 

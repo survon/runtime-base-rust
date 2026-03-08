@@ -1,13 +1,13 @@
 // src/widgets/module_detail/widget.rs
+use crate::module::ModuleManager;
+use crate::ui::style::dim_unless_focused;
+use ratatui::prelude::Style;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Stylize},
     widgets::{Block, BorderType, Paragraph, Widget},
 };
-use ratatui::prelude::Style;
-use crate::module::ModuleManager;
-use crate::ui::style::dim_unless_focused;
 
 #[derive(Debug)]
 pub struct ModuleDetailWidget {
@@ -26,7 +26,7 @@ impl ModuleDetailWidget {
         module_idx: usize,
         is_focused: Option<bool>,
         area: Rect,
-        buf: &mut Buffer
+        buf: &mut Buffer,
     ) -> Block {
         let border_style = dim_unless_focused(is_focused, Style::default().fg(Color::Yellow));
 
@@ -47,7 +47,10 @@ impl ModuleDetailWidget {
             _ => "🤷🏻‍♂️️",
         };
 
-        let title = format!(" {} {} - Press [Esc] To Close Module Window ", icon, module.config.name);
+        let title = format!(
+            " {} {} - Press [Esc] To Close Module Window ",
+            icon, module.config.name
+        );
 
         let container = Block::bordered()
             .title(title)
@@ -66,8 +69,8 @@ impl ModuleDetailWidget {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(1),     // Content
-                Constraint::Length(3),  // Help
+                Constraint::Min(1),    // Content
+                Constraint::Length(3), // Help
             ])
             .split(area);
 

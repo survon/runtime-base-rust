@@ -3,13 +3,10 @@ mod render_create_quest;
 mod render_overview_cta;
 mod render_quest_detail;
 mod render_quest_list;
-mod trait_ui_template;
 mod trait_default;
+mod trait_ui_template;
 
-use ratatui::{
-    prelude::*,
-    widgets::{Widget},
-};
+use ratatui::{prelude::*, widgets::Widget};
 
 use crate::ui::template::UiTemplate;
 

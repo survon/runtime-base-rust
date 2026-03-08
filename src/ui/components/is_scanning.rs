@@ -18,9 +18,13 @@ impl UiComponent {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Blue))
-                    .title(" Scan in Progress ")
+                    .title(" Scan in Progress "),
             )
-            .style(Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center)
     }
 }

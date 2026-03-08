@@ -1,17 +1,13 @@
 // src/util/bus/serial.rs
-use serde::{
-    Deserialize,
-    Serialize,
-    de::Error as SerdeError
-};
+use serde::{de::Error as SerdeError, Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{log_debug,log_warn};
-use crate::util::io::bus::{BusMessage};
+use crate::util::io::bus::BusMessage;
+use crate::{log_debug, log_warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SspMessage {
-    pub protocol: String,  // "ssp/1.0"
+    pub protocol: String, // "ssp/1.0"
     #[serde(rename = "type")]
     pub msg_type: MessageType,
     pub topic: String,
@@ -65,7 +61,7 @@ pub enum Transport {
     Lora,
     Zigbee,
     Internal,
-    Unknown
+    Unknown,
 }
 
 impl Transport {
@@ -88,24 +84,29 @@ impl SspMessage {
         log_debug!("Parsing compact SSP: {}", json_str);
 
         // Required fields (compact format)
-        let protocol = value.get("p")
+        let protocol = value
+            .get("p")
             .and_then(|v| v.as_str())
             .ok_or_else(|| serde_json::Error::custom("Missing 'p' (protocol)"))?;
 
-        let msg_type_str = value.get("t")
+        let msg_type_str = value
+            .get("t")
             .and_then(|v| v.as_str())
             .ok_or_else(|| serde_json::Error::custom("Missing 't' (type)"))?;
 
-        let device_id = value.get("i")
+        let device_id = value
+            .get("i")
             .and_then(|v| v.as_str())
             .ok_or_else(|| serde_json::Error::custom("Missing 'i' (device id)"))?;
 
-        let timestamp = value.get("s")
+        let timestamp = value
+            .get("s")
             .and_then(|v| v.as_u64())
             .ok_or_else(|| serde_json::Error::custom("Missing 's' (timestamp)"))?;
 
         // Data payload
-        let data = value.get("d")
+        let data = value
+            .get("d")
             .and_then(|v| v.as_object())
             .ok_or_else(|| serde_json::Error::custom("Missing 'd' (data)"))?;
 

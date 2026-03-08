@@ -3,20 +3,14 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     prelude::{Color, Modifier, Style, Widget},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-
 };
 
+use super::{OverseerCard, ViewData};
 use crate::module::Module;
 use crate::ui::components::UiComponent;
-use super::{ViewData, OverseerCard};
 
 impl OverseerCard {
-    pub(super) fn render_all_devices(
-        &self,
-        area: Rect,
-        buf: &mut Buffer,
-        module: &mut Module,
-    ) {
+    pub(super) fn render_all_devices(&self, area: Rect, buf: &mut Buffer, module: &mut Module) {
         let ViewData {
             border_color,
             selected_index,
@@ -32,16 +26,16 @@ impl OverseerCard {
             .direction(Direction::Vertical)
             .constraints(if has_status {
                 vec![
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(1),     // Device list
-                    Constraint::Length(3),  // Status/Scan
-                    Constraint::Length(3),  // Help
+                    Constraint::Length(3), // Title
+                    Constraint::Min(1),    // Device list
+                    Constraint::Length(3), // Status/Scan
+                    Constraint::Length(3), // Help
                 ]
             } else {
                 vec![
-                    Constraint::Length(3),  // Title
-                    Constraint::Min(1),     // Device list
-                    Constraint::Length(3),  // Help
+                    Constraint::Length(3), // Title
+                    Constraint::Min(1),    // Device list
+                    Constraint::Length(3), // Help
                 ]
             })
             .split(area);
@@ -51,16 +45,21 @@ impl OverseerCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(border_color))
+                    .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
         // Device list
         if known_devices.is_empty() {
             let empty_message = "No devices discovered yet.\n\nDevices will appear here when they're in range.\n\nPress '[r]' to refresh scanning.";
-            let empty_message_component = UiComponent::empty_message(empty_message, Some(border_color));
+            let empty_message_component =
+                UiComponent::empty_message(empty_message, Some(border_color));
             Widget::render(empty_message_component, chunks[1], buf);
         } else {
             let list_items: Vec<ListItem> = known_devices
@@ -74,7 +73,11 @@ impl OverseerCard {
                     let style = if i == selected_index {
                         Style::default()
                             .fg(Color::Black)
-                            .bg(if is_trusted { Color::Green } else { Color::Gray })
+                            .bg(if is_trusted {
+                                Color::Green
+                            } else {
+                                Color::Gray
+                            })
                             .add_modifier(Modifier::BOLD)
                     } else if is_trusted {
                         Style::default().fg(Color::Green)
@@ -89,13 +92,12 @@ impl OverseerCard {
                 })
                 .collect();
 
-            let list = List::new(list_items)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(border_color))
-                        .title(" All Known Devices ")
-                );
+            let list = List::new(list_items).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color))
+                    .title(" All Known Devices "),
+            );
             Widget::render(list, chunks[1], buf);
         }
 

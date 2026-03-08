@@ -1,9 +1,9 @@
-pub mod llm;
-pub mod overseer;
-pub mod valve_control;
-pub mod monitoring;
-pub mod side_quest;
-pub mod knowledge;
-pub mod com;
 pub mod album;
+pub mod com;
 pub mod council;
+pub mod knowledge;
+pub mod llm;
+pub mod monitoring;
+pub mod overseer;
+pub mod side_quest;
+pub mod valve_control;

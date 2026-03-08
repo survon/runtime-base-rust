@@ -1,12 +1,12 @@
 // src/ui/module_templates/core/llm_card.rs
 use crate::module::Module;
 use crate::ui::template::UiTemplate;
-use ratatui::prelude::*;
 use ratatui::buffer::Buffer;
-use ratatui::widgets::{Block, Borders, Paragraph, Widget, Wrap};
 use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::prelude::*;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph, Widget, Wrap};
 
 #[derive(Debug)]
 pub struct LlmCard;
@@ -26,7 +26,7 @@ impl LlmCard {
         is_selected: bool,
         area: Rect,
         buf: &mut Buffer,
-        module: &'a mut Module
+        module: &'a mut Module,
     ) -> ViewData<'a> {
         let module_name = &module.config.name;
 
@@ -85,7 +85,13 @@ impl LlmCard {
 }
 
 impl UiTemplate for LlmCard {
-    fn render_overview_cta(&self, is_selected: bool, area: Rect, buf: &mut Buffer, module: &mut Module) {
+    fn render_overview_cta(
+        &self,
+        is_selected: bool,
+        area: Rect,
+        buf: &mut Buffer,
+        module: &mut Module,
+    ) {
         let ViewData {
             module_name,
             model_info,
@@ -96,30 +102,30 @@ impl UiTemplate for LlmCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // CTA
+                Constraint::Length(3), // Title
+                Constraint::Min(1),    // CTA
             ])
             .split(area);
 
         // Title
-        let title_color = if is_selected { Color::White } else { Color::Green };
+        let title_color = if is_selected {
+            Color::White
+        } else {
+            Color::Green
+        };
         let title = Paragraph::new(format!("🤖 {} - Interactive Chat", module_name))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(title_color))
-                    .title(format!(" {} ", model_info))
+                    .title(format!(" {} ", model_info)),
             )
             .style(Style::default().fg(Color::Green))
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
         let cta = Paragraph::new(format!("🤖 {} - Interactive Chat", module_name))
-            .block(
-                Block::default()
-                    .borders(Borders::NONE)
-                    .title(" Let's go! ")
-            )
+            .block(Block::default().borders(Borders::NONE).title(" Let's go! "))
             .style(Style::default().fg(Color::Green))
             .alignment(Alignment::Center);
 
@@ -140,10 +146,10 @@ impl UiTemplate for LlmCard {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Min(1),     // Chat history
-                Constraint::Length(3),  // Input box
-                Constraint::Length(3),  // Help
+                Constraint::Length(3), // Title
+                Constraint::Min(1),    // Chat history
+                Constraint::Length(3), // Input box
+                Constraint::Length(3), // Help
             ])
             .split(area);
 
@@ -154,14 +160,20 @@ impl UiTemplate for LlmCard {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(title_color))
-                    .title(format!(" {} ", model_info))
+                    .title(format!(" {} ", model_info)),
             )
             .style(Style::default().fg(Color::Green))
             .alignment(Alignment::Center);
         Widget::render(title, chunks[0], buf);
 
         // Chat history with link highlighting
-        self.render_chat_history(&chat_history, scroll_offset, current_link_index, chunks[1], buf);
+        self.render_chat_history(
+            &chat_history,
+            scroll_offset,
+            current_link_index,
+            chunks[1],
+            buf,
+        );
 
         // Input box
         let input_color = Color::Yellow;
@@ -171,7 +183,7 @@ impl UiTemplate for LlmCard {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(input_color))
-                    .title(" Type your message ")
+                    .title(" Type your message "),
             )
             .style(Style::default().fg(Color::Yellow));
         Widget::render(input_widget, chunks[2], buf);
@@ -183,7 +195,7 @@ impl UiTemplate for LlmCard {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(help_color))
-                    .title(" Controls ")
+                    .title(" Controls "),
             )
             .style(Style::default().fg(Color::Gray))
             .alignment(Alignment::Center);
@@ -208,7 +220,7 @@ impl LlmCard {
         scroll_offset: u16,
         current_link_index: Option<usize>,
         area: Rect,
-        buf: &mut Buffer
+        buf: &mut Buffer,
     ) {
         let content = if messages.is_empty() {
             Text::from(vec![
@@ -229,7 +241,7 @@ impl LlmCard {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(" Chat History (↑↓ to scroll) ")
+                    .title(" Chat History (↑↓ to scroll) "),
             )
             .wrap(Wrap { trim: true })
             .scroll((scroll_offset, 0));
@@ -237,7 +249,11 @@ impl LlmCard {
         Widget::render(chat_widget, area, buf);
     }
 
-    fn format_messages(&self, messages: &[String], current_link_index: Option<usize>) -> Text<'static> {
+    fn format_messages(
+        &self,
+        messages: &[String],
+        current_link_index: Option<usize>,
+    ) -> Text<'static> {
         let mut lines = Vec::new();
         let mut link_counter = 0;
 
@@ -309,10 +325,7 @@ impl LlmCard {
                 Span::styled("    ", Style::default()),
                 Span::styled(parts[0].to_string(), Style::default().fg(Color::White)),
                 Span::styled("(from ", Style::default().fg(Color::White)),
-                Span::styled(
-                    format!("{}{}", indicator, filename),
-                    link_style
-                ),
+                Span::styled(format!("{}{}", indicator, filename), link_style),
                 Span::styled(")", Style::default().fg(Color::White)),
             ]));
         }

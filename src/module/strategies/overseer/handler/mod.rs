@@ -1,40 +1,37 @@
 // src/modules/overseer/handler.rs
-mod installer;
-mod list_registry_manifests;
-mod fetch_registry_manifests;
-mod handle_key;
-mod update_bindings;
-mod trait_module_handler;
-mod update_module_config;
 mod archive_module;
+mod fetch_registry_manifests;
+mod get_config_editor;
+mod handle_archive_module;
+mod handle_config_editor_save;
+mod handle_delete_device;
+mod handle_ignore_device;
+mod handle_install_module;
+mod handle_key;
+mod handle_main_menu_select;
+mod handle_manage_modules_enter;
+mod handle_restore_module;
+mod handle_scan_devices;
+mod handle_toggle_trust;
+mod handle_trust_device;
+mod installer;
 mod list_archived_modules;
+mod list_registry_manifests;
+mod new;
+mod process_messages;
+mod refresh_data;
+mod refresh_installed_modules;
+mod refresh_known_devices;
 mod restore_module;
 mod start_device_listener;
-mod process_messages;
-mod handle_scan_devices;
-mod refresh_data;
-mod refresh_known_devices;
-mod handle_main_menu_select;
-mod refresh_installed_modules;
-mod handle_trust_device;
-mod handle_ignore_device;
-mod handle_toggle_trust;
-mod handle_delete_device;
-mod handle_install_module;
-mod handle_archive_module;
-mod handle_restore_module;
-mod handle_manage_modules_enter;
-mod get_config_editor;
-mod handle_config_editor_save;
+mod trait_module_handler;
 mod trigger_module_refresh;
-mod new;
+mod update_bindings;
+mod update_module_config;
 
 use color_eyre::Result;
-use ratatui::{
-    buffer::Buffer,
-    crossterm::event::KeyCode,
-    prelude::*,
-};
+use ratatui::{buffer::Buffer, crossterm::event::KeyCode, prelude::*};
+use serde::{Deserialize, Serialize};
 use std::{
     any::Any,
     fs,
@@ -42,22 +39,18 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::mpsc;
-use serde::{Deserialize, Serialize};
 
-use crate::{log_debug, log_error, log_info};
-use crate::module::{
-    trait_module_handler::ModuleHandler,
-    ConfigValidator, Module,
-};
 use crate::module::strategies::overseer::{
     config_editor::{ConfigEditor, EditorAction, FieldValue},
     database::{KnownDevice, OverseerDatabase},
     handler::installer::*,
 };
+use crate::module::{trait_module_handler::ModuleHandler, ConfigValidator, Module};
 use crate::util::{
     database::Database,
     io::{bus::MessageBus, discovery::DiscoveryManager, event::AppEvent},
 };
+use crate::{log_debug, log_error, log_info};
 
 /// Registry response format for module listings
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,7 +109,7 @@ enum WastelandView {
     ManageModules,
     ArchivedModules,
     EditConfig,
-    CreateNewModule
+    CreateNewModule,
 }
 
 #[derive(Debug)]

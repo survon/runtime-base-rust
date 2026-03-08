@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::database::{Album, Track};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JukeboxState {
@@ -119,9 +119,7 @@ impl JukeboxStateMachine {
 
         state.is_playing = true;
 
-        let mut events = vec![
-            JukeboxEvent::StateChanged(state.clone()),
-        ];
+        let mut events = vec![JukeboxEvent::StateChanged(state.clone())];
 
         if let Some(track) = &state.current_track {
             events.push(JukeboxEvent::TrackStarted {
@@ -186,13 +184,19 @@ impl JukeboxStateMachine {
         Self::handle_play_track(state, new_index)
     }
 
-    fn handle_set_volume(mut state: JukeboxState, volume: f32) -> (JukeboxState, Vec<JukeboxEvent>) {
+    fn handle_set_volume(
+        mut state: JukeboxState,
+        volume: f32,
+    ) -> (JukeboxState, Vec<JukeboxEvent>) {
         state.volume = volume.clamp(0.0, 1.0);
 
-        (state.clone(), vec![
-            JukeboxEvent::VolumeChanged(state.volume),
-            JukeboxEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                JukeboxEvent::VolumeChanged(state.volume),
+                JukeboxEvent::StateChanged(state),
+            ],
+        )
     }
 
     fn handle_volume_up(state: JukeboxState) -> (JukeboxState, Vec<JukeboxEvent>) {
@@ -217,13 +221,19 @@ impl JukeboxStateMachine {
         state.current_index = 0;
         state.is_playing = false;
 
-        (state.clone(), vec![
-            JukeboxEvent::PlaylistLoaded { album, track_count },
-            JukeboxEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                JukeboxEvent::PlaylistLoaded { album, track_count },
+                JukeboxEvent::StateChanged(state),
+            ],
+        )
     }
 
-    fn handle_play_track(mut state: JukeboxState, index: usize) -> (JukeboxState, Vec<JukeboxEvent>) {
+    fn handle_play_track(
+        mut state: JukeboxState,
+        index: usize,
+    ) -> (JukeboxState, Vec<JukeboxEvent>) {
         if index >= state.playlist.len() {
             return (state, vec![]);
         }
@@ -232,13 +242,16 @@ impl JukeboxStateMachine {
 
         // Check if file exists
         if !std::path::Path::new(&track.file_path).exists() {
-            return (state.clone(), vec![
-                JukeboxEvent::PlaybackError {
-                    track,
-                    error: "Audio file not found".to_string(),
-                },
-                JukeboxEvent::StateChanged(state),
-            ]);
+            return (
+                state.clone(),
+                vec![
+                    JukeboxEvent::PlaybackError {
+                        track,
+                        error: "Audio file not found".to_string(),
+                    },
+                    JukeboxEvent::StateChanged(state),
+                ],
+            );
         }
 
         state.current_index = index;
@@ -246,13 +259,16 @@ impl JukeboxStateMachine {
         state.is_playing = true;
         state.playback_position_ms = 0;
 
-        (state.clone(), vec![
-            JukeboxEvent::TrackStarted {
-                track,
-                album: state.current_album.clone(),
-            },
-            JukeboxEvent::StateChanged(state),
-        ])
+        (
+            state.clone(),
+            vec![
+                JukeboxEvent::TrackStarted {
+                    track,
+                    album: state.current_album.clone(),
+                },
+                JukeboxEvent::StateChanged(state),
+            ],
+        )
     }
 
     fn handle_track_ended(state: JukeboxState) -> (JukeboxState, Vec<JukeboxEvent>) {

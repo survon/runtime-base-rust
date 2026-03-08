@@ -14,10 +14,10 @@ impl DocumentManager {
         };
 
         let path = Path::new(&actual_path);
-        let content = self.viewer.get_direct_view_content(path)
-            .or_else(|| {
-                self.viewer.view_document(path).ok()
-            });
+        let content = self
+            .viewer
+            .get_direct_view_content(path)
+            .or_else(|| self.viewer.view_document(path).ok());
 
         if let Some(content) = content {
             if let Some(external_viewer) = &self.external_viewer {

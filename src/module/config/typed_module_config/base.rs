@@ -1,7 +1,4 @@
-use crate::module::config::{
-    BaseModuleConfig,
-    TypedModuleConfig
-};
+use crate::module::config::{BaseModuleConfig, TypedModuleConfig};
 
 impl TypedModuleConfig {
     /// Get the base config regardless of type

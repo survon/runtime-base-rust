@@ -1,19 +1,12 @@
 mod base;
-mod name;
 mod module_type;
+mod name;
 
 use serde::{Deserialize, Serialize};
 
 use crate::module::config::{
-    GenericConfig,
-    AlbumConfig,
-    ComConfig,
-    KnowledgeConfig,
-    LlmConfig,
-    MonitoringConfig,
-    OverseerConfig,
-    SideQuestConfig,
-    ValveControlConfig
+    AlbumConfig, ComConfig, GenericConfig, KnowledgeConfig, LlmConfig, MonitoringConfig,
+    OverseerConfig, SideQuestConfig, ValveControlConfig,
 };
 
 /// Enum wrapping all possible module configurations

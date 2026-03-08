@@ -1,9 +1,6 @@
 use crate::{
     module::ModuleManager,
-    util::io::{
-        bus::MessageBus,
-        get_all_event_message_topics,
-    }
+    util::io::{bus::MessageBus, get_all_event_message_topics},
 };
 
 impl ModuleManager {

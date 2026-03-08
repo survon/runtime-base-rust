@@ -1,5 +1,5 @@
-use std::fs;
 use crate::module::strategies::overseer::handler::OverseerHandler;
+use std::fs;
 
 impl OverseerHandler {
     pub(in crate::module) fn archive_module(&self, module_name: &str) -> color_eyre::Result<()> {

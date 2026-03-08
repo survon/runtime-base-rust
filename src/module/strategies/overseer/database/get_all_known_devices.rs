@@ -3,13 +3,15 @@ use crate::util::database::Database;
 use super::KnownDevice;
 
 impl Database {
-    pub(in crate::module) fn _overseer__get_all_known_devices(&self) -> rusqlite::Result<Vec<KnownDevice>> {
+    pub(in crate::module) fn _overseer__get_all_known_devices(
+        &self,
+    ) -> rusqlite::Result<Vec<KnownDevice>> {
         let conn = self.app_conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT mac_address, device_name, device_type, firmware_version,
                     first_seen, last_seen, is_trusted, rssi
              FROM known_devices
-             ORDER BY last_seen DESC"
+             ORDER BY last_seen DESC",
         )?;
 
         let devices = stmt

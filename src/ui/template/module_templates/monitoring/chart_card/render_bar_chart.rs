@@ -33,27 +33,30 @@ impl ChartCard {
         let max_bars = (inner_width / 4).max(1).min(history.len());
 
         // Take last N data points that fit
-        let recent_data: Vec<(f64, f64, i64)> = history.iter()
-            .rev()
-            .take(max_bars)
-            .rev()
-            .copied()
-            .collect();
+        let recent_data: Vec<(f64, f64, i64)> =
+            history.iter().rev().take(max_bars).rev().copied().collect();
 
         // Create bar data as tuples (&str, u64) - required by ratatui 0.29+
-        let bar_data: Vec<(&str, u64)> = recent_data.iter()
+        let bar_data: Vec<(&str, u64)> = recent_data
+            .iter()
             .enumerate()
             .map(|(i, (val_a, _, _))| {
                 // We need static strings, so use a fixed set (expanded to 30)
-                let labels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-                    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-                    "21", "22", "23", "24", "25", "26", "27", "28", "29", "30"];
+                let labels = [
+                    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14",
+                    "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27",
+                    "28", "29", "30",
+                ];
                 let label = if i < labels.len() { labels[i] } else { "•" };
                 (label, (*val_a).max(0.0) as u64)
             })
             .collect();
 
-        let connected_icon = if is_connected { "🔗" } else { "⛓️‍💥" };
+        let connected_icon = if is_connected {
+            "🔗"
+        } else {
+            "⛓️‍💥"
+        };
 
         let container = if is_contained {
             Block::default()
@@ -61,9 +64,14 @@ impl ChartCard {
                 .padding(Padding::symmetric(1, 1))
         } else {
             Block::default()
-                .title(format!(" {}{}{} (Showing {} of {}) ",
-                               connected_icon, module_name, status_suffix,
-                               recent_data.len(), history.len()))
+                .title(format!(
+                    " {}{}{} (Showing {} of {}) ",
+                    connected_icon,
+                    module_name,
+                    status_suffix,
+                    recent_data.len(),
+                    history.len()
+                ))
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color))
         };
@@ -74,8 +82,16 @@ impl ChartCard {
             .bar_width(3)
             .bar_gap(1)
             .max(max_value as u64)
-            .bar_style(Style::default().fg(if is_connected { Color::Green } else { Color::DarkGray }))
-            .value_style(Style::default().fg(Color::Black).bg(if is_connected { Color::Green } else { Color::DarkGray }));
+            .bar_style(Style::default().fg(if is_connected {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }))
+            .value_style(Style::default().fg(Color::Black).bg(if is_connected {
+                Color::Green
+            } else {
+                Color::DarkGray
+            }));
 
         Widget::render(bar_chart, area, buf);
     }

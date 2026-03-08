@@ -1,7 +1,7 @@
 use std::fs;
 
-use crate::{log_debug, log_error, log_info};
 use crate::module::config::ConfigValidator;
+use crate::{log_debug, log_error, log_info};
 
 use super::OverseerHandler;
 
@@ -19,9 +19,8 @@ impl OverseerHandler {
 
         // Convert serde_json to serde_yaml first
         // This ensures proper type conversion between the two formats
-        let yaml_value: serde_yaml::Value = serde_json::from_value(
-            serde_json::to_value(updated_config)?
-        )?;
+        let yaml_value: serde_yaml::Value =
+            serde_json::from_value(serde_json::to_value(updated_config)?)?;
 
         let yaml_str = serde_yaml::to_string(&yaml_value)?;
 
